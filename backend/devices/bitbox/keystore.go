@@ -16,7 +16,9 @@
 package bitbox
 
 import (
+	"encoding/binary"
 	"fmt"
+	"sync"
 
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcutil/hdkeychain"
@@ -31,10 +33,11 @@ import (
 )
 
 type keystore struct {
-	dbb           *Device
-	configuration *signing.Configuration
-	cosignerIndex int
-	log           *logrus.Entry
+	dbb *Device
+	log *logrus.Entry
+
+	rootFingerMu sync.Mutex
+	rootFinger   []byte // cached result of RootFingerprint
 }
 
 // Type implements keystore.Keystore.
@@ -42,24 +45,48 @@ func (keystore *keystore) Type() keystorePkg.Type {
 	return keystorePkg.TypeHardware
 }
 
-// CosignerIndex implements keystore.Keystore.
-func (keystore *keystore) CosignerIndex() int {
-	return keystore.cosignerIndex
+// RootFingerprint implements keystore.Keystore.
+func (keystore *keystore) RootFingerprint() ([]byte, error) {
+	keystore.rootFingerMu.Lock()
+	defer keystore.rootFingerMu.Unlock()
+	if keystore.rootFinger != nil {
+		return keystore.rootFinger, nil
+	}
+	// The BitBox01 does not expose the root fingerprint, and it does not allow getting the xpub at
+	// "m/".  We simply get an arbitrary child xpub and read the parentFingerprint property, which
+	// equals the fingerprint at m/. This is part of the BIP32 specification.
+	xpub, err := keystore.dbb.xpub("m/84'")
+	if err != nil {
+		return nil, err
+	}
+	fingerprint := make([]byte, 4)
+	binary.BigEndian.PutUint32(fingerprint, xpub.ParentFingerprint())
+	keystore.rootFinger = fingerprint
+	return fingerprint, nil
 }
 
-// SupportsAccount implements keystore.Keystore.
-func (keystore *keystore) SupportsAccount(
-	coin coin.Coin, multisig bool, meta interface{}) bool {
+// SupportsCoin implements keystore.Keystore.
+func (keystore *keystore) SupportsCoin(coin coin.Coin) bool {
 	switch coin.(type) {
 	case *btc.Coin:
-		return !multisig
+		return true
 	default:
 		return false
 	}
 }
 
+// SupportsAccount implements keystore.Keystore.
+func (keystore *keystore) SupportsAccount(coin coin.Coin, meta interface{}) bool {
+	return keystore.SupportsCoin(coin)
+}
+
 // SupportsUnifiedAccounts implements keystore.Keystore.
 func (keystore *keystore) SupportsUnifiedAccounts() bool {
+	return false
+}
+
+// SupportsMultipleAccounts implements keystore.Keystore.
+func (keystore *keystore) SupportsMultipleAccounts() bool {
 	return false
 }
 
@@ -154,7 +181,7 @@ func (keystore *keystore) signBTCTransaction(btcProposedTx *btc.ProposedTransact
 	}
 	for i, signature := range signatures {
 		signature := signature
-		btcProposedTx.Signatures[i][keystore.CosignerIndex()] = &signature.Signature
+		btcProposedTx.Signatures[i] = &signature.Signature
 	}
 	return nil
 }

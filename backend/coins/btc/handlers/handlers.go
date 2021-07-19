@@ -18,6 +18,7 @@ package handlers
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -175,7 +176,7 @@ func (handlers *Handlers) getAccountTransactions(_ *http.Request) (interface{}, 
 			Fee:       feeString,
 			Time:      formattedTime,
 			Addresses: addresses,
-			Note:      handlers.account.Notes().TxNote(txInfo.InternalID),
+			Note:      handlers.account.TxNote(txInfo.InternalID),
 		}
 		switch handlers.account.Coin().(type) {
 		case *btc.Coin:
@@ -196,7 +197,7 @@ func (handlers *Handlers) getAccountTransactions(_ *http.Request) (interface{}, 
 }
 
 func (handlers *Handlers) postExportTransactions(_ *http.Request) (interface{}, error) {
-	name := time.Now().Format("2006-01-02-at-15-04-05-") + handlers.account.Config().Code + "-export.csv"
+	name := fmt.Sprintf("%s-%s-export.csv", time.Now().Format("2006-01-02-at-15-04-05"), handlers.account.Config().Code)
 	downloadsDir, err := config.DownloadsDir()
 	if err != nil {
 		return nil, err
@@ -379,42 +380,33 @@ func (handlers *Handlers) postInit(_ *http.Request) (interface{}, error) {
 	return nil, handlers.account.Initialize()
 }
 
-// status indicates the connection and initialization status.
-type status string
-
-const (
-	// accountSynced indicates that the account is synced.
-	accountSynced status = "accountSynced"
-
-	// accountDisabled indicates that the account has not yet been initialized.
-	accountDisabled status = "accountDisabled"
-
-	// offlineMode indicates that the connection to the blockchain network could not be established.
-	offlineMode status = "offlineMode"
-
-	// fatalError indicates that there was a fatal error in handling the account. When this happens,
+type statusResponse struct {
+	// Disabled indicates that the account has not yet been initialized.
+	Disabled bool `json:"disabled"`
+	// Synced indicates that the account is synced.
+	Synced bool `json:"synced"`
+	// Offline indicates that the connection to the blockchain network could not be established.
+	OfflineError *string `json:"offlineError"`
+	// FatalError indicates that there was a fatal error in handling the account. When this happens,
 	// an error is shown to the user and the account is made unusable.
-	fatalError status = "fatalError"
-)
+	FatalError bool `json:"fatalError"`
+}
 
 func (handlers *Handlers) getAccountStatus(_ *http.Request) (interface{}, error) {
-	status := []status{}
 	if handlers.account == nil {
-		status = append(status, accountDisabled)
-	} else {
-		if handlers.account.Synced() {
-			status = append(status, accountSynced)
-		}
-
-		if handlers.account.Offline() {
-			status = append(status, offlineMode)
-		}
-
-		if handlers.account.FatalError() {
-			status = append(status, fatalError)
-		}
+		return statusResponse{Disabled: true}, nil
 	}
-	return status, nil
+	offlineErr := handlers.account.Offline()
+	var offlineError *string
+	if offlineErr != nil {
+		s := offlineErr.Error()
+		offlineError = &s
+	}
+	return statusResponse{
+		Synced:       handlers.account.Synced(),
+		OfflineError: offlineError,
+		FatalError:   handlers.account.FatalError(),
+	}, nil
 }
 
 type jsonAddress struct {
@@ -448,10 +440,10 @@ func (handlers *Handlers) postVerifyAddress(r *http.Request) (interface{}, error
 func (handlers *Handlers) getCanVerifyExtendedPublicKey(_ *http.Request) (interface{}, error) {
 	switch specificAccount := handlers.account.(type) {
 	case *btc.Account:
-		return specificAccount.CanVerifyExtendedPublicKey(), nil
+		return specificAccount.Config().Keystore.CanVerifyExtendedPublicKey(), nil
 	case *eth.Account:
 		// No xpub verification for ethereum accounts
-		return []int{}, nil
+		return false, nil
 	default:
 		return nil, nil
 	}
@@ -459,7 +451,6 @@ func (handlers *Handlers) getCanVerifyExtendedPublicKey(_ *http.Request) (interf
 
 func (handlers *Handlers) postVerifyExtendedPublicKey(r *http.Request) (interface{}, error) {
 	var input struct {
-		XPubIndex          int `json:"xpubIndex"`
 		SigningConfigIndex int `json:"signingConfigIndex"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -469,7 +460,7 @@ func (handlers *Handlers) postVerifyExtendedPublicKey(r *http.Request) (interfac
 	if !ok {
 		return nil, errp.New("An account must be BTC based to support xpub verification")
 	}
-	return btcAccount.VerifyExtendedPublicKey(input.SigningConfigIndex, input.XPubIndex)
+	return btcAccount.VerifyExtendedPublicKey(input.SigningConfigIndex)
 }
 
 func (handlers *Handlers) getHasSecureOutput(r *http.Request) (interface{}, error) {

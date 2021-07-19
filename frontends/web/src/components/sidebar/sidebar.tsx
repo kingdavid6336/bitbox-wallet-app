@@ -17,6 +17,7 @@
 
 import { Component, h, JSX, RenderableProps } from 'preact';
 import { Link, Match } from 'preact-router/match';
+import { IAccount } from '../../api/account';
 import coins from '../../assets/icons/coins.svg';
 import ejectIcon from '../../assets/icons/eject.svg';
 import info from '../../assets/icons/info.svg';
@@ -27,14 +28,12 @@ import { SharedProps as SharedPanelProps, store as panelStore } from '../../comp
 import { share } from '../../decorators/share';
 import { subscribe } from '../../decorators/subscribe';
 import { translate, TranslateProps } from '../../decorators/translate';
-import { IAccount } from '../../routes/account/account';
 import { debug } from '../../utils/env';
 import { apiPost } from '../../utils/request';
 import Logo, { AppLogoInverted } from '../icon/logo';
 
 interface SidebarProps {
     deviceIDs: string[];
-    bitboxBaseIDs: string[];
     accounts: IAccount[];
 }
 
@@ -141,7 +140,7 @@ class Sidebar extends Component<Props> {
                 href={`/account/${code}`}
                 onClick={this.handleSidebarItemClick}
                 title={name}>
-                <Logo coinCode={coinCode} className="sidebar_icon" alt={name} />
+                <Logo stacked coinCode={coinCode} className="sidebar_icon" alt={name} />
                 <span className="sidebar_label">{name}</span>
             </Link>
         );
@@ -172,24 +171,9 @@ class Sidebar extends Component<Props> {
                         </div>
                     </Link>
                     <div className="sidebarHeaderContainer">
-                        <span className="sidebarHeader">{t('sidebar.accounts')}</span>
-                        {
-                            debug && (
-                                <span className="sidebarHeaderAction">
-                                    <Link
-                                        href={`/add-account`}
-                                        title={t('sidebar.addAccount')}
-                                        activeClassName="sidebar-active"
-                                        onClick={this.handleSidebarItemClick}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <circle cx="12" cy="12" r="10"></circle>
-                                            <line x1="12" y1="8" x2="12" y2="16"></line>
-                                            <line x1="8" y1="12" x2="16" y2="12"></line>
-                                        </svg>
-                                    </Link>
-                                </span>
-                            )
-                        }
+                        <span className="sidebarHeader" hidden={!keystores.length}>
+                            {t('sidebar.accounts')}
+                        </span>
                     </div>
                     {/* <div className="activeGroup">
                         <div className="sidebarItem">
@@ -249,36 +233,6 @@ class Sidebar extends Component<Props> {
                         </Link>
                     </div>
                     ) : null }
-                    {debug &&
-                        <div key="bitboxbase" className="sidebarItem">
-                            <Link
-                                activeClassName="sidebar-active"
-                                href={`/bitboxbase`}
-                                title={t('sidebar.bitboxBaseConnect')}
-                                onClick={this.handleSidebarItemClick}>
-                                <div className="stacked">
-                                    <img draggable={false} className="sidebar_settings" src={settingsGrey} alt={t('sidebar.bitboxBase')} />
-                                    <img draggable={false} className="sidebar_settings" src={settings} alt={t('sidebar.bitboxBase')} />
-                                </div>
-                                <span className="sidebar_label">{t('sidebar.bitboxBaseConnect')}</span>
-                            </Link>
-                        </div>
-                    }
-                    {/* {debug && bitboxBaseIDs.map(bitboxBaseID => (
-                            <div key={bitboxBaseID} className="sidebarItem">
-                                <Link
-                                    href={`/bitboxbase/${bitboxBaseID}`}
-                                    activeClassName="sidebar-active"
-                                    title={t('sidebar.bitboxBase')}
-                                    onClick={this.handleSidebarItemClick}>
-                                    <div className="single">
-                                        <img draggable={false} className="sidebar_settings" src={settings} alt={t('sidebar.bitboxBase')} />
-                                    </div>
-                                    <span className="sidebar_label">{t('sidebar.bitboxBase')}</span>
-                                </Link>
-                            </div>
-                        ))
-                    } */}
                     { deviceIDs.map(deviceID => (
                         <div key={deviceID} className="sidebarItem">
                             <Link

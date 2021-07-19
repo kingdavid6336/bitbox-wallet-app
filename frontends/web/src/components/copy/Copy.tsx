@@ -1,5 +1,6 @@
 /**
  * Copyright 2018 Shift Devices AG
+ * Copyright 2021 Shift Crypto AG
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +17,16 @@
 
 import { Component, h, RenderableProps } from 'preact';
 import CheckIcon from '../../assets/icons/check.svg';
-import CopyDisabledIcon from '../../assets/icons/copy-disabled.svg';
 import CopyIcon from '../../assets/icons/copy.svg';
 import { translate, TranslateProps } from '../../decorators/translate';
 import * as style from './Copy.css';
 
 interface CopyableInputProps {
-    value: string;
     className?: string;
     disabled?: boolean;
     flexibleHeight?: boolean;
+    alignLeft?: boolean;
+    value: string;
 }
 
 type Props = CopyableInputProps & TranslateProps;
@@ -35,14 +36,11 @@ interface State {
 }
 
 class CopyableInput extends Component<Props, State> {
-    private inputField!: HTMLInputElement;
-
-    constructor(props: Props) {
-        super(props);
-        this.state = {
-            success: false,
-        };
+    public readonly state: State = {
+        success: false,
     }
+
+    private textArea!: HTMLTextAreaElement;
 
     public componentDidMount() {
         this.setHeight();
@@ -53,24 +51,26 @@ class CopyableInput extends Component<Props, State> {
     }
 
     private setHeight() {
-        const textarea = this.inputField;
+        const textarea = this.textArea;
         const fontSize = window.getComputedStyle(textarea, null).getPropertyValue('font-size');
         const units = Number(fontSize.replace('px', '')) + 2;
         textarea.setAttribute('rows', '1');
         textarea.setAttribute('rows', String(Math.round((textarea.scrollHeight / units) - 2)));
     }
 
-    private setRef = (input: HTMLInputElement) => {
-        this.inputField = input;
+    private setRef = (textarea: HTMLTextAreaElement) => {
+        this.textArea = textarea;
     }
 
-    private onFocus = (e: Event) => {
-        const input = e.target as HTMLInputElement;
-        input.focus();
+    private onFocus = (e: FocusEvent) => {
+        const textarea = e.target as HTMLTextAreaElement;
+        if (textarea) {
+            textarea.focus();
+        }
     }
 
     private copy = () => {
-        this.inputField.select();
+        this.textArea.select();
         if (document.execCommand('copy')) {
             this.setState({ success: true }, () => {
                 setTimeout(() => this.setState({ success: false }), 1500);
@@ -79,9 +79,17 @@ class CopyableInput extends Component<Props, State> {
     }
 
     public render(
-        { t, value, className, disabled, flexibleHeight }: RenderableProps<Props>,
+        { alignLeft, t, value, className, disabled, flexibleHeight }: RenderableProps<Props>,
         { success }: State,
     ) {
+        const copyButton = disabled ? null : (
+            <button
+                onClick={this.copy}
+                className={[style.button, success && style.success, 'ignore'].join(' ')}
+                title={t('button.copy')}>
+                <img src={success ? CheckIcon : CopyIcon} />
+            </button>
+        );
         return (
             <div class={['flex flex-row flex-start flex-items-start', style.container, className ? className : ''].join(' ')}>
                 <textarea
@@ -91,14 +99,12 @@ class CopyableInput extends Component<Props, State> {
                     value={value}
                     ref={this.setRef}
                     rows={1}
-                    className={[style.inputField, flexibleHeight && style.flexibleHeight].join(' ')} />
-                <button
-                    disabled={disabled}
-                    onClick={this.copy}
-                    className={[style.button, success && style.success, 'ignore'].join(' ')}
-                    title={t('button.copy')}>
-                        <img src={success ? CheckIcon : disabled ? CopyDisabledIcon : CopyIcon} />
-                </button>
+                    className={[
+                        style.inputField,
+                        flexibleHeight && style.flexibleHeight,
+                        alignLeft && style.alignLeft
+                    ].join(' ')} />
+                {copyButton}
             </div>
         );
     }

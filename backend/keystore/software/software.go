@@ -17,6 +17,7 @@ package software
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 
 	"github.com/btcsuite/btcd/btcec"
@@ -35,7 +36,6 @@ import (
 
 // Keystore implements a keystore in software.
 type Keystore struct {
-	cosignerIndex int
 	// The master extended private key from which all keys are derived.
 	master     *hdkeychain.ExtendedKey
 	identifier string
@@ -44,27 +44,25 @@ type Keystore struct {
 
 // NewKeystore creates a new keystore with the given configuration, index and key.
 func NewKeystore(
-	cosignerIndex int,
 	master *hdkeychain.ExtendedKey,
 ) *Keystore {
 	publicKey, _ := master.ECPubKey()
 	hash := sha256.Sum256(publicKey.SerializeCompressed())
 	return &Keystore{
-		cosignerIndex: cosignerIndex,
-		master:        master,
-		identifier:    hex.EncodeToString(hash[:]),
-		log:           logging.Get().WithGroup("software"),
+		master:     master,
+		identifier: hex.EncodeToString(hash[:]),
+		log:        logging.Get().WithGroup("software"),
 	}
 }
 
 // NewKeystoreFromPIN creates a new unique keystore derived from the PIN.
-func NewKeystoreFromPIN(cosignerIndex int, pin string) *Keystore {
+func NewKeystoreFromPIN(pin string) *Keystore {
 	seed := pbkdf2.Key([]byte(pin), []byte("BitBox"), 64, hdkeychain.RecommendedSeedLen, sha256.New)
 	master, err := hdkeychain.NewMaster(seed, &chaincfg.TestNet3Params)
 	if err != nil {
 		panic(errp.WithStack(err))
 	}
-	return NewKeystore(cosignerIndex, master)
+	return NewKeystore(master)
 }
 
 // Type implements keystore.Keystore.
@@ -72,29 +70,50 @@ func (keystore *Keystore) Type() keystorePkg.Type {
 	return keystorePkg.TypeSoftware
 }
 
+// RootFingerprint implements keystore.Keystore.
+func (keystore *Keystore) RootFingerprint() ([]byte, error) {
+	// The bip32 Go lib we use does not expose a key's fingerprint. We simply get an arbitrary child
+	// xpub and read the parentFingerprint field. This is part of the BIP32 specification.
+	keypath, err := signing.NewAbsoluteKeypath("m/84'")
+	if err != nil {
+		return nil, err
+	}
+	xprv, err := keypath.Derive(keystore.master)
+	if err != nil {
+		return nil, err
+	}
+	fingerprint := make([]byte, 4)
+	binary.BigEndian.PutUint32(fingerprint, xprv.ParentFingerprint())
+	return fingerprint, nil
+}
+
 // Configuration implements keystore.Keystore.
 func (keystore *Keystore) Configuration() *signing.Configuration {
 	return nil
 }
 
-// CosignerIndex implements keystore.Keystore.
-func (keystore *Keystore) CosignerIndex() int {
-	return keystore.cosignerIndex
-}
-
-// SupportsAccount implements keystore.Keystore.
-func (keystore *Keystore) SupportsAccount(
-	coin coin.Coin, multisig bool, meta interface{}) bool {
+// SupportsCoin implements keystore.Keystore.
+func (keystore *Keystore) SupportsCoin(coin coin.Coin) bool {
 	switch coin.(type) {
 	case *btc.Coin:
-		return !multisig
+		return true
 	default:
 		return false
 	}
 }
 
+// SupportsAccount implements keystore.Keystore.
+func (keystore *Keystore) SupportsAccount(coin coin.Coin, meta interface{}) bool {
+	return keystore.SupportsCoin(coin)
+}
+
 // SupportsUnifiedAccounts implements keystore.Keystore.
 func (keystore *Keystore) SupportsUnifiedAccounts() bool {
+	return true
+}
+
+// SupportsMultipleAccounts implements keystore.Keystore.
+func (keystore *Keystore) SupportsMultipleAccounts() bool {
 	return true
 }
 
@@ -211,7 +230,7 @@ func (keystore *Keystore) SignTransaction(
 	}
 	for i, signature := range signatures {
 		signature := signature
-		btcProposedTx.Signatures[i][keystore.CosignerIndex()] = &signature
+		btcProposedTx.Signatures[i] = &signature
 	}
 	return nil
 }

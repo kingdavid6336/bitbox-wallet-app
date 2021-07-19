@@ -15,11 +15,11 @@
  * limitations under the License.
  */
 
-import { BrowserQRCodeReader } from '@zxing/library';
 import { Component, h, RenderableProps } from 'preact';
 import { route } from 'preact-router';
+import { BrowserQRCodeReader } from '@zxing/library';
 import * as accountApi from '../../../api/account';
-import { IAccount } from '../account';
+import { TDevices } from '../../../api/devices';
 import reject from '../../../assets/icons/cancel.svg';
 import approve from '../../../assets/icons/checked.svg';
 import qrcodeIcon from '../../../assets/icons/qrcode.png';
@@ -31,24 +31,23 @@ import { Button, ButtonLink, Checkbox, Input } from '../../../components/forms';
 import { Entry } from '../../../components/guide/entry';
 import { Guide } from '../../../components/guide/guide';
 import { Header } from '../../../components/layout';
-import { Fiat, store as fiat } from '../../../components/rates/rates';
+import { store as fiat } from '../../../components/rates/rates';
 import { Spinner } from '../../../components/spinner/Spinner';
 import Status from '../../../components/status/status';
-import WaitDialog from '../../../components/wait-dialog/wait-dialog';
+import { WaitDialog } from '../../../components/wait-dialog/wait-dialog';
 import { translate, TranslateProps } from '../../../decorators/translate';
 import { debug } from '../../../utils/env';
 import { apiGet, apiPost } from '../../../utils/request';
 import { apiWebsocket } from '../../../utils/websocket';
-import { Devices } from '../../device/deviceswitch';
 import { isBitcoinBased } from '../utils';
 import { FeeTargets } from './feetargets';
 import * as style from './send.css';
 import { Props as UTXOsProps, SelectedUTXO, UTXOs } from './utxos';
 
 interface SendProps {
-    accounts: IAccount[];
+    accounts: accountApi.IAccount[];
     code?: string;
-    devices: Devices;
+    devices: TDevices;
     deviceIDs: string[];
 }
 
@@ -70,7 +69,7 @@ interface State {
     amount?: string;
     data?: string;
     fiatAmount?: string;
-    fiatUnit: Fiat;
+    fiatUnit: accountApi.Fiat;
     sendAll: boolean;
     feeTarget?: accountApi.FeeTargetCode;
     feePerByte: string;
@@ -86,8 +85,7 @@ interface State {
     noMobileChannelError?: boolean;
     signProgress?: SignProgress;
     // show visual BitBox in dialog when instructed to sign.
-    // can't be undefined because of the default touchConfirm param in the wait dialog.
-    signConfirm: boolean | null;
+    signConfirm: boolean;
     coinControl: boolean;
     activeCoinControl: boolean;
     hasCamera: boolean;
@@ -100,7 +98,7 @@ class Send extends Component<Props, State> {
     private utxos!: Component<UTXOsProps>;
     private selectedUTXOs: SelectedUTXO = {};
     private unsubscribe!: () => void;
-    private qrCodeReader: BrowserQRCodeReader = new BrowserQRCodeReader();
+    private qrCodeReader?: BrowserQRCodeReader;
 
     // pendingProposals keeps all requests that have been made
     // to /tx-proposal in case there are multiple parallel requests
@@ -112,7 +110,7 @@ class Send extends Component<Props, State> {
         valid: false,
         sendAll: false,
         isConfirming: false,
-        signConfirm: null,
+        signConfirm: false,
         isSent: false,
         isAborted: false,
         isUpdatingProposal: false,
@@ -159,7 +157,7 @@ class Send extends Component<Props, State> {
                 case 'device':
                     switch (data) {
                         case 'signProgress':
-                            this.setState({ signProgress: meta, signConfirm: null });
+                            this.setState({ signProgress: meta, signConfirm: false });
                             break;
                         case 'signConfirm':
                             this.setState({ signConfirm: true });
@@ -174,11 +172,18 @@ class Send extends Component<Props, State> {
         this.registerEvents();
         const account = this.getAccount();
         if (account && !account.coinCode.startsWith('eth-erc20-') && account.coinCode !== 'eth') {
-            this.qrCodeReader
-                .getVideoInputDevices()
-                .then(videoInputDevices => {
-                    this.setState({ hasCamera: videoInputDevices.length > 0 });
-                });
+            import('../../../components/qrcode/qrreader')
+                .then(({ BrowserQRCodeReader }) => {
+                    if (!this.qrCodeReader) {
+                        this.qrCodeReader = new BrowserQRCodeReader();
+                    }
+                    this.qrCodeReader
+                        .getVideoInputDevices()
+                        .then(videoInputDevices => {
+                            this.setState({ hasCamera: videoInputDevices.length > 0 });
+                        });
+                })
+                .catch(console.error);
         }
     }
 
@@ -187,7 +192,9 @@ class Send extends Component<Props, State> {
         if (this.unsubscribe) {
             this.unsubscribe();
         }
-        this.qrCodeReader.reset();
+        if (this.qrCodeReader) {
+            this.qrCodeReader.reset();
+        }
     }
 
     private registerEvents = () => {
@@ -244,10 +251,11 @@ class Send extends Component<Props, State> {
                 const { errorMessage } = result;
                 alertUser(this.props.t('unknownError', errorMessage && { errorMessage }));
             }
+        })
+        .catch((error) => console.error(error))
+        .then(() => {
             // The following method allows pressing escape again.
-            this.setState({ isConfirming: false, signProgress: undefined, signConfirm: null });
-        }).catch(() => {
-            this.setState({ isConfirming: false, signProgress: undefined, signConfirm: null });
+            this.setState({ isConfirming: false, signProgress: undefined, signConfirm: false });
         });
     }
 
@@ -374,8 +382,9 @@ class Send extends Component<Props, State> {
         this.setState(prevState => ({
             ...prevState,
             [target.id]: value,
-        }));
-        this.validateAndDisplayFee(true);
+        }), () => {
+            this.validateAndDisplayFee(true);
+        });
     }
 
     private handleFiatInput = (event: Event) => {
@@ -386,10 +395,7 @@ class Send extends Component<Props, State> {
 
     private convertToFiat = (value?: string | boolean) => {
         if (value) {
-            let coinUnit = this.getAccount()!.coinUnit;
-            if (coinUnit.length === 4 && coinUnit.startsWith('T') || coinUnit === 'RETH') {
-                coinUnit = coinUnit.substring(1);
-            }
+            const coinUnit = this.getAccount()!.coinUnit;
             apiGet(`coins/convertToFiat?from=${coinUnit}&to=${this.state.fiatUnit}&amount=${value}`)
                 .then(data => {
                     if (data.success) {
@@ -492,8 +498,10 @@ class Send extends Component<Props, State> {
 
     private toggleScanQR = () => {
         if (this.state.activeScanQR) {
-            // release camera; invokes the catch function below.
-            this.qrCodeReader.reset();
+            if (this.qrCodeReader) {
+                // release camera; invokes the catch function below.
+                this.qrCodeReader.reset();
+            }
             // should already be false, set by the catch function below. we do it again anyway, in
             // case it is not called consistently on each platform.
             this.setState({ activeScanQR: false });
@@ -503,12 +511,14 @@ class Send extends Component<Props, State> {
             activeScanQR: true,
             videoLoading: true,
         }, () => {
-            this.qrCodeReader
+            this.qrCodeReader && this.qrCodeReader
                 .decodeFromInputVideoDevice(undefined, 'video')
                 .then(result => {
                     this.setState({ activeScanQR: false });
                     this.parseQRResult(result.getText());
-                    this.qrCodeReader.reset(); // release camera
+                    if (this.qrCodeReader) {
+                        this.qrCodeReader.reset(); // release camera
+                    }
                 })
                 .catch(() => {
                     this.setState({ activeScanQR: false });
@@ -563,7 +573,7 @@ class Send extends Component<Props, State> {
         if (!account) {
             return null;
         }
-        const confirmPrequel = signProgress && signProgress.steps > 1 && (
+        const confirmPrequel = (signProgress && signProgress.steps > 1) ? (
             <span>
                 {
                     t('send.signprogress.description', {
@@ -573,14 +583,14 @@ class Send extends Component<Props, State> {
                 <br />
                 {t('send.signprogress.label')}: {signProgress.step}/{signProgress.steps}
             </span>
-        );
+        ) : undefined;
         return (
             <div class="contentWithGuide">
                 <div class="container">
-                    <Status type="warning">
-                        {paired === false && t('warning.sendPairing')}
+                    <Status type="warning" hidden={paired !== false}>
+                        {t('warning.sendPairing')}
                     </Status>
-                    <Header title={<h2>{t('send.title', { accountName: account.name })}</h2>} />
+                    <Header title={<h2>{t('send.title', { accountName: account.coinName })}</h2>} />
                     <div class="innerContainer scrollableContainer">
                         <div class="content padded">
                             <div>

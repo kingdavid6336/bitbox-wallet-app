@@ -16,24 +16,24 @@
 
 import { Component, h, RenderableProps } from 'preact';
 import { route } from 'preact-router';
-import { CoinCode } from '../../api/account';
+import { AccountCode, IAccount } from '../../api/account';
+import { TDevices } from '../../api/devices';
 import Guide from './guide';
 import A from '../../components/anchor/anchor';
 import { Header } from '../../components/layout';
+import { Spinner } from '../../components/spinner/Spinner';
 import { load } from '../../decorators/load';
 import { translate, TranslateProps } from '../../decorators/translate';
 import { Button, Checkbox, Select } from '../../components/forms';
-import { Devices } from '../device/deviceswitch';
-import { IAccount } from '../account/account';
 import { setConfig } from '../../utils/config';
 import { apiGet } from '../../utils/request';
-import { isBitcoin } from '../account/utils';
+import { isBitcoinOnly } from '../account/utils';
 import * as style from './info.css';
 
 interface BuyInfoProps {
     accounts: IAccount[];
     code?: string;
-    devices: Devices;
+    devices: TDevices;
 }
 
 interface LoadedBuyInfoProps {
@@ -42,13 +42,13 @@ interface LoadedBuyInfoProps {
 
 interface Option {
     text: string;
-    value: CoinCode;
+    value: AccountCode;
 }
 
 interface State {
     status: 'choose' | 'agree'
     selected?: string;
-    options: Option[]
+    options?: Option[]
 }
 
 type Props = BuyInfoProps & LoadedBuyInfoProps & TranslateProps;
@@ -57,7 +57,6 @@ class BuyInfo extends Component<Props, State> {
     public readonly state: State = {
         status: this.props.config.frontend.skipBuyDisclaimer ? 'choose' : 'agree',
         selected: this.props.code,
-        options: [],
     }
 
     componentDidMount = () => {
@@ -74,7 +73,7 @@ class BuyInfo extends Component<Props, State> {
     }
 
     private maybeProceed = () => {
-        if (this.state.status === 'choose' && this.state.options.length === 1) {
+        if (this.state.status === 'choose' && this.state.options !== undefined && this.state.options.length === 1) {
             route(`/buy/moonpay/${this.state.options[0].value}`);
         }
     }
@@ -88,7 +87,7 @@ class BuyInfo extends Component<Props, State> {
         )
         .then(results => results.filter(result => result))
         // @ts-ignore
-        .then(accounts => accounts.map(({ name, code }) => ({ text: name, value: code })))
+        .then(accounts => accounts.map(({ isToken, name, coinName, code }) => ({ text: isToken || name === coinName ? name : `${name} (${coinName})`, value: code })))
         .then(options => {
             this.setState({ options }, this.maybeProceed);
         })
@@ -99,16 +98,31 @@ class BuyInfo extends Component<Props, State> {
         setConfig({ frontend: { skipBuyDisclaimer: e.target.checked }});
     }
 
+    private getCryptoName = (): string => {
+        const { accounts, code, t } = this.props;
+        if (!code) {
+            const onlyBitcoin = accounts.every(({ coinCode }) => isBitcoinOnly(coinCode));
+            return onlyBitcoin ? 'Bitcoin' : t('buy.info.crypto');
+        }
+        const account = accounts.find(account => account.code === code);
+        if (account) {
+            return isBitcoinOnly(account.coinCode) ? 'Bitcoin' : t('buy.info.crypto');
+        }
+        return t('buy.info.crypto');
+    }
+
     public render(
-        { code,
-          t }: RenderableProps<Props>,
+        { t }: RenderableProps<Props>,
         {
             status,
             selected,
             options,
         }: State
     ) {
-        const name = (code && isBitcoin(code)) ? 'Bitcoin' : 'crypto';
+        if (options === undefined) {
+            return <Spinner text={t('loading')} />;
+        }
+        const name = this.getCryptoName();
         return (
             <div class="contentWithGuide">
                 <div class="container">
@@ -195,10 +209,8 @@ class BuyInfo extends Component<Props, State> {
                                 <div class="content narrow isVerticallyCentered">
                                     <h1 class={style.title}>{t('buy.title', { name })}</h1>
                                     <Select
-                                        label={t('buy.info.selectLabel')}
-                                        placeholder={t('buy.info.selectPlaceholder')}
                                         options={[{
-                                                text: t('buy.info.selectPlaceholder'),
+                                                text: t('buy.info.selectLabel'),
                                                 disabled: true,
                                                 value: 'choose',
                                             },

@@ -17,36 +17,86 @@
 import { apiGet, apiPost } from '../utils/request';
 import { ChartData } from '../routes/account/summary/chart';
 
-export type AccountState = 'accountSynced' | 'accountDisabled' | 'fatalError' | 'offlineMode';
 
-export const getStatus = (code: string): Promise<AccountState[]> => {
+export type CoinCode = 'btc' | 'tbtc' | 'ltc' | 'tltc' | 'eth' | 'teth' | 'reth';
+
+export type AccountCode = string;
+
+export type Fiat = 'AUD' | 'BRL' | 'BTC' | 'CAD' | 'CHF' | 'CNY' | 'EUR' | 'GBP' | 'HKD' | 'ILS' | 'JPY' | 'KRW' | 'RUB' | 'SGD' | 'USD';
+
+export type MainnetCoin = 'BTC' | 'LTC' | 'ETH';
+
+export type TestnetCoin = 'TBTC' | 'TLTC' | 'TETH' | 'RETH';
+
+export type Coin = MainnetCoin | TestnetCoin;
+
+export interface IActiveToken {
+    tokenCode: string;
+    accountCode: AccountCode;
+}
+
+export interface IAccount {
+    active: boolean;
+    coinCode: CoinCode;
+    coinUnit: string;
+    coinName: string;
+    code: AccountCode;
+    name: string;
+    isToken: boolean;
+    activeTokens?: IActiveToken[];
+    blockExplorerTxPrefix: string;
+}
+
+export const getAccounts = (): Promise<IAccount[]> => {
+    return apiGet(`accounts`);
+};
+
+export interface IStatus {
+    disabled: boolean;
+    synced: boolean;
+    fatalError: boolean;
+    offlineError: string | null;
+}
+
+export const getStatus = (code: AccountCode): Promise<IStatus> => {
     return apiGet(`account/${code}/status`);
 };
 
 export type ScriptType = 'p2pkh' | 'p2wpkh-p2sh' | 'p2wpkh';
 
-export interface ISigningConfiguration {
-    address: string;
+export interface IKeyInfo {
     keypath: string;
+    rootFingerprint: string;
+    xpub: string;
+}
+
+export type TBitcoinSimple = {
+    keyInfo: IKeyInfo;
     scriptType: ScriptType;
-    threshold: number;
-    xpubs: string[];
+}
+
+export type TEthereumSimple = {
+    keyInfo: IKeyInfo;
+}
+
+export type TSigningConfiguration = {
+    bitcoinSimple: TBitcoinSimple;
+    ethereumSimple?: never;
+} | {
+    bitcoinSimple?: never;
+    ethereumSimple: TEthereumSimple;
 }
 
 export interface ISigningConfigurationList {
-    signingConfigurations: ISigningConfiguration[];
+    signingConfigurations: TSigningConfiguration[];
 }
 
-export const getInfo = (code: string): Promise<ISigningConfigurationList> => {
+export const getInfo = (code: AccountCode): Promise<ISigningConfigurationList> => {
     return apiGet(`account/${code}/info`);
 };
 
-export const init = (code: string): Promise<null> => {
+export const init = (code: AccountCode): Promise<null> => {
     return apiPost(`account/${code}/init`);
-};
-
-export const reinitialize = (): Promise<null> => {
-    return apiPost('accounts/reinitialize');
 };
 
 export interface ISummary {
@@ -66,14 +116,6 @@ export const exportSummary = (): Promise<string> => {
     return apiPost('export-account-summary');
 };
 
-export type MainnetCoin = 'BTC' | 'LTC' | 'ETH';
-
-export type TestnetCoin = 'TBTC' | 'TLTC' | 'TETH' | 'RETH';
-
-export type Coin = MainnetCoin | TestnetCoin;
-
-export type Fiat = 'AUD' | 'BTC' | 'CAD' | 'CHF' | 'CNY' | 'EUR' | 'GBP' | 'ILS' | 'JPY' | 'KRW' | 'RUB' | 'SGD' | 'USD';
-
 export type Conversions = null | {
     [key in Fiat]: string;
 }
@@ -84,15 +126,13 @@ export interface IAmount {
     unit: Coin;
 }
 
-export type CoinCode = 'btc' | 'tbtc' | 'ltc' | 'tltc' | 'eth' | 'teth' | 'reth';
-
 export interface IBalance {
     available: IAmount;
     hasIncoming: boolean;
     incoming: IAmount;
 }
 
-export const getBalance = (code: string): Promise<IBalance> => {
+export const getBalance = (code: AccountCode): Promise<IBalance> => {
     return apiGet(`account/${code}/balance`);
 };
 
@@ -121,23 +161,30 @@ export interface INoteTx {
     note: string;
 }
 
-export const postNotesTx = (code: string, {
+export const postNotesTx = (code: AccountCode, {
     internalTxID,
     note,
 }: INoteTx): Promise<null> => {
     return apiPost(`account/${code}/notes/tx`, { internalTxID, note });
 };
 
-export const getTransactionList = (code: string): Promise<ITransaction[]> => {
+export const getTransactionList = (code: AccountCode): Promise<ITransaction[]> => {
     return apiGet(`account/${code}/transactions`);
 };
 
-export const exportAccount = (code: string): Promise<string> => {
+export const exportAccount = (code: AccountCode): Promise<string> => {
     return apiPost(`account/${code}/export`);
 };
 
-export const getCanVerifyXPub = (code: string): Promise<number[]> => {
+export const getCanVerifyXPub = (code: AccountCode): Promise<boolean> => {
     return apiGet(`account/${code}/can-verify-extended-public-key`);
+};
+
+export const verifyXPub = (
+    code: AccountCode,
+    signingConfigIndex: number,
+): Promise<void> => {
+    return apiPost(`account/${code}/verify-extended-public-key`, { signingConfigIndex });
 };
 
 export interface IReceiveAddress {
@@ -145,13 +192,9 @@ export interface IReceiveAddress {
     address: string;
 }
 
-export const verifyAddress = (code: string, addressID: string): Promise<boolean> => {
-    return apiPost(`account/${code}/verify-address`, addressID);
-};
-
 export type ReceiveAddressList = IReceiveAddress[][];
 
-export const getReceiveAddressList = (code: string): Promise<ReceiveAddressList> => {
+export const getReceiveAddressList = (code: AccountCode): Promise<ReceiveAddressList> => {
     return apiGet(`account/${code}/receive-addresses`);
 };
 
@@ -161,7 +204,7 @@ export interface ISendTx {
     errorMessage?: string;
 }
 
-export const sendTx = (code: string): Promise<ISendTx> => {
+export const sendTx = (code: AccountCode): Promise<ISendTx> => {
     return apiPost(`account/${code}/sendtx`);
 };
 
@@ -183,24 +226,6 @@ export interface IProposeTx {
     errorMessage?: string;
 }
 
-export const proposeTx = (code: string, data: IProposeTxData): Promise<IProposeTx> => {
-    return apiPost(`account/${code}/tx-proposal`, data);
-};
-
-export const proposeTxNote = (code: string, note: string): Promise<null> => {
-    return apiPost(`account/${code}/propose-tx-note`, note);
-};
-
-export interface IUTXO {
-    address: string;
-    amount: IAmount;
-    outPoint: string;
-}
-
-export const getUTXOList = (code: string): Promise<IUTXO[]> => {
-    return apiGet(`account/${code}/utxos`);
-};
-
 export interface IFeeTarget {
     code: FeeTargetCode;
     feeRateInfo: string;
@@ -211,6 +236,6 @@ export interface IFeeTargetList {
     defaultFeeTarget: FeeTargetCode
 }
 
-export const getFeeTargetList = (code: string): Promise<IFeeTargetList> => {
+export const getFeeTargetList = (code: AccountCode): Promise<IFeeTargetList> => {
     return apiGet(`account/${code}/fee-targets`);
 };

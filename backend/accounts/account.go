@@ -20,7 +20,6 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts/notes"
 	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
 	"github.com/digitalbitbox/bitbox-wallet-app/backend/signing"
 	"github.com/digitalbitbox/bitbox-wallet-app/util/observable"
@@ -61,7 +60,10 @@ type Interface interface {
 	Initialize() error
 	// Synced indicates whether the account has loaded and finished the initial sync.
 	Synced() bool
-	Offline() bool
+	// If there was a network connection issue, this returns the network error.
+	Offline() error
+	// FatalError indicates that there was a fatal error in handling the account. When this happens,
+	// an error is shown to the user and the account is made unusable.
 	FatalError() bool
 	Close()
 	Notifier() Notifier
@@ -81,7 +83,7 @@ type Interface interface {
 	CanVerifyAddresses() (bool, bool, error)
 	VerifyAddress(addressID string) (bool, error)
 
-	Notes() *notes.Notes
+	TxNote(txID string) string
 	// ProposeTxnote stores a note. The note is is persisted in the notes database upon calling
 	// SendTx(). This function must be called before `SendTx()`.
 	ProposeTxNote(string)

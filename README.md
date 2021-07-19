@@ -47,10 +47,9 @@ The below instructions assume a unix environment.
 
 The following dependencies need to be installed:
 
-- [Go](https://golang.org/doc/install) version 1.14
+- [Go](https://golang.org/doc/install) version 1.16
 - [Yarn](https://yarnpkg.com/en/) for managing the web UI deps
-- [Qt5](https://www.qt.io) version 5.11.3
-  - Installers for older versions can be found in [this Qt archive](https://download.qt.io/new_archive/qt/5.11/5.11.3)
+- [Qt5](https://www.qt.io) version 5.15.2
   - install Qt for your platform, including the WebEngine component
 
 Make sure the following environment variables are set:

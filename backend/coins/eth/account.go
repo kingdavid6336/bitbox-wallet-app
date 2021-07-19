@@ -42,7 +42,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var pollInterval = 30 * time.Second
+var pollInterval = 60 * time.Second
 
 // Account is an Ethereum account, with one address.
 type Account struct {
@@ -129,29 +129,16 @@ func (account *Account) Initialize() error {
 	}
 	account.initialized = true
 
-	signingConfigurations, err := account.Config().GetSigningConfigurations()
-	if err != nil {
-		return err
-	}
-
+	signingConfigurations := account.Config().SigningConfigurations
 	if len(signingConfigurations) != 1 {
 		return errp.New("Ethereum only supports one signing config")
 	}
 	signingConfiguration := signingConfigurations[0]
 
-	// Derive m/0, first account.
-	relKeyPath, err := signing.NewRelativeKeypath("0")
-	if err != nil {
-		return err
-	}
-	signingConfiguration, err = signingConfiguration.Derive(relKeyPath)
-	if err != nil {
-		return err
-	}
 	account.signingConfiguration = signingConfiguration
 	account.notifier = account.Config().GetNotifier(signingConfigurations)
 
-	accountIdentifier := fmt.Sprintf("account-%s-%s", account.signingConfiguration.Hash(), account.Config().Code)
+	accountIdentifier := fmt.Sprintf("account-%s", account.Config().Code)
 	account.dbSubfolder = path.Join(account.Config().DBFolder, accountIdentifier)
 	if err := os.MkdirAll(account.dbSubfolder, 0700); err != nil {
 		return errp.WithStack(err)
@@ -166,25 +153,14 @@ func (account *Account) Initialize() error {
 	account.db = db
 	account.log.Debugf("Opened the database '%s' to persist the transactions.", dbName)
 
-	if account.signingConfiguration.IsAddressBased() {
-		if !ethcommon.IsHexAddress(account.signingConfiguration.Address()) {
-			return errp.WithStack(errors.ErrInvalidAddress)
-		}
-		account.address = Address{
-			Address: ethcommon.HexToAddress(account.signingConfiguration.Address()),
-		}
-	} else {
-		account.address = Address{
-			Address: crypto.PubkeyToAddress(*account.signingConfiguration.PublicKeys()[0].ToECDSA()),
-		}
+	account.address = Address{
+		Address: crypto.PubkeyToAddress(*account.signingConfiguration.PublicKey().ToECDSA()),
 	}
 
-	account.signingConfiguration = signing.NewConfiguration(
-		account.signingConfiguration.ScriptType(),
+	account.signingConfiguration = signing.NewEthereumConfiguration(
+		account.signingConfiguration.EthereumSimple.KeyInfo.RootFingerprint,
 		account.signingConfiguration.AbsoluteKeypath(),
-		account.signingConfiguration.ExtendedPublicKeys(),
-		account.address.String(),
-		account.signingConfiguration.SigningThreshold(),
+		account.signingConfiguration.ExtendedPublicKey(),
 	)
 
 	account.coin.Initialize()
@@ -210,9 +186,9 @@ func (account *Account) poll(initDone func()) {
 			}
 			if err := account.update(); err != nil {
 				account.log.WithError(err).Error("error updating account")
-				account.SetOffline(true)
+				account.SetOffline(err)
 			} else {
-				account.SetOffline(false)
+				account.SetOffline(nil)
 			}
 			if initDone != nil {
 				initDone()
@@ -599,7 +575,7 @@ func (account *Account) SendTx() error {
 	note := account.BaseAccount.GetAndClearProposedTxNote()
 
 	account.log.Info("Signing and sending transaction")
-	if err := account.Config().Keystores.SignTransaction(txProposal); err != nil {
+	if err := account.Config().Keystore.SignTransaction(txProposal); err != nil {
 		return err
 	}
 	// By experience, at least with the Etherscan backend, this can succeed and still the
@@ -658,12 +634,12 @@ func (account *Account) VerifyAddress(addressID string) (bool, error) {
 	}
 	account.Synchronizer.WaitSynchronized()
 	defer account.RLock()()
-	canVerifyAddress, _, err := account.Config().Keystores.CanVerifyAddresses(account.Coin())
+	canVerifyAddress, _, err := account.Config().Keystore.CanVerifyAddress(account.Coin())
 	if err != nil {
 		return false, err
 	}
 	if canVerifyAddress {
-		return true, account.Config().Keystores.VerifyAddress(account.signingConfiguration, account.Coin())
+		return true, account.Config().Keystore.VerifyAddress(account.signingConfiguration, account.Coin())
 	}
 	return false, nil
 }
@@ -673,5 +649,5 @@ func (account *Account) CanVerifyAddresses() (bool, bool, error) {
 	if account.signingConfiguration == nil {
 		return false, false, errp.New("account must be initialized")
 	}
-	return account.Config().Keystores.CanVerifyAddresses(account.Coin())
+	return account.Config().Keystore.CanVerifyAddress(account.Coin())
 }

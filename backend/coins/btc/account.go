@@ -58,8 +58,8 @@ const (
 
 type subaccount struct {
 	signingConfiguration *signing.Configuration
-	receiveAddresses     AddressChain
-	changeAddresses      AddressChain
+	receiveAddresses     *addresses.AddressChain
+	changeAddresses      *addresses.AddressChain
 }
 
 // Account is a account whose addresses are derived from an xpub.
@@ -156,8 +156,7 @@ func (account *Account) defaultGapLimits(signingConfiguration *signing.Configura
 		Change:  6,
 	}
 
-	if signingConfiguration.Singlesig() &&
-		signingConfiguration.ScriptType() == signing.ScriptTypeP2PKH {
+	if signingConfiguration.ScriptType() == signing.ScriptTypeP2PKH {
 		// Usually 6, but BWS uses 20, so for legacy accounts, we have to do that too.
 		// We increase it a bit more as some users still had change buried a bit deeper.
 		limits.Change = 25
@@ -270,16 +269,13 @@ func (account *Account) Initialize() error {
 	}
 	account.initialized = true
 
-	signingConfigurations, err := account.Config().GetSigningConfigurations()
-	if err != nil {
-		return err
-	}
+	signingConfigurations := account.Config().SigningConfigurations
 	if len(signingConfigurations) == 0 {
 		return errp.New("There must be a least one signing configuration")
 	}
 	account.notifier = account.Config().GetNotifier(signingConfigurations)
 
-	accountIdentifier := fmt.Sprintf("account-%s-%s", signingConfigurations.Hash(), account.Config().Code)
+	accountIdentifier := fmt.Sprintf("account-%s", account.Config().Code)
 	account.dbSubfolder = path.Join(account.Config().DBFolder, accountIdentifier)
 	if err := os.MkdirAll(account.dbSubfolder, 0700); err != nil {
 		return errp.WithStack(err)
@@ -294,25 +290,22 @@ func (account *Account) Initialize() error {
 	account.db = db
 	account.log.Debugf("Opened the database '%s' to persist the transactions.", dbName)
 
-	onConnectionStatusChanged := func(status blockchain.Status) {
-		switch status {
-		case blockchain.DISCONNECTED:
-			account.log.Warn("Connection to blockchain backend lost")
-			account.SetOffline(true)
-		case blockchain.CONNECTED:
+	onConnectionStatusChanged := func(err error) {
+		if err != nil {
+			account.log.WithError(err).Warn("Connection to blockchain backend lost")
+			account.SetOffline(err)
+		} else {
 			// when we have previously been offline, the initial sync status is set back
 			// as we need to synchronize with the new backend.
 			account.ResetSynced()
-			account.SetOffline(false)
+			account.SetOffline(nil)
 			account.minRelayFeeRate = nil
 			account.log.Debug("Connection to blockchain backend established")
-		default:
-			account.log.Panicf("Status %d is unknown.", status)
 		}
 	}
 	account.coin.Initialize()
-	account.SetOffline(account.coin.Blockchain().ConnectionStatus() == blockchain.DISCONNECTED)
-	account.coin.Blockchain().RegisterOnConnectionStatusChangedEvent(onConnectionStatusChanged)
+	account.SetOffline(account.coin.Blockchain().ConnectionError())
+	account.coin.Blockchain().RegisterOnConnectionErrorChangedEvent(onConnectionStatusChanged)
 
 	theHeaders := account.coin.Headers()
 	theHeaders.SubscribeEvent(func(event headers.Event) {
@@ -329,24 +322,17 @@ func (account *Account) Initialize() error {
 
 		var subacc subaccount
 		subacc.signingConfiguration = signingConfiguration
-		if signingConfiguration.IsAddressBased() {
-			subacc.receiveAddresses = addresses.NewSingleAddress(
-				signingConfiguration, account.coin.Net(), account.log)
-			account.log.Debug("creating single change address for address based account")
-			subacc.changeAddresses = addresses.NewSingleAddress(
-				signingConfiguration, account.coin.Net(), account.log)
-		} else {
-			gapLimits, err := account.gapLimits(signingConfiguration)
-			if err != nil {
-				return err
-			}
-			account.log.Infof("gap limits: receive=%d, change=%d", gapLimits.Receive, gapLimits.Change)
-
-			subacc.receiveAddresses = addresses.NewAddressChain(
-				signingConfiguration, account.coin.Net(), int(gapLimits.Receive), 0, account.log)
-			subacc.changeAddresses = addresses.NewAddressChain(
-				signingConfiguration, account.coin.Net(), int(gapLimits.Change), 1, account.log)
+		gapLimits, err := account.gapLimits(signingConfiguration)
+		if err != nil {
+			return err
 		}
+		account.log.Infof("gap limits: receive=%d, change=%d", gapLimits.Receive, gapLimits.Change)
+
+		subacc.receiveAddresses = addresses.NewAddressChain(
+			signingConfiguration, account.coin.Net(), int(gapLimits.Receive), 0, account.log)
+		subacc.changeAddresses = addresses.NewAddressChain(
+			signingConfiguration, account.coin.Net(), int(gapLimits.Change), 1, account.log)
+
 		account.subaccounts = append(account.subaccounts, subacc)
 	}
 	account.ensureAddresses()
@@ -384,29 +370,25 @@ func (account *Account) Info() *accounts.Info {
 	// convert it here to the account-specific version (zpub, ypub, tpub, ...).
 	signingConfigurations := make([]*signing.Configuration, len(account.subaccounts))
 	for idx, subacc := range account.subaccounts {
-		var xpubs []*hdkeychain.ExtendedKey
-		for _, xpub := range subacc.signingConfiguration.ExtendedPublicKeys() {
-			if xpub.IsPrivate() {
-				panic("xpub can't be private")
-			}
-			xpubCopy, err := hdkeychain.NewKeyFromString(xpub.String())
-			if err != nil {
-				panic(err)
-			}
-			xpubCopy.SetNet(
-				&chaincfg.Params{
-					HDPublicKeyID: XPubVersionForScriptType(
-						account.coin, subacc.signingConfiguration.ScriptType()),
-				},
-			)
-			xpubs = append(xpubs, xpubCopy)
+		xpub := subacc.signingConfiguration.ExtendedPublicKey()
+		if xpub.IsPrivate() {
+			panic("xpub can't be private")
 		}
-		signingConfigurations[idx] = signing.NewConfiguration(
+		xpubCopy, err := hdkeychain.NewKeyFromString(xpub.String())
+		if err != nil {
+			panic(err)
+		}
+		xpubCopy.SetNet(
+			&chaincfg.Params{
+				HDPublicKeyID: XPubVersionForScriptType(
+					account.coin, subacc.signingConfiguration.ScriptType()),
+			},
+		)
+		signingConfigurations[idx] = signing.NewBitcoinConfiguration(
 			subacc.signingConfiguration.ScriptType(),
+			subacc.signingConfiguration.BitcoinSimple.KeyInfo.RootFingerprint,
 			subacc.signingConfiguration.AbsoluteKeypath(),
-			xpubs,
-			subacc.signingConfiguration.Address(),
-			subacc.signingConfiguration.SigningThreshold(),
+			xpubCopy,
 		)
 	}
 	return &accounts.Info{
@@ -426,10 +408,6 @@ func (account *Account) onNewHeader(header *blockchain.Header) {
 
 // FatalError returns true if the account had a fatal error.
 func (account *Account) FatalError() bool {
-	// Wait until synchronized, to include server errors without manually dealing with sync status.
-	if !account.Offline() {
-		account.Synchronizer.WaitSynchronized()
-	}
 	return account.fatalError
 }
 
@@ -611,7 +589,7 @@ func (account *Account) ensureAddresses() {
 	}
 	defer dbTx.Rollback()
 
-	syncSequence := func(addressChain AddressChain) error {
+	syncSequence := func(addressChain *addresses.AddressChain) error {
 		for {
 			newAddresses := addressChain.EnsureAddresses()
 			if len(newAddresses) == 0 {
@@ -720,12 +698,12 @@ func (account *Account) VerifyAddress(addressID string) (bool, error) {
 	if address == nil {
 		return false, errp.New("unknown address not found")
 	}
-	canVerifyAddress, _, err := account.Config().Keystores.CanVerifyAddresses(account.Coin())
+	canVerifyAddress, _, err := account.Config().Keystore.CanVerifyAddress(account.Coin())
 	if err != nil {
 		return false, err
 	}
 	if canVerifyAddress {
-		return true, account.Config().Keystores.VerifyAddress(address.Configuration, account.Coin())
+		return true, account.Config().Keystore.VerifyAddress(address.Configuration, account.Coin())
 	}
 	return false, nil
 }
@@ -735,7 +713,7 @@ func (account *Account) CanVerifyAddresses() (bool, bool, error) {
 	if !account.initialized {
 		return false, false, errp.New("account must be initialized")
 	}
-	return account.Config().Keystores.CanVerifyAddresses(account.Coin())
+	return account.Config().Keystore.CanVerifyAddress(account.Coin())
 }
 
 type byValue struct {
@@ -770,20 +748,12 @@ func (account *Account) SpendableOutputs() []*SpendableOutput {
 	return result
 }
 
-// CanVerifyExtendedPublicKey returns the indices of the keystores that support secure verification.
-func (account *Account) CanVerifyExtendedPublicKey() []int {
-	return account.Config().Keystores.CanVerifyExtendedPublicKeys()
-}
-
 // VerifyExtendedPublicKey verifies an account's public key. Returns false, nil if no secure output
 // exists.
 //
 // signingConfigIndex refers to the subaccount / signing config.
-//
-// xpubIndex is the position of an xpub in the []*hdkeychain which corresponds to the particular
-// keystore in []Keystore.
-func (account *Account) VerifyExtendedPublicKey(signingConfigIndex, xpubIndex int) (bool, error) {
-	keystore := account.Config().Keystores.Keystores()[xpubIndex]
+func (account *Account) VerifyExtendedPublicKey(signingConfigIndex int) (bool, error) {
+	keystore := account.Config().Keystore
 	if keystore.CanVerifyExtendedPublicKey() {
 		return true, keystore.VerifyExtendedPublicKey(
 			account.Coin(),

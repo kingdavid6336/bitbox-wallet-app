@@ -38,22 +38,32 @@ const (
 var ErrSigningAborted = errors.New("signing aborted by user")
 
 // Keystore supports hardened key derivation according to BIP32 and signing of transactions.
+//go:generate moq -pkg mocks -out mocks/keystore.go . Keystore
 type Keystore interface {
 	// Type denotes the type of the keystore.
 	Type() Type
 
-	// CosignerIndex returns the index at which the keystore signs in a multisig configuration.
-	// The returned value is always zero for a singlesig configuration.
-	CosignerIndex() int
+	// RootFingerprint returns the keystore's root fingerprint, which is the first 32 bits of the
+	// hash160 of the pubkey at the keypath m/.
+	//
+	// https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#key-identifiers
+	RootFingerprint() ([]byte, error)
+
+	// SupportsCoin returns true if the keystore supports at least one account type for this coin.
+	SupportsCoin(coinInstance coin.Coin) bool
 
 	// SupportsAccount returns true if they keystore supports the given coin/account.
 	// meta is a coin-specific metadata related to the account type.
-	// If false, the backend will add one account per supported script type.
-	SupportsAccount(coin coin.Coin, multisig bool, meta interface{}) bool
+	SupportsAccount(coinInstance coin.Coin, meta interface{}) bool
 
 	// SupportsUnifiedAccounts returns true if the keystore supports signing transactions with mixed
 	// input script types in BTC/LTC, for single-sig accounts.
+	// If false, the backend will add one account per supported script type.
 	SupportsUnifiedAccounts() bool
+
+	// SupportsMultipleAccounts returns true if the keystore can handle more than one account per
+	// coin.
+	SupportsMultipleAccounts() bool
 
 	// CanVerifyAddress returns whether the keystore supports to output an address securely.
 	// This is typically done through a screen on the device or through a paired mobile phone.

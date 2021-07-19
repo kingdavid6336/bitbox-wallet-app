@@ -29,13 +29,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil/hdkeychain"
 	"github.com/digitalbitbox/bitbox-wallet-app/backend"
 	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts"
 	"github.com/digitalbitbox/bitbox-wallet-app/backend/banners"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/bitboxbase"
-	baseHandlers "github.com/digitalbitbox/bitbox-wallet-app/backend/bitboxbase/handlers"
 	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc"
 	accountHandlers "github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/handlers"
 	coinpkg "github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
@@ -51,14 +47,13 @@ import (
 	"github.com/digitalbitbox/bitbox-wallet-app/backend/exchanges"
 	"github.com/digitalbitbox/bitbox-wallet-app/backend/keystore"
 	"github.com/digitalbitbox/bitbox-wallet-app/backend/rates"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/signing"
 	utilConfig "github.com/digitalbitbox/bitbox-wallet-app/util/config"
 	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
 	"github.com/digitalbitbox/bitbox-wallet-app/util/jsonp"
 	"github.com/digitalbitbox/bitbox-wallet-app/util/locker"
 	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
 	"github.com/digitalbitbox/bitbox-wallet-app/util/observable"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/digitalbitbox/bitbox-wallet-app/util/socksproxy"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
@@ -74,32 +69,17 @@ type Backend interface {
 	Coin(coinpkg.Code) (coinpkg.Coin, error)
 	Testing() bool
 	Accounts() []accounts.Interface
-	Keystores() *keystore.Keystores
-	CreateAndAddAccount(
-		coin coinpkg.Coin,
-		code string,
-		name string,
-		getSigningConfigurations func() (signing.Configurations, error),
-		persist bool,
-		emitEvent bool,
-	) error
+	Keystore() keystore.Keystore
 	OnAccountInit(f func(accounts.Interface))
 	OnAccountUninit(f func(accounts.Interface))
 	OnDeviceInit(f func(device.Interface))
 	OnDeviceUninit(f func(deviceID string))
 	DevicesRegistered() map[string]device.Interface
-	OnBitBoxBaseInit(f func(*bitboxbase.BitBoxBase))
-	OnBitBoxBaseUninit(f func(bitboxBaseID string))
-	BitBoxBasesDetected() map[string]string
-	BitBoxBasesRegistered() map[string]*bitboxbase.BitBoxBase
 	Start() <-chan interface{}
-	RegisterKeystore(keystore.Keystore)
 	DeregisterKeystore()
 	Register(device device.Interface) error
 	Deregister(deviceID string)
-	TryMakeNewBase(ip string) (bool, error)
 	RatesUpdater() *rates.RateUpdater
-	BitBoxBaseDeregister(bitboxBaseID string)
 	DownloadCert(string) (string, error)
 	CheckElectrumServer(*config.ServerInfo) error
 	RegisterTestKeystore(string)
@@ -110,6 +90,12 @@ type Backend interface {
 	Banners() *banners.Banners
 	Environment() backend.Environment
 	ChartData() (*backend.Chart, error)
+	SupportedCoins(keystore.Keystore) []coinpkg.Code
+	CanAddAccount(coinpkg.Code, keystore.Keystore) (string, bool)
+	CreateAndPersistAccountConfig(coinCode coinpkg.Code, name string, keystore keystore.Keystore) (accounts.Code, error)
+	SetAccountActive(accountCode accounts.Code, active bool) error
+	SetTokenActive(accountCode accounts.Code, tokenCode string, active bool) error
+	RenameAccount(accountCode accounts.Code, name string) error
 }
 
 // Handlers provides a web api to the backend.
@@ -189,9 +175,13 @@ func NewHandlers(
 	getAPIRouter(apiRouter)("/account-add", handlers.postAddAccountHandler).Methods("POST")
 	getAPIRouter(apiRouter)("/keystores", handlers.getKeystoresHandler).Methods("GET")
 	getAPIRouter(apiRouter)("/accounts", handlers.getAccountsHandler).Methods("GET")
+	getAPIRouter(apiRouter)("/set-account-active", handlers.postSetAccountActiveHandler).Methods("POST")
+	getAPIRouter(apiRouter)("/set-token-active", handlers.postSetTokenActiveHandler).Methods("POST")
+	getAPIRouter(apiRouter)("/rename-account", handlers.postRenameAccountHandler).Methods("POST")
 	getAPIRouter(apiRouter)("/accounts/reinitialize", handlers.postAccountsReinitializeHandler).Methods("POST")
 	getAPIRouter(apiRouter)("/export-account-summary", handlers.postExportAccountSummary).Methods("POST")
 	getAPIRouter(apiRouter)("/account-summary", handlers.getAccountSummary).Methods("GET")
+	getAPIRouter(apiRouter)("/supported-coins", handlers.getSupportedCoinsHandler).Methods("GET")
 	getAPIRouter(apiRouter)("/test/register", handlers.postRegisterTestKeystoreHandler).Methods("POST")
 	getAPIRouter(apiRouter)("/test/deregister", handlers.postDeregisterTestKeystoreHandler).Methods("POST")
 	getAPIRouter(apiRouter)("/rates", handlers.getRatesHandler).Methods("GET")
@@ -203,21 +193,17 @@ func NewHandlers(
 	getAPIRouter(apiRouter)("/coins/btc/headers/status", handlers.getHeadersStatus(coinpkg.CodeBTC)).Methods("GET")
 	getAPIRouter(apiRouter)("/certs/download", handlers.postCertsDownloadHandler).Methods("POST")
 	getAPIRouter(apiRouter)("/electrum/check", handlers.postElectrumCheckHandler).Methods("POST")
+	getAPIRouter(apiRouter)("/socksproxy/check", handlers.postSocksProxyCheck).Methods("POST")
 	getAPIRouter(apiRouter)("/exchange/moonpay/buy-supported/{code}", handlers.getExchangeMoonpayBuySupported).Methods("GET")
 	getAPIRouter(apiRouter)("/exchange/moonpay/buy/{code}", handlers.getExchangeMoonpayBuy).Methods("GET")
-	getAPIRouter(apiRouter)("/bitboxbases/establish-connection", handlers.postEstablishConnectionHandler).Methods("POST")
 
 	devicesRouter := getAPIRouter(apiRouter.PathPrefix("/devices").Subrouter())
 	devicesRouter("/registered", handlers.getDevicesRegisteredHandler).Methods("GET")
 
-	bitboxBasesRouter := getAPIRouter(apiRouter.PathPrefix("/bitboxbases").Subrouter())
-	bitboxBasesRouter("/registered", handlers.getBitBoxBasesRegisteredHandler).Methods("GET")
-	bitboxBasesRouter("/detected", handlers.getBitBoxBasesDetectedHandler).Methods("GET")
-
 	handlersMapLock := locker.Locker{}
 
-	accountHandlersMap := map[string]*accountHandlers.Handlers{}
-	getAccountHandlers := func(accountCode string) *accountHandlers.Handlers {
+	accountHandlersMap := map[accounts.Code]*accountHandlers.Handlers{}
+	getAccountHandlers := func(accountCode accounts.Code) *accountHandlers.Handlers {
 		defer handlersMapLock.Lock()()
 		if _, ok := accountHandlersMap[accountCode]; !ok {
 			accountHandlersMap[accountCode] = accountHandlers.NewHandlers(getAPIRouter(
@@ -270,17 +256,6 @@ func NewHandlers(
 		return bitbox02BootloaderHandlersMap[deviceID]
 	}
 
-	baseHandlersMap := map[string]*baseHandlers.Handlers{}
-	getBaseHandlers := func(bitboxBaseID string) *baseHandlers.Handlers {
-		defer handlersMapLock.Lock()()
-		if _, ok := baseHandlersMap[bitboxBaseID]; !ok {
-			baseHandlersMap[bitboxBaseID] = baseHandlers.NewHandlers(getAPIRouter(
-				apiRouter.PathPrefix(fmt.Sprintf("/bitboxbases/%s", bitboxBaseID)).Subrouter(),
-			), log)
-		}
-		return baseHandlersMap[bitboxBaseID]
-	}
-
 	backend.OnDeviceInit(func(device device.Interface) {
 		switch specificDevice := device.(type) {
 		case *bitbox.Device:
@@ -293,13 +268,6 @@ func NewHandlers(
 	})
 	backend.OnDeviceUninit(func(deviceID string) {
 		getDeviceHandlers(deviceID).Uninit()
-	})
-
-	backend.OnBitBoxBaseInit(func(baseDevice *bitboxbase.BitBoxBase) {
-		getBaseHandlers(baseDevice.Identifier()).Init(baseDevice)
-	})
-	backend.OnBitBoxBaseUninit(func(bitboxBaseID string) {
-		getBaseHandlers(bitboxBaseID).Uninit()
 	})
 
 	apiRouter.HandleFunc("/events", handlers.eventsHandler)
@@ -330,20 +298,38 @@ func writeJSON(w io.Writer, value interface{}) {
 	}
 }
 
-type accountJSON struct {
-	CoinCode              coinpkg.Code `json:"coinCode"`
-	CoinUnit              string       `json:"coinUnit"`
-	Code                  string       `json:"code"`
-	Name                  string       `json:"name"`
-	BlockExplorerTxPrefix string       `json:"blockExplorerTxPrefix"`
+type activeToken struct {
+	// TokenCode is the token code as defined in erc20.go, e.g. "eth-erc20-usdt".
+	TokenCode string `json:"tokenCode"`
+	// AccountCode is the code of the account, which is not the same as the TokenCode, as there can
+	// be many accounts for the same token.
+	AccountCode accounts.Code `json:"accountCode"`
 }
 
-func newAccountJSON(account accounts.Interface) *accountJSON {
+type accountJSON struct {
+	Active                bool          `json:"active"`
+	CoinCode              coinpkg.Code  `json:"coinCode"`
+	CoinUnit              string        `json:"coinUnit"`
+	CoinName              string        `json:"coinName"`
+	Code                  accounts.Code `json:"code"`
+	Name                  string        `json:"name"`
+	IsToken               bool          `json:"isToken"`
+	ActiveTokens          []activeToken `json:"activeTokens,omitempty"`
+	BlockExplorerTxPrefix string        `json:"blockExplorerTxPrefix"`
+}
+
+func newAccountJSON(account accounts.Interface, activeTokens []activeToken) *accountJSON {
+	eth, ok := account.Coin().(*eth.Coin)
+	isToken := ok && eth.ERC20Token() != nil
 	return &accountJSON{
+		Active:                account.Config().Active,
 		CoinCode:              account.Coin().Code(),
 		CoinUnit:              account.Coin().Unit(false),
+		CoinName:              account.Coin().Name(),
 		Code:                  account.Config().Code,
 		Name:                  account.Config().Name,
+		IsToken:               isToken,
+		ActiveTokens:          activeTokens,
 		BlockExplorerTxPrefix: account.Coin().BlockExplorerTransactionURLPrefix(),
 	}
 }
@@ -424,90 +410,36 @@ func (handlers *Handlers) getTestingHandler(_ *http.Request) (interface{}, error
 }
 
 func (handlers *Handlers) postAddAccountHandler(r *http.Request) (interface{}, error) {
-	jsonBody := map[string]string{}
+	var jsonBody struct {
+		CoinCode coinpkg.Code `json:"coinCode"`
+		Name     string       `json:"name"`
+	}
+
+	type response struct {
+		Success      bool          `json:"success"`
+		AccountCode  accounts.Code `json:"accountCode,omitempty"`
+		ErrorMessage string        `json:"errorMessage,omitempty"`
+		ErrorCode    string        `json:"errorCode,omitempty"`
+	}
+
 	if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
-		return nil, errp.WithStack(err)
+		return response{Success: false, ErrorMessage: err.Error()}, nil
 	}
-	// The following parameters only work for watch-only singlesig accounts at the moment.
-	jsonCoinCode := coinpkg.Code(jsonBody["coinCode"])
-	jsonScriptType := jsonBody["scriptType"]
-	jsonAccountName := jsonBody["accountName"]
-	jsonExtendedPublicKey := jsonBody["extendedPublicKey"]
-	jsonAddress := jsonBody["address"]
 
-	coin, err := handlers.backend.Coin(jsonCoinCode)
+	keystore := handlers.backend.Keystore()
+	if keystore == nil {
+		return response{Success: false, ErrorMessage: "Keystore not found"}, nil
+	}
+
+	accountCode, err := handlers.backend.CreateAndPersistAccountConfig(jsonBody.CoinCode, jsonBody.Name, keystore)
 	if err != nil {
-		return nil, err
-	}
-
-	scriptType, err := signing.DecodeScriptType(jsonScriptType)
-	if err != nil {
-		return nil, err
-	}
-	keypath := signing.NewEmptyAbsoluteKeypath()
-
-	var configuration *signing.Configuration
-	var warningCode string
-
-	if jsonAddress != "" {
-		switch jsonCoinCode {
-		case coinpkg.CodeBTC, coinpkg.CodeLTC, coinpkg.CodeTBTC, coinpkg.CodeTLTC:
-			btcCoin, ok := coin.(*btc.Coin)
-			if !ok {
-				panic("unexpected type, expected: *btc.Coin")
-			}
-			_, err := btcCoin.DecodeAddress(jsonAddress)
-			if err != nil {
-				return map[string]interface{}{"success": false, "errorCode": "invalidAddress"}, nil
-			}
-			configuration = signing.NewAddressConfiguration(scriptType, keypath, jsonAddress)
-		case coinpkg.CodeETH, coinpkg.CodeTETH:
-			if !common.IsHexAddress(jsonAddress) {
-				return map[string]interface{}{"success": false, "errorCode": "invalidAddress"}, nil
-			}
-			configuration = signing.NewAddressConfiguration(scriptType, keypath, jsonAddress)
+		handlers.log.WithError(err).Error("Could not add account")
+		if errCode, ok := errp.Cause(err).(backend.ErrorCode); ok {
+			return response{Success: false, ErrorCode: string(errCode)}, nil
 		}
-
-	} else {
-		extendedPublicKey, err := hdkeychain.NewKeyFromString(jsonExtendedPublicKey)
-		if err != nil {
-			return map[string]interface{}{"success": false, "errorCode": "xpubInvalid"}, nil
-		}
-		if extendedPublicKey.IsPrivate() {
-			return map[string]interface{}{"success": false, "errorCode": "xprivEntered"}, nil
-		}
-		if btcCoin, ok := coin.(*btc.Coin); ok {
-			expectedNet := &chaincfg.Params{
-				HDPublicKeyID: btc.XPubVersionForScriptType(btcCoin, scriptType),
-			}
-			if !extendedPublicKey.IsForNet(expectedNet) {
-				warningCode = "xpubWrongNet"
-			}
-		}
-		configuration = signing.NewSinglesigConfiguration(scriptType, keypath, extendedPublicKey)
+		return response{Success: false, ErrorMessage: err.Error()}, nil
 	}
-
-	getSigningConfigurations := func() (signing.Configurations, error) {
-		return signing.Configurations{configuration}, nil
-	}
-	accountCode := fmt.Sprintf("%s-%s", configuration.Hash(), coin.Code())
-	err = handlers.backend.CreateAndAddAccount(
-		coin, accountCode, jsonAccountName, getSigningConfigurations, true, true)
-	if errp.Cause(err) == backend.ErrAccountAlreadyExists {
-		return map[string]interface{}{"success": false, "errorCode": "alreadyExists"}, nil
-	}
-	if err != nil {
-		return map[string]interface{}{
-			"success":      false,
-			"errorCode":    "unknown",
-			"errorMessage": err.Error(),
-		}, nil
-	}
-	return map[string]interface{}{
-		"success":     true,
-		"accountCode": accountCode,
-		"warningCode": warningCode,
-	}, nil
+	return response{Success: true, AccountCode: accountCode}, nil
 }
 
 func (handlers *Handlers) getKeystoresHandler(_ *http.Request) (interface{}, error) {
@@ -515,7 +447,9 @@ func (handlers *Handlers) getKeystoresHandler(_ *http.Request) (interface{}, err
 		Type keystore.Type `json:"type"`
 	}
 	keystores := []*json{}
-	for _, keystore := range handlers.backend.Keystores().Keystores() {
+
+	keystore := handlers.backend.Keystore()
+	if keystore != nil {
 		keystores = append(keystores, &json{
 			Type: keystore.Type(),
 		})
@@ -525,10 +459,90 @@ func (handlers *Handlers) getKeystoresHandler(_ *http.Request) (interface{}, err
 
 func (handlers *Handlers) getAccountsHandler(_ *http.Request) (interface{}, error) {
 	accounts := []*accountJSON{}
+	persistedAccounts := handlers.backend.Config().AccountsConfig()
 	for _, account := range handlers.backend.Accounts() {
-		accounts = append(accounts, newAccountJSON(account))
+		var activeTokens []activeToken
+		if account.Coin().Code() == coinpkg.CodeETH {
+			persistedAccount := persistedAccounts.Lookup(account.Config().Code)
+			if persistedAccount == nil {
+				handlers.log.WithField("code", account.Config().Code).Error("account not found in accounts database")
+				continue
+			}
+			for _, tokenCode := range persistedAccount.ActiveTokens {
+				activeTokens = append(activeTokens, activeToken{
+					TokenCode:   tokenCode,
+					AccountCode: backend.Erc20AccountCode(account.Config().Code, tokenCode),
+				})
+			}
+		}
+		accounts = append(accounts, newAccountJSON(account, activeTokens))
 	}
 	return accounts, nil
+}
+
+func (handlers *Handlers) postSetAccountActiveHandler(r *http.Request) (interface{}, error) {
+	var jsonBody struct {
+		AccountCode accounts.Code `json:"accountCode"`
+		Active      bool          `json:"active"`
+	}
+
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}, nil
+	}
+	if err := handlers.backend.SetAccountActive(jsonBody.AccountCode, jsonBody.Active); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}, nil
+	}
+	return response{Success: true}, nil
+}
+
+func (handlers *Handlers) postSetTokenActiveHandler(r *http.Request) (interface{}, error) {
+	var jsonBody struct {
+		AccountCode accounts.Code `json:"accountCode"`
+		TokenCode   string        `json:"tokenCode"`
+		Active      bool          `json:"active"`
+	}
+
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}, nil
+	}
+	if err := handlers.backend.SetTokenActive(jsonBody.AccountCode, jsonBody.TokenCode, jsonBody.Active); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}, nil
+	}
+	return response{Success: true}, nil
+}
+
+func (handlers *Handlers) postRenameAccountHandler(r *http.Request) (interface{}, error) {
+	var jsonBody struct {
+		AccountCode accounts.Code `json:"accountCode"`
+		Name        string        `json:"name"`
+	}
+
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+		ErrorCode    string `json:"errorCode,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}, nil
+	}
+	if err := handlers.backend.RenameAccount(jsonBody.AccountCode, jsonBody.Name); err != nil {
+		if errCode, ok := errp.Cause(err).(backend.ErrorCode); ok {
+			return response{Success: false, ErrorCode: string(errCode)}, nil
+		}
+		return response{Success: false, ErrorMessage: err.Error()}, nil
+	}
+	return response{Success: true}, nil
 }
 
 func (handlers *Handlers) postAccountsReinitializeHandler(_ *http.Request) (interface{}, error) {
@@ -542,22 +556,6 @@ func (handlers *Handlers) getDevicesRegisteredHandler(_ *http.Request) (interfac
 		jsonDevices[deviceID] = device.ProductName()
 	}
 	return jsonDevices, nil
-}
-
-func (handlers *Handlers) getBitBoxBasesDetectedHandler(_ *http.Request) (interface{}, error) {
-	jsonDetectedBases := map[string]string{}
-	for hostname, baseIPv4 := range handlers.backend.BitBoxBasesDetected() {
-		jsonDetectedBases[hostname] = baseIPv4
-	}
-	return jsonDetectedBases, nil
-}
-
-func (handlers *Handlers) getBitBoxBasesRegisteredHandler(_ *http.Request) (interface{}, error) {
-	jsonRegisteredBases := map[string]string{}
-	for bitboxBaseID, bitboxBase := range handlers.backend.BitBoxBasesRegistered() {
-		jsonRegisteredBases[bitboxBaseID] = bitboxBase.GetLocalHostname()
-	}
-	return jsonRegisteredBases, nil
 }
 
 func (handlers *Handlers) postRegisterTestKeystoreHandler(r *http.Request) (interface{}, error) {
@@ -579,7 +577,7 @@ func (handlers *Handlers) postDeregisterTestKeystoreHandler(_ *http.Request) (in
 }
 
 func (handlers *Handlers) getRatesHandler(_ *http.Request) (interface{}, error) {
-	return handlers.backend.RatesUpdater().Last(), nil
+	return handlers.backend.RatesUpdater().LatestPrice(), nil
 }
 
 func (handlers *Handlers) getConvertToFiatHandler(r *http.Request) (interface{}, error) {
@@ -593,7 +591,7 @@ func (handlers *Handlers) getConvertToFiatHandler(r *http.Request) (interface{},
 			"errMsg":  "invalid amount",
 		}, nil
 	}
-	rate := handlers.backend.RatesUpdater().Last()[from][to]
+	rate := handlers.backend.RatesUpdater().LatestPrice()[from][to]
 	return map[string]interface{}{
 		"success":    true,
 		"fiatAmount": strconv.FormatFloat(amountAsFloat*rate, 'f', 2, 64),
@@ -625,7 +623,7 @@ func (handlers *Handlers) getConvertFromFiatHandler(r *http.Request) (interface{
 	case "TBTC", "TLTC", "TETH", "RETH":
 		unit = unit[1:]
 	}
-	rate := handlers.backend.RatesUpdater().Last()[unit][from]
+	rate := handlers.backend.RatesUpdater().LatestPrice()[unit][from]
 	result := 0.0
 	if rate != 0.0 {
 		result = amountAsFloat / rate
@@ -681,23 +679,26 @@ func (handlers *Handlers) postElectrumCheckHandler(r *http.Request) (interface{}
 	}, nil
 }
 
-func (handlers *Handlers) postEstablishConnectionHandler(r *http.Request) (interface{}, error) {
-	jsonBody := map[string]string{}
-	if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
+func (handlers *Handlers) postSocksProxyCheck(r *http.Request) (interface{}, error) {
+	var endpoint string
+	if err := json.NewDecoder(r.Body).Decode(&endpoint); err != nil {
 		return nil, errp.WithStack(err)
 	}
-	ip := jsonBody["ip"]
-	handlers.log.WithField("ip", ip).Debug("Connect to middleware with the following ip:")
 
-	success, err := handlers.backend.TryMakeNewBase(ip)
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+
+	err := socksproxy.NewSocksProxy(true, endpoint).Validate()
 	if err != nil {
-		return map[string]interface{}{
-			"success":      success,
-			"errorMessage": err.Error(),
+		return response{
+			Success:      false,
+			ErrorMessage: err.Error(),
 		}, nil
 	}
-	return map[string]interface{}{
-		"success": true,
+	return response{
+		Success: true,
 	}, nil
 }
 
@@ -787,6 +788,36 @@ func (handlers *Handlers) getAccountSummary(_ *http.Request) (interface{}, error
 	return handlers.backend.ChartData()
 }
 
+// getSupportedCoinsHandler returns an array of coin codes for which you can add an account.
+// Exactly one keystore must be connected, otherwise an empty array is returned.
+func (handlers *Handlers) getSupportedCoinsHandler(_ *http.Request) (interface{}, error) {
+	type element struct {
+		CoinCode             coinpkg.Code `json:"coinCode"`
+		Name                 string       `json:"name"`
+		CanAddAccount        bool         `json:"canAddAccount"`
+		SuggestedAccountName string       `json:"suggestedAccountName"`
+	}
+	keystore := handlers.backend.Keystore()
+	if keystore == nil {
+		return []string{}, nil
+	}
+	var result []element
+	for _, coinCode := range handlers.backend.SupportedCoins(keystore) {
+		coin, err := handlers.backend.Coin(coinCode)
+		if err != nil {
+			continue
+		}
+		suggestedAccountName, canAddAccount := handlers.backend.CanAddAccount(coinCode, keystore)
+		result = append(result, element{
+			CoinCode:             coinCode,
+			Name:                 coin.Name(),
+			CanAddAccount:        canAddAccount,
+			SuggestedAccountName: suggestedAccountName,
+		})
+	}
+	return result, nil
+}
+
 func (handlers *Handlers) postExportAccountSummary(_ *http.Request) (interface{}, error) {
 	name := time.Now().Format("2006-01-02-at-15-04-05-") + "Accounts-Summary.csv"
 	downloadsDir, err := utilConfig.DownloadsDir()
@@ -817,13 +848,15 @@ func (handlers *Handlers) postExportAccountSummary(_ *http.Request) (interface{}
 		"Unit",
 		"Type",
 		"Xpubs",
-		"Address",
 	})
 	if err != nil {
 		return nil, errp.WithStack(err)
 	}
 
 	for _, account := range handlers.backend.Accounts() {
+		if !account.Config().Active {
+			continue
+		}
 		if account.FatalError() {
 			continue
 		}
@@ -840,23 +873,10 @@ func (handlers *Handlers) postExportAccountSummary(_ *http.Request) (interface{}
 		unit := account.Coin().SmallestUnit()
 		var accountType string
 		var xpubs []string
-		var address string
 		signingConfigurations := account.Info().SigningConfigurations
-		if len(signingConfigurations) == 1 && signingConfigurations[0].IsAddressBased() {
-			accountType = "address"
-			address = signingConfigurations[0].Address()
-		} else {
-			accountType = "xpubs"
-			for _, signingConfiguration := range signingConfigurations {
-				if len(signingConfiguration.ExtendedPublicKeys()) != 1 {
-					return nil, errp.New("multisig not supported in the export yet")
-				}
-				xpubs = append(xpubs, signingConfiguration.ExtendedPublicKeys()[0].String())
-			}
-
-			if _, ok := account.(*eth.Account); ok {
-				address = signingConfigurations[0].Address()
-			}
+		accountType = "xpubs"
+		for _, signingConfiguration := range signingConfigurations {
+			xpubs = append(xpubs, signingConfiguration.ExtendedPublicKey().String())
 		}
 
 		err = writer.Write([]string{
@@ -866,7 +886,6 @@ func (handlers *Handlers) postExportAccountSummary(_ *http.Request) (interface{}
 			unit,
 			accountType,
 			strings.Join(xpubs, "; "),
-			address,
 		})
 		if err != nil {
 			return nil, errp.WithStack(err)
@@ -880,21 +899,27 @@ func (handlers *Handlers) getExchangeMoonpayBuySupported(r *http.Request) (inter
 	// TODO: Refactor to make use of a map.
 	var acct accounts.Interface
 	for _, a := range handlers.backend.Accounts() {
-		if a.Config().Code == acctCode {
+		if !a.Config().Active {
+			continue
+		}
+		if string(a.Config().Code) == acctCode {
 			acct = a
 			break
 		}
 	}
 	// TODO: Offline() can be removed from here once there is a unified way of initializing accounts
 	// and showing sync status, offline/fatal states, etc.
-	return acct != nil && !acct.Offline() && exchanges.IsMoonpaySupported(acct.Coin().Code()), nil
+	return acct != nil && acct.Offline() == nil && exchanges.IsMoonpaySupported(acct.Coin().Code()), nil
 }
 
 func (handlers *Handlers) getExchangeMoonpayBuy(r *http.Request) (interface{}, error) {
-	acctCode := mux.Vars(r)["code"]
+	acctCode := accounts.Code(mux.Vars(r)["code"])
 	// TODO: Refactor to make use of a map.
 	var acct accounts.Interface
 	for _, a := range handlers.backend.Accounts() {
+		if !a.Config().Active {
+			continue
+		}
 		if a.Config().Code == acctCode {
 			acct = a
 			break

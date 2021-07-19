@@ -18,6 +18,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"os"
 	"path"
 	"sync"
 	"time"
@@ -33,22 +34,28 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Code is a globally unique account code. It is used for example as a name in databases (e.g. cache
+// database, transaction notes database, etc).
+type Code string
+
 // AccountConfig holds account configuration.
 type AccountConfig struct {
+	// Active, if false, does not load the account in the sidebar, portfolio, etc.
+	Active bool
 	// Code is an identifier for the account *type* (part of account database filenames, apis, etc.).
 	// Type as in btc-p2wpkh, eth-erc20-usdt, etc.
-	Code string
+	Code Code
 	// Name returns a human readable long name.
 	Name string
 	// DBFolder is the folder for all accounts. Full path.
 	DBFolder string
 	// NotesFolder is the folder where the transaction notes are stored. Full path.
-	NotesFolder              string
-	Keystores                *keystore.Keystores
-	OnEvent                  func(Event)
-	RateUpdater              *rates.RateUpdater
-	GetSigningConfigurations func() (signing.Configurations, error)
-	GetNotifier              func(signing.Configurations) Notifier
+	NotesFolder           string
+	Keystore              keystore.Keystore
+	OnEvent               func(Event)
+	RateUpdater           *rates.RateUpdater
+	SigningConfigurations signing.Configurations
+	GetNotifier           func(signing.Configurations) Notifier
 }
 
 // BaseAccount is an account struct with common functionality to all coin accounts.
@@ -63,12 +70,20 @@ type BaseAccount struct {
 	// synced indicates whether the account has loaded and finished the initial sync of the
 	// addresses.
 	synced  bool
-	offline bool
+	offline error
 
-	notes *notes.Notes
+	// notes handles transaction notes.
+	//
+	// It is a slice for migration purposes: from v4.27.0 to v4.28.0, the account identifiers
+	// changed. The slice contains all possible instances of where notes are stored. The first
+	// element is the newest, and other elements are notes stored under legacy names. After
+	// `Initialize()`, this will always have at least one element.
+	notes []*notes.Notes
 
 	proposedTxNote   string
 	proposedTxNoteMu sync.Mutex
+
+	log *logrus.Entry
 }
 
 // NewBaseAccount creates a new Account instance.
@@ -76,6 +91,7 @@ func NewBaseAccount(config *AccountConfig, coin coin.Coin, log *logrus.Entry) *B
 	account := &BaseAccount{
 		config: config,
 		coin:   coin,
+		log:    log,
 	}
 	account.Synchronizer = synchronizer.NewSynchronizer(
 		func() { config.OnEvent(EventSyncStarted) },
@@ -117,37 +133,79 @@ func (account *BaseAccount) ResetSynced() {
 }
 
 // Offline implements Interface.
-func (account *BaseAccount) Offline() bool {
+func (account *BaseAccount) Offline() error {
 	return account.offline
 }
 
 // SetOffline sets the account offline status and emits the EventStatusChanged() if the status
 // changed.
-func (account *BaseAccount) SetOffline(offline bool) {
-	wasOffline := account.offline
+func (account *BaseAccount) SetOffline(offline error) {
 	account.offline = offline
-	if wasOffline != offline {
-		account.config.OnEvent(EventStatusChanged)
-	}
+	account.config.OnEvent(EventStatusChanged)
 }
 
 // Initialize initializes the account. `accountIdentifier` is used as part of the filename of
 // account databases.
 func (account *BaseAccount) Initialize(accountIdentifier string) error {
-	notes, err := notes.LoadNotes(path.Join(
+	txNotes, err := notes.LoadNotes(path.Join(
 		account.config.NotesFolder,
 		fmt.Sprintf("%s.json", accountIdentifier),
 	))
 	if err != nil {
 		return err
 	}
-	account.notes = notes
-	return nil
-}
+	account.notes = []*notes.Notes{txNotes}
 
-// Notes implements Interface.
-func (account *BaseAccount) Notes() *notes.Notes {
-	return account.notes
+	// Append legacy notes (notes stored in files based on obsolete account identifiers). Account
+	// identifiers changed from v4.27.0 to v4.28.0.
+	if len(account.Config().SigningConfigurations) == 0 {
+		return nil
+	}
+	accountNumber, err := account.Config().SigningConfigurations[0].AccountNumber()
+	if err != nil {
+		return nil
+	}
+	if accountNumber != 0 {
+		// Up to v4.27.0, we only had one account per coin.
+		return nil
+	}
+
+	legacyConfigurations := signing.ConvertToLegacyConfigurations(account.Config().SigningConfigurations)
+	var legacyAccountIdentifiers []string
+	switch account.coin.Code() {
+	case coin.CodeBTC, coin.CodeTBTC, coin.CodeLTC, coin.CodeTLTC:
+		legacyAccountIdentifiers = []string{fmt.Sprintf("account-%s-%s", legacyConfigurations.Hash(), account.coin.Code())}
+		// Also consider split accounts:
+		for _, cfg := range account.Config().SigningConfigurations {
+			legacyConfigurations := signing.ConvertToLegacyConfigurations(signing.Configurations{cfg})
+			legacyAccountIdentifier := fmt.Sprintf("account-%s-%s-%s", legacyConfigurations.Hash(), account.coin.Code(), cfg.ScriptType())
+			legacyAccountIdentifiers = append(
+				legacyAccountIdentifiers,
+				legacyAccountIdentifier,
+			)
+		}
+	default:
+		legacyAccountIdentifiers = []string{
+			fmt.Sprintf("account-%s-%s", legacyConfigurations[0].Hash(), account.coin.Code()),
+		}
+	}
+	for _, identifier := range legacyAccountIdentifiers {
+		notesFile := path.Join(account.config.NotesFolder, fmt.Sprintf("%s.json", identifier))
+		if _, err := os.Stat(notesFile); os.IsNotExist(err) {
+			continue // skip nonexistent legacy notes file
+		}
+
+		legacyNotes, err := notes.LoadNotes(path.Join(
+			account.config.NotesFolder,
+			fmt.Sprintf("%s.json", identifier),
+		))
+		if err != nil {
+			return err
+		}
+		account.notes = append(account.notes, legacyNotes)
+	}
+
+	return nil
 }
 
 // ProposeTxNote implements accounts.Account.
@@ -171,12 +229,31 @@ func (account *BaseAccount) GetAndClearProposedTxNote() string {
 
 // SetTxNote implements accounts.Account.
 func (account *BaseAccount) SetTxNote(txID string, note string) error {
-	if err := account.notes.SetTxNote(txID, note); err != nil {
+	// The notes slice is guaranteed to have at least one element by BaseAccount.Initialize.
+	if err := account.notes[0].SetTxNote(txID, note); err != nil {
 		return err
+	}
+	// Delete the notes in legacy files. Don't really care if it fails.
+	for i, notes := range account.notes[1:] {
+		if err := notes.SetTxNote(txID, ""); err != nil {
+			account.log.WithError(err).Errorf("Can't delete a note from a legacy file idx=%d", i)
+		}
 	}
 	// Prompt refresh.
 	account.config.OnEvent(EventStatusChanged)
 	return nil
+}
+
+// TxNote fetches a note for a transcation. Returns the empty string if no note was found.
+func (account *BaseAccount) TxNote(txID string) string {
+	// Take the first note we can find. The first slice element is the regular location of notes,
+	// the other elements lookup notes in legacy locations, so they are not lost when upgrading.
+	for _, notes := range account.notes {
+		if note := notes.TxNote(txID); note != "" {
+			return note
+		}
+	}
+	return ""
 }
 
 // ExportCSV implements accounts.Account.
@@ -224,7 +301,7 @@ func (account *BaseAccount) ExportCSV(w io.Writer, transactions []*TransactionDa
 				feeString,
 				addressAndAmount.Address,
 				transaction.TxID,
-				account.Notes().TxNote(transaction.InternalID),
+				account.TxNote(transaction.InternalID),
 			})
 			if err != nil {
 				return errp.WithStack(err)

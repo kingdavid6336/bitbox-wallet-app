@@ -14,6 +14,7 @@
 .flex-wrap { flex-wrap: wrap; }
 .flex-nowrap { flex-wrap: nowrap; }
 .flex-1 { flex: 1; }
+.flex-grow { flex-grow: 1; }
 .flex-none { flex: none !important; }
 .flex > * { min-width: 0; }
 @media (max-width: 768px) {
@@ -121,8 +122,9 @@
     overflow: auto;
 }
 
-.scrollableContainer .content {
-    /* overflow: visible; */
+.scrollContainer {
+    overflow-x: auto;
+    overflow-y: scroll;
 }
 
 .subHeaderContainer {
@@ -171,6 +173,10 @@
 
 .content.narrow {
     max-width: var(--content-width-small);
+}
+
+.content.larger {
+    max-width: var(--content-width-larger);
 }
 
 .content.noSpace {
@@ -291,6 +297,10 @@
 
 .box.large {
     padding: var(--space-default);
+}
+
+.box.larger {
+    padding: var(--space-large);
 }
 
 .box.slim {
@@ -425,6 +435,10 @@
 
     .box.large {
         padding: var(--space-half);
+    }
+
+    .box.larger {
+        padding: var(--space-default);
     }
 
     .m-top-quarter-on-small {

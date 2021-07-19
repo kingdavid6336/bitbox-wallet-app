@@ -16,101 +16,133 @@
  */
 
 import { Component, h, RenderableProps } from 'preact';
-import { ISigningConfiguration } from '../../../api/account';
+import { route } from 'preact-router';
+import { getCanVerifyXPub, IAccount, TBitcoinSimple, TEthereumSimple, TSigningConfiguration, verifyXPub } from '../../../api/account';
+import { getScriptName, isBitcoinBased } from '../utils';
 import { CopyableInput } from '../../../components/copy/Copy';
 import { Button } from '../../../components/forms';
 import { QRCode } from '../../../components/qrcode/qrcode';
 import { translate, TranslateProps } from '../../../decorators/translate';
-import { apiGet, apiPost } from '../../../utils/request';
 import * as style from './info.css';
 
 interface ProvidedProps {
-    info: ISigningConfiguration;
+    account: IAccount;
+    info: TSigningConfiguration;
     code: string;
     signingConfigIndex: number;
 }
 
 interface State {
-    canVerifyExtendedPublicKey: number[]; // holds a list of keystores which support secure verification
+    canVerifyExtendedPublicKey: boolean;
 }
 
 type Props = ProvidedProps & TranslateProps;
 
 class SigningConfiguration extends Component<Props, State> {
-    constructor(props) {
-        super(props);
-        this.state = ({ canVerifyExtendedPublicKey: [] });
+
+    public readonly state: State = {
+        canVerifyExtendedPublicKey: false,
+    }
+
+    public componentDidMount() {
         this.canVerifyExtendedPublicKeys();
     }
 
     private canVerifyExtendedPublicKeys = () => {
-        apiGet(`account/${this.props.code}/can-verify-extended-public-key`).then(canVerifyExtendedPublicKey => {
+        getCanVerifyXPub(this.props.code).then(canVerifyExtendedPublicKey => {
             this.setState({ canVerifyExtendedPublicKey });
         });
     }
 
-    private verifyExtendedPublicKey = (signingConfigIndex: number, xpubIndex: number) => {
-        apiPost(`account/${this.props.code}/verify-extended-public-key`, {
-            signingConfigIndex, xpubIndex,
-        });
+    private verifyExtendedPublicKey = (signingConfigIndex: number) => {
+        verifyXPub(this.props.code, signingConfigIndex);
     }
 
-    private scriptTypeTitle = (scriptType: string) => {
-        switch (scriptType) {
-            case 'p2pkh':
-                return 'Legacy';
-            case 'p2wpkh-p2sh':
-                return 'Segwit';
-            case 'p2wpkh':
-                return 'Native segwit (bech32)';
-            default:
-                return scriptType;
+    private getSimpleInfo(): TBitcoinSimple | TEthereumSimple {
+        const { info } = this.props;
+        if (info.bitcoinSimple !== undefined) {
+            return info.bitcoinSimple;
         }
+        return info.ethereumSimple;
     }
 
     public render(
-        { t,
-          info,
+        { children,
+          account,
+          code,
+          t,
           signingConfigIndex,
         }: RenderableProps<Props>,
-        { canVerifyExtendedPublicKey }: State) {
+        { canVerifyExtendedPublicKey }: State
+    ) {
+        const config = this.getSimpleInfo();
+        const bitcoinBased = isBitcoinBased(account.coinCode);
         return (
-        // TODO: add info if single or multisig, and threshold.
-        <div className={style.address}>
-            { info.address ?
-                <div>
-                    <label className="labelLarge">{t('accountInfo.address')}</label>
-                    <QRCode data={info.address} />
-                    <div className={style.textareaContainer}>
-                        <CopyableInput flexibleHeight value={info.address} />
+            <div className={style.address}>
+                <div className={style.qrCode}>
+                    { bitcoinBased ? (
+                        <QRCode
+                            data={config.keyInfo.xpub} />
+                    ) : null }
+                </div>
+                <div className={style.details}>
+                    <div className="labelLarge">
+                        { account.isToken ? null : (
+                            <p key="accountname" className={style.entry}>
+                                {/* borrowing translation from accountSummary */}
+                                <strong>{t('accountSummary.name')}:</strong>
+                                <span>{account.name}</span>
+                            </p>
+                        )}
+                        <p key="keypath" className={style.entry}>
+                            <strong>Keypath:</strong>
+                            <code>{config.keyInfo.keypath}</code>
+                        </p>
+                        { ('scriptType' in config) ? (
+                            <p key="scriptName" className={style.entry}>
+                                <strong>Type:</strong>
+                                <span>{getScriptName(config.scriptType)}</span>
+                            </p>
+                        ) : null}
+                        { ('scriptType' in config) ? (
+                            <p key="scriptType" className={style.entry}>
+                                <strong>Script Type:</strong>
+                                <span>{config.scriptType.toUpperCase()}</span>
+                            </p>
+                        ) : null}
+                        <p key="coinName" className={style.entry}>
+                            <strong>{account.isToken ? 'Token' : 'Coin'}:</strong>
+                            <span>{account.coinName} ({account.coinUnit})</span>
+                        </p>
+                        { bitcoinBased ? (
+                            <p key="xpub" className={`${style.entry} ${style.largeEntry}`}>
+                                <strong className="m-right-half">
+                                    {t('accountInfo.extendedPublicKey')}:
+                                </strong>
+                                <CopyableInput
+                                    className="flex-grow"
+                                    alignLeft
+                                    flexibleHeight
+                                    value={config.keyInfo.xpub} />
+                            </p>
+                        ) : null }
                     </div>
                 </div>
-                    :
-                info.xpubs.map((xpub, xpubIndex) => {
-                    return (
-                        <div key={xpub}>
-                            <h2>{this.scriptTypeTitle(info.scriptType)}</h2>
-                            <label className="labelLarge">{t('accountInfo.extendedPublicKey')}</label>
-                            {info.xpubs.length > 1 && (' #' + (xpubIndex + 1))}
-                            <QRCode data={xpub} />
-                            <div className={style.textareaContainer}>
-                                <CopyableInput value={xpub} flexibleHeight />
-                            </div>
-                            <div className="buttons">
-                                {
-                                    canVerifyExtendedPublicKey.includes(xpubIndex) && (
-                                        <Button primary onClick={() => this.verifyExtendedPublicKey(signingConfigIndex, xpubIndex)}>
-                                            {t('accountInfo.verify')}
-                                        </Button>
-                                    )
-                                }
-                            </div>
-                        </div>
-                    );
-                })
-            }
-        </div>
-    ); }
+                <div className={style.buttons}>
+                    { canVerifyExtendedPublicKey ? (
+                        <Button className={style.verifyButton} primary onClick={() => this.verifyExtendedPublicKey(signingConfigIndex)}>
+                            {t('accountInfo.verify')}
+                        </Button>
+                    ) : bitcoinBased ? null : (
+                        <Button className={style.verifyButton} primary onClick={() => route(`/account/${code}/receive`)}>
+                            {t('receive.verify')}
+                        </Button>
+                    ) }
+                    {children}
+                </div>
+            </div>
+        );
+    }
 }
 
 const HOC = translate<ProvidedProps>()(SigningConfiguration);

@@ -17,35 +17,39 @@
 
 import { Component, h, RenderableProps } from 'preact';
 import * as accountApi from '../../api/account';
+import { syncAddressesCount } from '../../api/accountsync';
+import { TDevices } from '../../api/devices';
+import { unsubscribe, UnsubscribeList } from '../../utils/subscriptions';
+import { statusChanged, syncdone } from '../../api/subscribe-legacy';
 import { Balance } from '../../components/balance/balance';
 import { Entry } from '../../components/guide/entry';
 import { Guide } from '../../components/guide/guide';
 import { HeadersSync } from '../../components/headerssync/headerssync';
 import { Header } from '../../components/layout';
+import { Info } from '../../components/icon';
 import { Spinner } from '../../components/spinner/Spinner';
 import Status from '../../components/status/status';
 import { Transactions } from '../../components/transactions/transactions';
 import { load } from '../../decorators/load';
-import { subscribe } from '../../decorators/subscribe';
 import { translate, TranslateProps } from '../../decorators/translate';
 import { apiGet } from '../../utils/request';
-import { apiWebsocket } from '../../utils/websocket';
-import { Devices } from '../device/deviceswitch';
 import * as style from './account.css';
 import { isBitcoinBased } from './utils';
 
-export interface IAccount {
-    coinCode: accountApi.CoinCode;
-    coinUnit: string;
-    code: string;
-    name: string;
-    blockExplorerTxPrefix: string;
-}
+// Show some additional info for the following coin types, if legacy split acocunts is enabled.
+const WithCoinTypeInfo = [
+    'btc-p2pkh',
+    'btc-p2wpkh',
+    'btc-p2wpkh-p2sh',
+    'tbtc-p2pkh',
+    'tbtc-p2wpkh',
+    'tbtc-p2wpkh-p2sh',
+];
 
 interface AccountProps {
     code: string;
-    devices: Devices;
-    accounts: IAccount[];
+    devices: TDevices;
+    accounts: accountApi.IAccount[];
 }
 
 interface LoadedAccountProps {
@@ -53,54 +57,50 @@ interface LoadedAccountProps {
     config: any;
 }
 
-interface SubscribedAccountProps {
-    syncedAddressesCount?: number;
-}
-
 interface State {
-    initialized: boolean;
-    connected?: boolean;
+    status?: accountApi.IStatus;
     transactions?: accountApi.ITransaction[];
     balance?: accountApi.IBalance;
     hasCard: boolean;
     exported: string;
-    accountInfo?:accountApi. ISigningConfigurationList;
-    fatalError: boolean;
+    accountInfo?: accountApi.ISigningConfigurationList;
+    syncedAddressesCount?: number;
 }
 
-type Props = SubscribedAccountProps & LoadedAccountProps & AccountProps & TranslateProps;
+type Props = LoadedAccountProps & AccountProps & TranslateProps;
 
 class Account extends Component<Props, State> {
     public readonly state: State = {
-        initialized: false,
-        connected: undefined,
+        status: undefined,
         transactions: undefined,
         balance: undefined,
         hasCard: false,
         exported: '',
         accountInfo: undefined,
-        fatalError: false,
+        syncedAddressesCount: undefined,
     };
 
-    private unsubscribe!: () => void;
+    private subscribtions: UnsubscribeList = [];
 
     public componentDidMount() {
-        this.unsubscribe = apiWebsocket(this.onEvent);
         this.checkSDCards();
         if (!this.props.code) {
             return;
         }
+        this.subscribe();
         this.onStatusChanged();
     }
 
     public componentWillUnmount() {
-        this.unsubscribe();
+        unsubscribe(this.subscribtions);
     }
 
     public componentWillReceiveProps(nextProps) {
         if (nextProps.code && nextProps.code !== this.props.code) {
             this.setState({
+                status: undefined,
                 balance: undefined,
+                syncedAddressesCount: 0,
                 transactions: undefined,
             });
         }
@@ -113,10 +113,24 @@ class Account extends Component<Props, State> {
         if (this.props.code !== prevProps.code) {
             this.onStatusChanged();
             this.checkSDCards();
+            unsubscribe(this.subscribtions);
+            this.subscribe();
         }
         if (this.deviceIDs(this.props.devices).length !== this.deviceIDs(prevProps.devices).length) {
             this.checkSDCards();
         }
+    }
+
+    private subscribe() {
+        this.subscribtions.push(
+            syncAddressesCount(this.props.code, (code, syncedAddressesCount) => {
+                if (code === this.props.code) {
+                    this.setState({ syncedAddressesCount });
+                }
+            }),
+            statusChanged(this.props.code, () => this.onStatusChanged()),
+            syncdone(this.props.code, () => this.onAccountChanged()),
+        );
     }
 
     private checkSDCards() {
@@ -137,25 +151,9 @@ class Account extends Component<Props, State> {
                     return;
             }
         }))
-               .then(sdcards => sdcards.some(sdcard => sdcard))
-               .then(hasCard => this.setState({ hasCard }));
-    }
-
-    private onEvent = data => {
-        if (!this.props.code) {
-            return;
-        }
-        if (data.type !== 'account' || data.code !== this.props.code) {
-            return;
-        }
-        switch (data.data) {
-            case 'statusChanged':
-                this.onStatusChanged();
-                break;
-            case 'syncdone':
-                this.onAccountChanged();
-                break;
-        }
+            .then(sdcards => sdcards.some(sdcard => sdcard))
+            .then(hasCard => this.setState({ hasCard }))
+            .catch(console.error);
     }
 
     private onStatusChanged() {
@@ -168,50 +166,49 @@ class Account extends Component<Props, State> {
                 // Results came in after the account was switched. Ignore.
                 return;
             }
-            const state = {
-                initialized: status.includes('accountSynced'),
-                connected: !status.includes('offlineMode'),
-                fatalError: status.includes('fatalError'),
-            };
-            if (!state.initialized && !status.includes('accountDisabled')) {
-                accountApi.init(code).catch(console.error);
+            if (!status.disabled) {
+                if (!status.synced) {
+                    accountApi.init(code).catch(console.error);
+                } else {
+                    accountApi.getInfo(code).then(accountInfo => {
+                        if (this.props.code !== code) {
+                            // Results came in after the account was switched. Ignore.
+                            return;
+                        }
+                        this.setState({ accountInfo });
+                    })
+                    .catch(console.error);
+                }
             }
-            if (state.initialized && !status.includes('accountDisabled')) {
-                accountApi.getInfo(code).then(accountInfo => {
-                    if (this.props.code !== code) {
-                        // Results came in after the account was switched. Ignore.
-                        return;
-                    }
-                    this.setState({ accountInfo });
-                })
-                .catch(console.error);
-            }
-
-            this.setState(state);
-            this.onAccountChanged();
-        });
+            this.setState({ status }, this.onAccountChanged);
+        })
+        .catch(console.error);
     }
 
     private onAccountChanged = () => {
-        if (!this.props.code || this.state.fatalError) {
+        const status = this.state.status;
+        if (!this.props.code || status === undefined || status.fatalError) {
             return;
         }
-        if (this.state.initialized && this.state.connected) {
+        if (status.synced && status.offlineError === null) {
             const expectedCode = this.props.code;
-            accountApi.getBalance(this.props.code).then(balance => {
-                if (this.props.code !== expectedCode) {
-                    // Results came in after the account was switched. Ignore.
-                    return;
-                }
-                this.setState({ balance });
-            });
-            accountApi.getTransactionList(this.props.code).then(transactions => {
-                if (this.props.code !== expectedCode) {
-                    // Results came in after the account was switched. Ignore.
-                    return;
-                }
-                this.setState({ transactions });
-            });
+            Promise.all([
+                accountApi.getBalance(this.props.code).then(balance => {
+                    if (this.props.code !== expectedCode) {
+                        // Results came in after the account was switched. Ignore.
+                        return;
+                    }
+                    this.setState({ balance });
+                }),
+                accountApi.getTransactionList(this.props.code).then(transactions => {
+                    if (this.props.code !== expectedCode) {
+                        // Results came in after the account was switched. Ignore.
+                        return;
+                    }
+                    this.setState({ transactions });
+                })
+            ])
+            .catch(console.error);
         } else {
             this.setState({
                 balance: undefined,
@@ -222,23 +219,28 @@ class Account extends Component<Props, State> {
     }
 
     private export = () => {
-        if (this.state.fatalError) {
+        if (this.state.status === undefined || this.state.status.fatalError) {
             return;
         }
-        accountApi.exportAccount(this.props.code).then(exported => {
-            this.setState({ exported });
-        }).catch(console.error);
+        accountApi.exportAccount(this.props.code)
+            .then(exported => this.setState({ exported }))
+            .catch(console.error);
     }
 
-    private isBTCScriptType = (scriptType: accountApi.ScriptType, account: IAccount, accountInfo?: accountApi.ISigningConfigurationList): boolean => {
+    private isBTCScriptType = (
+        scriptType: accountApi.ScriptType,
+        account: accountApi.IAccount,
+        accountInfo?: accountApi.ISigningConfigurationList,
+    ): boolean => {
         if (!accountInfo || accountInfo.signingConfigurations.length !== 1) {
             return false;
         }
+        const config = accountInfo.signingConfigurations[0].bitcoinSimple;
         return (account.coinCode === 'btc' || account.coinCode === 'tbtc') &&
-            accountInfo.signingConfigurations[0].scriptType === scriptType;
+            config !== undefined && config.scriptType === scriptType;
     }
 
-    private deviceIDs = (devices: Devices) => {
+    private deviceIDs = (devices: TDevices) => {
         return Object.keys(devices);
     }
 
@@ -256,72 +258,64 @@ class Account extends Component<Props, State> {
             t,
             code,
             accounts,
-            syncedAddressesCount,
+            config,
         }: RenderableProps<Props>,
         {
+            status,
             transactions,
-            initialized,
-            connected,
             balance,
             hasCard,
             exported,
             accountInfo,
-            fatalError,
+            syncedAddressesCount,
         }: State) {
         const account = accounts &&
                         accounts.find(acct => acct.code === code);
-        if (!account) {
+        if (!account || status === undefined) {
             return null;
         }
+
         const canSend = balance && balance.available.amount !== '0';
 
-        let initializingSpinnerText = t('account.initializing');
-        if (syncedAddressesCount !== undefined && syncedAddressesCount > 1) {
-            initializingSpinnerText += '\n' + t('account.syncedAddressesCount', {
-                count: syncedAddressesCount.toString(),
-                defaultValue: 0,
-            });
+        const initializingSpinnerText =
+            (syncedAddressesCount !== undefined && syncedAddressesCount > 1) ? (
+                '\n' + t('account.syncedAddressesCount', {
+                    count: syncedAddressesCount.toString(),
+                    defaultValue: 0,
+                })
+            ) : '';
+
+        const offlineErrorTextLines: string[] = [];
+        if (status.offlineError !== null) {
+            offlineErrorTextLines.push(t('account.reconnecting'));
+            offlineErrorTextLines.push(status.offlineError);
+            if (config.backend.proxy.useProxy) {
+                offlineErrorTextLines.push(t('account.maybeProxyError'));
+            }
         }
 
         return (
             <div class="contentWithGuide">
                 <div class="container">
-                    <Status type="warning">
-                        {hasCard && t('warning.sdcard')}
+                    <Status hidden={!hasCard} type="warning">
+                        {t('warning.sdcard')}
                     </Status>
-                    {
-                        connected === false ? (
-                            <Status>
-                                <p>{t('account.reconnecting')}</p>
-                            </Status>
-                        ) : null
-                    }
                     <Header
                         title={<h2><span>{account.name}</span></h2>}>
-                        {isBitcoinBased(account.coinCode) ? (
-                            <a href={`/account/${code}/info`} title={t('accountInfo.title')} className="flex flex-row flex-items-center">
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    className={style.accountIcon}>
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <line x1="12" y1="16" x2="12" y2="12"></line>
-                                    <line x1="12" y1="8" x2="12" y2="8"></line>
-                                </svg>
-                                <span>{t('accountInfo.label')}</span>
-                            </a>
-                        ) : null}
+                        <a href={`/account/${code}/info`} title={t('accountInfo.title')} className="flex flex-row flex-items-center">
+                            <Info className={style.accountIcon} />
+                            <span>{t('accountInfo.label')}</span>
+                        </a>
                     </Header>
-                    {initialized && this.dataLoaded() && isBitcoinBased(account.coinCode) && <HeadersSync coinCode={account.coinCode} />}
+                    {status.synced && this.dataLoaded() && isBitcoinBased(account.coinCode) && <HeadersSync coinCode={account.coinCode} />}
                     <div className="innerContainer scrollableContainer">
                         <div className="content padded">
-                            <Status dismissable={`info-${code}`} type="info" className="m-bottom-default">
-                                {t(`account.info.${code}`, { defaultValue: '' })}
+                            <Status
+                                className="m-bottom-default"
+                                hidden={!WithCoinTypeInfo.includes(code)}
+                                dismissable={`info-${code}`}
+                                type="info">
+                                {t(`account.info.${code}`)}
                             </Status>
                             <div class="flex flex-row flex-between flex-items-center flex-column-mobile flex-reverse-mobile">
                                 <label className="labelXLarge flex-self-start-mobile">{t('accountSummary.availableBalance')}</label>
@@ -341,11 +335,14 @@ class Account extends Component<Props, State> {
                                 <Balance balance={balance} />
                             </div>
                             {
-                                !initialized || connected === false || !this.dataLoaded() || fatalError ? (
+                                !status.synced || offlineErrorTextLines.length || !this.dataLoaded() || status.fatalError ? (
                                     <Spinner text={
-                                        connected === false && t('account.reconnecting') ||
-                                        !initialized && initializingSpinnerText ||
-                                        fatalError && t('account.fatalError') || ''
+                                        status.fatalError && t('account.fatalError') ||
+                                        offlineErrorTextLines.join('\n') ||
+                                        !status.synced && (
+                                            t('account.initializing')
+                                            + initializingSpinnerText
+                                        ) || ''
                                     } />
                                 ) : (
                                     <Transactions
@@ -395,22 +392,28 @@ class Account extends Component<Props, State> {
                     )}
                     <Entry key="accountTransactionConfirmation" entry={t('guide.accountTransactionConfirmation')} />
                     <Entry key="accountFiat" entry={t('guide.accountFiat')} />
+
                     { /* careful, also used in Settings */ }
                     <Entry key="accountRates" entry={t('guide.accountRates')} />
+
+                    <Entry key="cointracking" entry={{
+                        link: {
+                            text: 'CoinTracking',
+                            url: 'https://cointracking.info/import/bitbox/',
+                        },
+                        text: t('guide.cointracking.text'),
+                        title: t('guide.cointracking.title')
+                    }} />
                 </Guide>
             </div>
         );
     }
 }
 
-const loadHOC = load<LoadedAccountProps, SubscribedAccountProps & AccountProps & TranslateProps>(({ code }) => ({
+const loadHOC = load<LoadedAccountProps, AccountProps & TranslateProps>(({ code }) => ({
     moonpayBuySupported: `exchange/moonpay/buy-supported/${code}`,
     config: 'config',
 }))(Account);
 
-const subscribeHOC = subscribe<SubscribedAccountProps, AccountProps & TranslateProps>(({ code }) => ({
-    syncedAddressesCount: `account/${code}/synced-addresses-count`,
-}), false, true)(loadHOC);
-
-const HOC = translate<AccountProps>()(subscribeHOC);
+const HOC = translate<AccountProps>()(loadHOC);
 export { HOC as Account };

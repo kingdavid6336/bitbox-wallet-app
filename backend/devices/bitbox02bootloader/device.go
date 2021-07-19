@@ -20,7 +20,6 @@ import (
 
 	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/device/event"
 	keystoreInterface "github.com/digitalbitbox/bitbox-wallet-app/backend/keystore"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/signing"
 	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
 	"github.com/digitalbitbox/bitbox-wallet-app/util/observable"
 	"github.com/digitalbitbox/bitbox02-api-go/api/bootloader"
@@ -73,6 +72,13 @@ func NewDevice(
 			device.fireEvent()
 		},
 	)
+
+	firmwareHash, signingKeysHash, err := device.Device.GetHashes(false, false)
+	if err != nil {
+		log.WithError(err).Error("Could not get hashes from bootloader")
+	} else {
+		log.Infof("firmwareHash=%x, signingKeysHash=%x", firmwareHash, signingKeysHash)
+	}
 	return device
 }
 
@@ -91,8 +97,8 @@ func (device *Device) Identifier() string {
 	return device.deviceID
 }
 
-// KeystoreForConfiguration implements device.Device.
-func (device *Device) KeystoreForConfiguration(configuration *signing.Configuration, cosignerIndex int) keystoreInterface.Keystore {
+// Keystore implements device.Device.
+func (device *Device) Keystore() keystoreInterface.Keystore {
 	panic("not supported")
 }
 
@@ -117,4 +123,33 @@ func (device *Device) UpgradeFirmware() error {
 	product := device.Device.Product()
 	device.log.Infof("upgrading firmware: %s, %s", product, BundledFirmwareVersion(product))
 	return device.Device.UpgradeFirmware(bundledFirmware(product))
+}
+
+// VersionInfo contains version information about the upgrade.
+type VersionInfo struct {
+	Erased     bool `json:"erased"`
+	CanUpgrade bool `json:"canUpgrade"`
+}
+
+// VersionInfo returns info about the upgrade to the bundled firmware.
+func (device *Device) VersionInfo() (*VersionInfo, error) {
+	erased, err := device.Device.Erased()
+	if err != nil {
+		return nil, err
+	}
+	currentFirmwareVersion, _, err := device.Device.Versions()
+	if err != nil {
+		return nil, err
+	}
+	bundledFirmwareVersion, err := device.Device.SignedFirmwareVersion(
+		bundledFirmware(device.Device.Product()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	canUpgrade := erased || bundledFirmwareVersion > currentFirmwareVersion
+	return &VersionInfo{
+		Erased:     erased,
+		CanUpgrade: canUpgrade,
+	}, nil
 }

@@ -22,7 +22,6 @@ import (
 
 	event "github.com/digitalbitbox/bitbox-wallet-app/backend/devices/device/event"
 	keystoreInterface "github.com/digitalbitbox/bitbox-wallet-app/backend/keystore"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/signing"
 	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
 	"github.com/digitalbitbox/bitbox-wallet-app/util/observable"
 	"github.com/digitalbitbox/bitbox-wallet-app/util/observable/action"
@@ -110,16 +109,14 @@ func (device *Device) Identifier() string {
 	return device.deviceID
 }
 
-// KeystoreForConfiguration implements device.Device.
-func (device *Device) KeystoreForConfiguration(configuration *signing.Configuration, cosignerIndex int) keystoreInterface.Keystore {
+// Keystore implements device.Device.
+func (device *Device) Keystore() keystoreInterface.Keystore {
 	if device.Status() != firmware.StatusInitialized {
 		return nil
 	}
 	return &keystore{
-		device:        device,
-		configuration: configuration,
-		cosignerIndex: cosignerIndex,
-		log:           device.log,
+		device: device,
+		log:    device.log,
 	}
 }
 

@@ -17,6 +17,12 @@
 
 import { Component, h, RenderableProps } from 'preact';
 import { getCurrentUrl, route } from 'preact-router';
+import { getAccounts, IAccount } from './api/account';
+import { syncAccountsList } from './api/accountsync';
+import { getDeviceList, TDevices } from './api/devices';
+import { syncDeviceList } from './api/devicessync';
+import { unsubscribe, UnsubscribeList } from './utils/subscriptions';
+import { ConnectedApp } from './connected';
 import { Alert } from './components/alert/Alert';
 import { Banner } from './components/banner/banner';
 import { Confirm } from './components/confirm/Confirm';
@@ -26,46 +32,40 @@ import { MobileDataWarning } from './components/mobiledatawarning';
 import { Sidebar, toggleSidebar } from './components/sidebar/sidebar';
 import TranslationHelper from './components/translationhelper/translationhelper';
 import { Update } from './components/update/update';
-import { subscribe } from './decorators/subscribe';
 import { translate, TranslateProps } from './decorators/translate';
 import { i18nEditorActive } from './i18n/i18n';
-import { Account, IAccount } from './routes/account/account';
-import { AddAccount } from './routes/account/add/addaccount';
+import { Account } from './routes/account/account';
+import { AddAccount } from './routes/account/add/add';
 import { Moonpay } from './routes/buy/moonpay';
 import { BuyInfo } from './routes/buy/info';
-import Info from './routes/account/info/info';
+import { Info } from './routes/account/info/info';
 import { Receive } from './routes/account/receive/receive';
 import { Send } from './routes/account/send/send';
 import { AccountsSummary } from './routes/account/summary/accountssummary';
-import { BitBoxBase, setBaseUserStatus, setInternalBaseStatus, updateSharedBaseState } from './routes/bitboxbase/bitboxbase';
-import { BitBoxBaseConnect, DetectedBitBoxBases } from './routes/bitboxbase/bitboxbaseconnect';
-import { Devices, DeviceSwitch } from './routes/device/deviceswitch';
+import { DeviceSwitch } from './routes/device/deviceswitch';
 import ManageBackups from './routes/device/manage-backups/manage-backups';
+import { ManageAccounts } from './routes/settings/manage-accounts';
 import { Exchanges } from './routes/exchanges/exchanges';
 import ElectrumSettings from './routes/settings/electrum';
 import { Settings } from './routes/settings/settings';
-import { apiGet, apiPost } from './utils/request';
+import { apiPost } from './utils/request';
 import { apiWebsocket } from './utils/websocket';
 
 interface State {
-    detectedBases: DetectedBitBoxBases;
-    bitboxBaseIDs: string[];
-}
-
-interface SubscribedProps {
     accounts: IAccount[];
-    devices: Devices;
+    devices: TDevices;
 }
 
-type Props = SubscribedProps & TranslateProps;
+type Props = TranslateProps;
 
 class App extends Component<Props, State> {
     public readonly state: State = {
-        detectedBases: {},
-        bitboxBaseIDs: [],
+        accounts: [],
+        devices: {},
     };
 
     private unsubscribe!: () => void;
+    private unsubscribeList: UnsubscribeList = [];
 
     /**
      * Gets fired when the route changes.
@@ -74,13 +74,9 @@ class App extends Component<Props, State> {
         if (panelStore.state.activeSidebar) {
             toggleSidebar();
         }
-        setTimeout(this.maybeRoute);
     }
 
     public componentDidMount() {
-        this.maybeRoute();
-        this.onBitBoxBasesRegisteredChanged();
-        this.onBitBoxBasesDetectedChanged();
         this.unsubscribe = apiWebsocket(({ type, data, meta }) => {
             switch (type) {
             case 'backend':
@@ -95,73 +91,70 @@ class App extends Component<Props, State> {
                     break;
                 }
                 break;
-            case 'bitboxbases':
-                switch (data) {
-                case 'registeredChanged':
-                    this.onBitBoxBasesRegisteredChanged();
-                    break;
-                case 'detectedChanged':
-                    this.onBitBoxBasesDetectedChanged();
-                    break;
-                case 'reconnected':
-                    this.onBitBoxBaseReconnected(meta.ID);
-                    break;
-                }
             }
         });
+
+        const setDevices = (devices: TDevices) => {
+            const oldDeviceIDList = Object.keys(this.state.devices);
+            this.setState({ devices }, () => {
+                const newDeviceIDList: string[] = Object.keys(this.state.devices);
+                if (
+                    newDeviceIDList.length > 0
+                    && (oldDeviceIDList.length === 0 || newDeviceIDList[0] !== oldDeviceIDList[0])
+                ) {
+                    // route to the first device for unlock, create, restore etc.
+                    route(`/device/${newDeviceIDList[0]}`, true);
+                }
+            });
+        };
+
+        Promise.all([getDeviceList(), getAccounts()])
+            .then(([devices, accounts]) => {
+                this.setState({ accounts }, this.maybeRoute);
+                setDevices(devices);
+            })
+            .catch(console.error);
+
+        this.unsubscribeList.push(
+            syncAccountsList(accounts => {
+                this.setState({ accounts }, this.maybeRoute);
+            }),
+            syncDeviceList(setDevices),
+            // TODO: add syncBackendNewTX
+        );
     }
 
     public componentWillUnmount() {
         this.unsubscribe();
-    }
-
-    private onBitBoxBasesDetectedChanged = () => {
-        apiGet('bitboxbases/detected').then(detectedBases => {
-            this.setState({ detectedBases });
-        });
-    }
-
-    private onBitBoxBasesRegisteredChanged = () => {
-        apiGet('bitboxbases/registered').then(bases => {
-            let bitboxBaseIDs: string[] = [];
-            if (bases !== null) {
-                // Registered bases are returned in the format {ID: hostname}
-                bitboxBaseIDs = Object.keys(bases);
-            }
-            this.setState({ bitboxBaseIDs });
-            bitboxBaseIDs.map(ID => updateSharedBaseState('hostname', bases[ID].split('.')[0], ID));
-        });
-    }
-
-    private onBitBoxBaseReconnected = (ID: string) => {
-        setInternalBaseStatus('locked', ID);
-        setBaseUserStatus('OK', ID);
+        unsubscribe(this.unsubscribeList);
     }
 
     private maybeRoute = () => {
         const currentURL = getCurrentUrl();
         const isIndex = currentURL === '/' || currentURL === '/index.html' || currentURL === '/android_asset/web/index.html';
         const inAccounts = currentURL.startsWith('/account/');
-        const accounts = this.props.accounts;
-        if (currentURL.startsWith('/account-summary') && accounts.length === 0) {
+        const accounts = this.state.accounts;
+
+        // if no accounts are registered on specified views route to /
+        if ( accounts.length === 0 && (
+            currentURL.startsWith('/account-summary')
+            || currentURL.startsWith('/add-account')
+            || currentURL.startsWith('/settings/manage-accounts')
+        )) {
             route('/', true);
             return;
         }
+        // if on an account that isnt registered route to /
         if (inAccounts && !accounts.some(account => currentURL.startsWith('/account/' + account.code))) {
             route('/', true);
             return;
         }
-        if (isIndex || currentURL === '/account') {
-            if (accounts && accounts.length) {
-                route(`/account-summary`, true);
-                return;
-            }
-        }
-        const deviceIDs: string[] = Object.keys(this.props.devices);
-        if (isIndex && deviceIDs.length > 0) {
-            route(`/device/${deviceIDs[0]}`, true);
+        // if on index page and there is at least 1 account route to /account-summary
+        if (isIndex && accounts && accounts.length) {
+            route('/account-summary', true);
             return;
         }
+        // if on the /buy/ view and there are no accounts view route to /
         if (accounts.length === 0 && currentURL.startsWith('/buy/')) {
             route('/', true);
             return;
@@ -171,115 +164,104 @@ class App extends Component<Props, State> {
     // Returns a string representation of the current devices, so it can be used in the `key` property of subcomponents.
     // The prefix is used so different subcomponents can have unique keys to not confuse the renderer.
     private devicesKey = (prefix: string): string => {
-        return prefix + ':' + JSON.stringify(this.props.devices, Object.keys(this.props.devices).sort());
-    }
-
-    public componentDidUpdate(prevProps) {
-        if (prevProps.accounts !== this.props.accounts || prevProps.devices !== this.props.devices) {
-            this.maybeRoute();
-        }
+        return prefix + ':' + JSON.stringify(this.state.devices, Object.keys(this.state.devices).sort());
     }
 
     private toggleSidebar = () => {
         panelStore.setState({ activeSidebar: !panelStore.state.activeSidebar });
     }
 
+    private activeAccounts = (): IAccount[] => {
+        return this.state.accounts.filter(acct => acct.active);
+    }
+
     public render(
-        { accounts, devices }: RenderableProps<Props>,
-        { bitboxBaseIDs, detectedBases }: State,
+        {  }: RenderableProps<Props>,
+        { accounts, devices }: State,
     ) {
         const deviceIDs: string[] = Object.keys(devices);
+        const activeAccounts = this.activeAccounts();
         return (
-            <div className={['app', i18nEditorActive ? 'i18nEditor' : ''].join(' ')}>
-                <TranslationHelper />
-                <Sidebar
-                    accounts={accounts}
-                    deviceIDs={deviceIDs}
-                    bitboxBaseIDs={bitboxBaseIDs} />
-                <div class="appContent flex flex-column flex-1" style="min-width: 0;">
-                    <Update />
-                    <Banner msgKey="bitbox01" />
-                    <MobileDataWarning />
-                    <Container toggleSidebar={this.toggleSidebar} onChange={this.handleRoute}>
-                        <Send
-                            path="/account/:code/send"
-                            devices={devices}
-                            deviceIDs={deviceIDs}
-                            accounts={accounts} />
-                        <Receive
-                            path="/account/:code/receive"
-                            devices={devices}
-                            accounts={accounts}
-                            deviceIDs={deviceIDs} />
-                        <BuyInfo
-                            path="/buy/info/:code?"
-                            devices={devices}
-                            accounts={accounts} />
-                        <Moonpay
-                            path="/buy/moonpay/:code"
-                            code={'' /* dummy to satisfy TS */}
-                            devices={devices}
-                            accounts={accounts} />
-                        <Exchanges
-                            path="/exchanges" />
-                        <Info
-                            path="/account/:code/info"
-                            accounts={accounts} />
-                        <Account
-                            path="/account/:code"
-                            code={'' /* dummy to satisfy TS */}
-                            devices={devices}
-                            accounts={accounts} />
-                        <AddAccount
-                            path="/add-account" />
-                        <AccountsSummary accounts={accounts}
-                            path="/account-summary" />
-                        <BitBoxBaseConnect
-                            path="/bitboxbase"
-                            detectedBases={detectedBases}
-                            bitboxBaseIDs={bitboxBaseIDs} />
-                        <BitBoxBase
-                            path="/bitboxbase/:bitboxBaseID"
-                            bitboxBaseID={null} />
-                        <ElectrumSettings
-                            path="/settings/electrum" />
-                        <Settings
-                            deviceIDs={deviceIDs}
-                            path="/settings" />
-                        {/* Use with TypeScript: {Route<{ deviceID: string }>({ path: '/manage-backups/:deviceID', component: ManageBackups })} */}
-                        {/* ManageBackups and DeviceSwitch need a key to trigger (re-)mounting when devices change, to handle routing */}
-                        <ManageBackups
-                            path="/manage-backups/:deviceID"
-                            key={this.devicesKey('manage-backups')}
-                            devices={devices}
-                        />
-                        <DeviceSwitch
-                            path="/device/:deviceID"
-                            key={this.devicesKey('device-switch')}
-                            deviceID={null /* dummy to satisfy TS */}
-                            devices={devices} />
-                        <DeviceSwitch
-                            default
-                            key={this.devicesKey('device-switch-default')}
-                            deviceID={null}
-                            devices={devices} />
-                    </Container>
+            <ConnectedApp>
+                <div className={['app', i18nEditorActive ? 'i18nEditor' : ''].join(' ')}>
+                    <TranslationHelper />
+                    <Sidebar
+                        accounts={activeAccounts}
+                        deviceIDs={deviceIDs} />
+                    <div class="appContent flex flex-column flex-1" style="min-width: 0;">
+                        <Update />
+                        <Banner msgKey="bitbox01" />
+                        <MobileDataWarning />
+                        <Container toggleSidebar={this.toggleSidebar} onChange={this.handleRoute}>
+                            <Send
+                                path="/account/:code/send"
+                                devices={devices}
+                                deviceIDs={deviceIDs}
+                                accounts={activeAccounts} />
+                            <Receive
+                                path="/account/:code/receive"
+                                devices={devices}
+                                accounts={activeAccounts}
+                                deviceIDs={deviceIDs} />
+                            <BuyInfo
+                                path="/buy/info/:code?"
+                                devices={devices}
+                                accounts={activeAccounts} />
+                            <Moonpay
+                                path="/buy/moonpay/:code"
+                                code={'' /* dummy to satisfy TS */}
+                                devices={devices}
+                                accounts={activeAccounts} />
+                            <Exchanges
+                                path="/exchanges" />
+                            <Info
+                                path="/account/:code/info"
+                                code={'' /* dummy to satisfy TS */}
+                                accounts={activeAccounts} />
+                            <Account
+                                path="/account/:code"
+                                code={'' /* dummy to satisfy TS */}
+                                devices={devices}
+                                accounts={activeAccounts} />
+                            <AddAccount
+                                path="/add-account" />
+                            <AccountsSummary accounts={activeAccounts}
+                                path="/account-summary" />
+                            <ElectrumSettings
+                                path="/settings/electrum" />
+                            <Settings
+                                manageAccountsLen={accounts.length}
+                                deviceIDs={deviceIDs}
+                                path="/settings" />
+                            <ManageAccounts
+                                key={'manage-accounts'}
+                                path="/settings/manage-accounts" />
+                            {/* Use with TypeScript: {Route<{ deviceID: string }>({ path: '/manage-backups/:deviceID', component: ManageBackups })} */}
+                            {/* ManageBackups and DeviceSwitch need a key to trigger (re-)mounting when devices change, to handle routing */}
+                            <ManageBackups
+                                path="/manage-backups/:deviceID"
+                                key={this.devicesKey('manage-backups')}
+                                devices={devices}
+                            />
+                            <DeviceSwitch
+                                path="/device/:deviceID"
+                                key={this.devicesKey('device-switch')}
+                                deviceID={null /* dummy to satisfy TS */}
+                                devices={devices} />
+                            <DeviceSwitch
+                                default
+                                key={this.devicesKey('device-switch-default')}
+                                deviceID={null}
+                                devices={devices} />
+                        </Container>
+                    </div>
+                    <Alert />
+                    <Confirm />
                 </div>
-                <Alert />
-                <Confirm />
-            </div>
+            </ConnectedApp>
         );
     }
 }
 
-const subscribeHOC = subscribe<SubscribedProps, TranslateProps>(
-    {
-        accounts: 'accounts',
-        devices: 'devices/registered',
-    },
-    true,
-    false,
-)(App);
-
-const HOC = translate()(subscribeHOC);
+const HOC = translate()(App);
 export { HOC as App };

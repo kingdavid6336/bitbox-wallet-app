@@ -29,7 +29,14 @@ interface BitBox02BootloaderProps {
 }
 
 interface LoadedProps {
-    erased: boolean;
+    versionInfo: {
+        // Indicates whether the device has any firmware already installed on it.
+        // It is considered "erased" if there's no firmware, and it also happens
+        // to be the state in which BitBox02 is shipped to customers.
+        erased: boolean;
+        // Indicates whether the user can install/upgrade firmware.
+        canUpgrade: boolean;
+    };
 }
 
 type Props = BitBox02BootloaderProps & LoadedProps & TranslateProps;
@@ -103,7 +110,7 @@ class BitBox02Bootloader extends Component<Props, State> {
     public render(
         { t,
           deviceID,
-          erased,
+          versionInfo,
         }: RenderableProps<Props>,
         { status,
         }: State,
@@ -113,7 +120,12 @@ class BitBox02Bootloader extends Component<Props, State> {
             if (status.upgradeSuccessful) {
                 contents = (
                     <div className="box large">
-                        <p style="margin-bottom: 0;">{t('bb02Bootloader.success', { rebootSeconds: status.rebootSeconds.toString() })}</p>
+                        <p style="margin-bottom: 0;">
+                            {t('bb02Bootloader.success', {
+                                rebootSeconds: status.rebootSeconds.toString(),
+                                context: (versionInfo.erased ? 'install' : ''),
+                            })}
+                        </p>
                     </div>
                 );
             } else {
@@ -121,26 +133,39 @@ class BitBox02Bootloader extends Component<Props, State> {
                 contents = (
                     <div className="box large">
                         <progress value={value} max="100">{value}%</progress>
-                        <p style="margin-bottom: 0;">{t('bootloader.progress', {
-                            progress: value.toString(),
-                        })}</p>
+                        <p style="margin-bottom: 0;">
+                            {t('bootloader.progress', {
+                                progress: value.toString(),
+                                context: (versionInfo.erased ? 'install' : ''),
+                            })}
+                        </p>
                     </div>
                 );
             }
         } else {
             contents = (
                 <div className="box large" style="min-height: 390px">
+                    {versionInfo.erased && (
+                        <div class="subHeaderContainer first">
+                            <div class="subHeader">
+                              <h2>{t('welcome.title')}</h2>
+                              <h3>{t('welcome.getStarted')}</h3>
+                            </div>
+                        </div>
+                    )}
                     <div className="buttons">
-                        <Button
-                            primary
-                            onClick={this.upgradeFirmware}>
-                            {t('bootloader.button')}
-                        </Button>
-                        { !erased && (
+                        { versionInfo.canUpgrade ? (
+                            <Button
+                                primary
+                                onClick={this.upgradeFirmware}>
+                                {t('bootloader.button', { context: (versionInfo.erased ? 'install' : '') })}
+                            </Button>
+                            ) : null }
+                        { !versionInfo.erased && (
                             <Button
                                 transparent
                                 onClick={this.reboot}>
-                                {t('bb02Bootloader.abort')}
+                                {t('bb02Bootloader.abort', { context: !versionInfo.canUpgrade ? 'noUpgrade' : '' })}
                             </Button>
                         )}
                     </div>
@@ -175,6 +200,6 @@ class BitBox02Bootloader extends Component<Props, State> {
     }
 }
 
-const loadHOC = load<LoadedProps, BitBox02BootloaderProps & TranslateProps>(({ deviceID }) => ({ erased: 'devices/bitbox02-bootloader/' + deviceID + '/erased' }))(BitBox02Bootloader);
+const loadHOC = load<LoadedProps, BitBox02BootloaderProps & TranslateProps>(({ deviceID }) => ({ versionInfo: 'devices/bitbox02-bootloader/' + deviceID + '/version-info' }))(BitBox02Bootloader);
 const HOC = translate<BitBox02BootloaderProps>()(loadHOC);
 export { HOC as BitBox02Bootloader };

@@ -15,38 +15,25 @@
  */
 
 import { Component, h, RenderableProps } from 'preact';
-import { route } from 'preact-router';
-import { BitBox02 } from '../../components/devices/bitbox02/bitbox02';
+import { TDevices } from '../../api/devices';
+import BitBox01 from './bitbox01/bitbox01';
+import { BitBox02 } from './bitbox02/bitbox02';
 import { BitBox02Bootloader } from '../../components/devices/bitbox02bootloader/bitbox02bootloader';
-import Device from './device';
 import { Waiting } from './waiting';
 
-export interface Devices {
-    [deviceID: string]: 'bitbox' | 'bitbox02' | 'bitbox02-bootloader';
-}
-
-// Keys are typed as 'string | number' in Preact, which prevents us from using 'Devices' (object) here.
 interface Props {
-    key?: any;
-    devices: Devices;
+    devices: TDevices;
     deviceID: string | null;
 }
 
 class DeviceSwitch extends Component<Props, {}> {
-    public componentDidMount() {
-        const deviceIDs = Object.keys(this.props.devices);
-        if (this.props.deviceID !== null && !deviceIDs.includes(this.props.deviceID)) {
-            route('/', true);
-        }
-    }
-
     public render({ deviceID, devices }: RenderableProps<Props>) {
         if (this.props.default || deviceID === null || !Object.keys(devices).includes(deviceID)) {
             return <Waiting />;
         }
         switch (devices[deviceID]) {
         case 'bitbox':
-            return <Device deviceID={deviceID} />;
+            return <BitBox01 deviceID={deviceID} />;
         case 'bitbox02':
              return <BitBox02 deviceID={deviceID} />;
         case 'bitbox02-bootloader':

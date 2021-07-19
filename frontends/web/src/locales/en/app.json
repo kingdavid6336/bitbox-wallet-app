@@ -14,6 +14,7 @@
       "tbtc-p2wpkh-p2sh": "$t(account.info.btc-p2wpkh-p2sh)"
     },
     "initializing": "Getting information from the blockchain…",
+    "maybeProxyError": "Tor proxy enabled. Ensure that your Tor proxy is running properly, or disable the proxy setting.",
     "openFile": "Open file",
     "reconnecting": "Lost connection, trying to reconnect…",
     "syncedAddressesCount": "Scanned {{count}} addresses"
@@ -23,7 +24,13 @@
     "extendedPublicKey": "Extended public key",
     "label": "Account info",
     "title": "Account information",
-    "verify": "Verify on device"
+    "verify": "Verify on device",
+    "xpubTypeChangeBtn": {
+      "p2pkh": "View legacy P2PKH extended public key",
+      "p2wpkh": "View Native segwit",
+      "p2wpkh-p2sh": "View older segwit extended public key"
+    },
+    "xpubTypeInfo": "Currently displaying {{scriptType}} extended public key ({{current}} of {{numberOfXPubs}})"
   },
   "accountSummary": {
     "availableBalance": "Available balance",
@@ -32,27 +39,28 @@
     "fiatBalance": "Fiat balance",
     "name": "Account name",
     "noAccount": "There are no accounts to show.",
-    "title": "Accounts summary",
+    "title": "My portfolio",
     "total": "Total",
     "transactionHistory": "Transaction history"
   },
   "addAccount": {
-    "accountName": "Account name",
-    "address": "Address",
-    "coin": "Coin",
-    "error": {
-      "alreadyExists": "The account already exists.",
-      "invalidAddress": "Please enter a valid address",
-      "xprivEntered": "WARNING: You entered an extended private key. Please enter an extended public key and keep your private keys safe.",
-      "xpubInvalid": "Extended public key malformatted."
+    "chooseName": {
+      "nextButton": "Add account",
+      "step": "Name account",
+      "title": "Name your account"
     },
-    "extendedPublicKey": "Extended public key",
-    "scriptType": "Script type",
-    "submit": "Add account",
-    "title": "Add account",
-    "warning": {
-      "xpubWrongNet": "Warning: The extended public key format indicates that it might not be valid for the selected account type. If you do not see the expected transactions, then try to import the extended public key with another account type."
-    }
+    "selectCoin": {
+      "nextButton": "Next",
+      "step": "Select coin",
+      "title": "Select cryptocurrency"
+    },
+    "success": {
+      "message": "<strong>{{accountName}}</strong> has now been added to your accounts.",
+      "nextButton": "Done",
+      "step": "Finished",
+      "title": "Account added"
+    },
+    "title": "Add account"
   },
   "app": {
     "upgrade": "A new version of this app is available! Please upgrade from {{current}} to {{version}}."
@@ -115,13 +123,15 @@
   },
   "bb02Bootloader": {
     "abort": "Don't upgrade – take me back",
+    "abort_noUpgrade": "Take me back",
     "advanced": {
       "label": "Advanced settings",
       "toggleShowFirmwareHash": "Show the firmware hash every time on startup"
     },
     "flipscreen": "Flip screen",
     "orientation": "Device oriented the wrong way?",
-    "success": "Upgrade successful! Continuing in {{rebootSeconds}} seconds..."
+    "success": "Upgrade successful! Continuing in {{rebootSeconds}} seconds...",
+    "success_install": "Installation successful! Continuing in {{rebootSeconds}} seconds..."
   },
   "bitbox": {
     "error": {
@@ -145,6 +155,10 @@
       "placeholder": "New device name",
       "title": "Set BitBox02 name"
     },
+    "gotoStartupSettings": {
+      "description": "This will reboot your BitBox02 and enter the startup settings.",
+      "title": "Go to startup settings"
+    },
     "mnemonicPassphrase": {
       "description": "This allows you to enter an optional passphrase after unlocking your BitBox02.\n\n<strong>NOTE:</strong> any passphrase derives a new separate wallet.\nKeep your passphrase <strong>secure</strong>.\n<strong>A loss of the passphrase is NOT RECOVERABLE.</strong>",
       "disable": "Disable optional passphrase",
@@ -154,7 +168,7 @@
     }
   },
   "bitbox02Wizard": {
-    "attestationFailed": "Device attestation failed, which could be due to restarting the app while the device was waiting for user input. Please reconnect and try again.",
+    "attestationFailed": "Genuine check failed, which could be due to restarting the app while the device was waiting for user input. Please reconnect and try again. Please contact support@shiftcrypto.ch if this persists.",
     "backup": {
       "point1": "Select a backup on the microSD card",
       "point2": "Set a password for your device",
@@ -243,222 +257,14 @@
       "title": "You're ready to go!"
     }
   },
-  "bitboxBase": {
-    "connect": "Connect Base",
-    "connectedBases": "Connected devices",
-    "detectedBases": "Detected devices on your network",
-    "detectedBasesEmpty": "No devices found",
-    "manage": "Manage",
-    "manualInput": "Connect manually",
-    "manualInputInvalid": "Invalid IP address",
-    "manualInputLabel": "IP address:port",
-    "new": "New BitBoxBase",
-    "settings": {
-      "advanced": {
-        "blocks": "Blocks",
-        "confirmSystemPassword": "Set the BitBoxBase system password to use for <strong>ssh authentication and sudo access.</strong>\n$t(generic.confirmToContinue)",
-        "connectElectrum": "Connect Electrum",
-        "headers": "Headers",
-        "ipAddress": "IP address",
-        "manual": "Manual update",
-        "port": "Port",
-        "reset": "Reset to factory settings",
-        "sshAccess": {
-          "button": "SSH password login",
-          "confirm": "This setting gives you <strong>SSH and sudo access</strong> to your BitBoxBase using a system password that you must set.\nPlease proceed only if you know what you are doing.",
-          "inProgress": "Toggling SSH password authentication",
-          "success": "SSH password authentication and sudo access: {{enabled}}",
-          "title": "SSH access"
-        },
-        "status": "Status",
-        "subheaders": {
-          "bitcoin": "Bitcoin Core",
-          "electrs": "Electrs",
-          "lightning": "Lightning",
-          "networking": "Networking"
-        },
-        "syncOptions": "Sync options",
-        "systemPassword": "Set system password",
-        "systemPasswordSuccess": "BitBoxBase system password set successfully.",
-        "title": "Advanced settings",
-        "torAddress": "Tor onion address",
-        "version": "Version"
-      },
-      "backups": {
-        "confirmBackup": "Create a new backup of your BitBoxBase configuration on an external flash drive.\n\nPlease make sure to <strong>insert a flash drive</strong> into your BitBoxBase.",
-        "create": "Create backup",
-        "created": "Backup created successfully.",
-        "creating": "Creating backup...",
-        "manage": "Manage backups",
-        "restore": "Restore backup",
-        "title": "Backups"
-      },
-      "dashboard": {
-        "lightningChannels": "Active lightning channels",
-        "notAvailable": "Not available",
-        "peers": "Connected Bitcoin peers",
-        "syncStatus": "Bitcoin sync status"
-      },
-      "node": {
-        "bitcoinRestarting": "Base services are restarting...",
-        "changeName": "Change name",
-        "changeNameTitle": "Change BitBoxBase hostname",
-        "confirmDisconnect": "Your BitBoxBase will be removed from the App and you will have to reconnect to use it again.\n$t(generic.confirmToContinue)",
-        "confirmTorEnabled": {
-          "false": "Are you sure you want to <strong>enable</strong> Tor?\n $t(bitboxBase.settings.node.warning)",
-          "true": "Are you sure you want to <strong>disable</strong> Tor?\n This can have serious and irreversible implications regarding privacy and is not recommended.\n $t(bitboxBase.settings.node.warning)"
-        },
-        "disconnect": "Disconnect",
-        "newName": "Enter new hostname",
-        "password": "Change password",
-        "title": "Node",
-        "tor": "Tor",
-        "warning": "Please allow 1-2 minutes for changes to take effect."
-      },
-      "system": {
-        "confirmRestart": "Your BitBoxBase will now <strong>restart</strong> and will reconnect automatically once ready. This may take several minutes.\n $t(generic.confirmToContinue)",
-        "confirmShutdown": "Your BitBoxBase will now <strong>shut down</strong> and you will have to turn it back on manually.\n $t(generic.confirmToContinue)",
-        "confirmUpdate": "Would you like to update your BitBoxBase from version {{current}} to {{newVersion}}?",
-        "restart": "Restart",
-        "shutdown": "Shutdown",
-        "title": "System",
-        "upToDate": "Your BitBoxBase is up to date",
-        "update": "Update",
-        "updateProgress": {
-          "updateApplying": "Installing update...",
-          "updateDownloading": "Downloading update files...",
-          "updateFailed": "Update failed",
-          "updateNotInProgress": "Fetching update information...",
-          "updateRebooting": "Rebooting...",
-          "warning": "When finished, the Base will automatically disconnect and reboot."
-        },
-        "updateSeverity": "Severity",
-        "updateTitle": "Update BitBoxBase"
-      },
-      "title": "<strong>BitBox</strong>Base settings"
-    },
-    "title": "BitBoxBase"
-  },
-  "bitboxBaseUnlock": {
-    "placeholder": "Enter your BitBoxBase password to unlock"
-  },
-  "bitboxBaseWizard": {
-    "backups": {
-      "created": "Your backup has been created on <strong>the USB flashdrive.</strong>",
-      "createdTitle": "Applying configuration",
-      "finalizing": "The BitBoxBase is now finalizing the setup. This only takes a few seconds.",
-      "insert": "Insert a USB memory stick into the BitBoxBase to make a backup of your wallet.",
-      "list": {
-        "point1": "This backup contains sensitive information.",
-        "point2": "It allows you to reset the BitBoxBase management password.",
-        "point3": "Please <strong>remove the flashdrive</strong> now and store it in a secure location."
-      },
-      "title": "Wallet backup"
-    },
-    "bitcoin": {
-      "presync": "Use pre-synced",
-      "presyncInfo": {
-        "con1": "Trusting the provided data",
-        "con2": "No independent validation of Bitcoin transaction history",
-        "label": "The quickest way to get started",
-        "pro1": "BitBoxBase is ready within minutes",
-        "pro2": "No initial download or verification necessary"
-      },
-      "reindex": "Reindex",
-      "reindexInfo": {
-        "con1": "Takes about 1 day for the BitBoxBase to be ready",
-        "label": "Validate the entire blockchain",
-        "pro1": "Full validation of pre-synced Bitcoin blockchain",
-        "warning": "This process takes about 1 day. Are you sure you want to continue?"
-      },
-      "resync": "Resync",
-      "resyncInfo": {
-        "con1": "Can take 2+ days for the BitBoxBase to be ready",
-        "con2": "Burdens the Bitcoin and Tor networks",
-        "label": "Download and validate the entire blockchain",
-        "pro1": "Full validation of independently downloaded Bitcoin blockchain",
-        "warning": "This process can take 2+ days depending on your internet connection. Are you sure you want to continue?"
-      },
-      "title": "Choose synchronization"
-    },
-    "errors": {
-      "networkSetting": "No network setting found"
-    },
-    "hostname": {
-      "label": "Hostname",
-      "placeholder": "Valid hostname e.g. 'mybitboxbase'",
-      "title": "Choose a name",
-      "tooltip": "Valid hostname is between 2-64 characters; lowercase a-z; digits 0-9; and periods or hypens, excluding first and last characters"
-    },
-    "networks": {
-      "clearnet": {
-        "con1": "Leaks home IP address and geolocation if used without precautions",
-        "con2": "ISP can detect Bitcoin node",
-        "label": "Use clearnet for all connections; not recommended.",
-        "pro1": "Fastest",
-        "pro2": "Less latency",
-        "pro3": "Allows VPN usage",
-        "select": "Select Clearnet",
-        "title": "Clearnet"
-      },
-      "clearnetThenTor": {
-        "con1": "Burdens the Tor network",
-        "label": "Use clearnet for initial block download (IBD), then switch to Tor",
-        "pro1": "Faster initial block download",
-        "pro2": "Does not burden the Tor network during IBD",
-        "select": "Select clearnet + Tor",
-        "title": "Clearnet then Tor"
-      },
-      "title": "Choose networking",
-      "tor": {
-        "con1": "Burdens the Tor network",
-        "con2": "Possibly suspicious in totalitarian jurisdictions",
-        "label1": "Use Tor for all connections; our recommended option.",
-        "label2": "Use Tor for all connections",
-        "pro1": "Private",
-        "pro2": "Difficult to track physical location",
-        "pro3": "Allows remote access",
-        "select": "Select Tor",
-        "title": "Tor"
-      }
-    },
-    "pairing": {
-      "failed": "Unconfirmed pairing. Please try to disconnect and connect to the BitBoxBase again",
-      "paired": "You have confirmed on your BitBoxBase that the code matches",
-      "title": "Verify pairing code",
-      "unpaired": "New BitBoxBase connection detected. To continue please confirm that the code below matches the code shown on your BitBoxBase screen."
-    },
-    "setPassword": "Set a password",
-    "setup": {
-      "custom": {
-        "point1": "Syncing options",
-        "point2": "Network options",
-        "point3": "Custom hostname",
-        "select": "Select custom",
-        "title": "Custom"
-      },
-      "quick": {
-        "point1": "Pre-synced blockchain",
-        "point2": "Tor by default",
-        "point3": "Default hostname",
-        "select": "Select quick",
-        "title": "Quick start"
-      },
-      "title": "Choose setup"
-    },
-    "success": {
-      "button": "Go to dashboard",
-      "text": "It may take a minute or two for all dashboard information to be up to date.",
-      "title": "You're ready to go!"
-    },
-    "welcome": "Welcome to your BitBoxBase"
-  },
   "blink": {
     "button": "Blink"
   },
   "bootloader": {
     "button": "Upgrade firmware now",
+    "button_install": "Install firmware now",
     "progress": "Upgrading: {{progress}}%",
+    "progress_install": "Installing: {{progress}}%",
     "success": "Upgrade successful! Please replug the device. This time, do not touch the button."
   },
   "button": {
@@ -486,6 +292,7 @@
   "buy": {
     "info": {
       "continue": "Agree and continue",
+      "crypto": "crypto",
       "disclaimer": {
         "intro": [
           "We partner with MoonPay to offer you a seamless way to buy {{name}} directly within the BitBoxApp. It's just a few clicks.",
@@ -578,6 +385,7 @@
         "label": "microSD card",
         "true": "Inserted"
       },
+      "securechip": "Secure chip",
       "title": "Hardware"
     },
     "loading": "Retrieving device info…",
@@ -609,6 +417,10 @@
     "cancel": "Cancel",
     "confirm": "Confirm",
     "confirmTitle": "Confirmation"
+  },
+  "error": {
+    "accountAlreadyExists": "The account already exists.",
+    "accountLimitReached": "Cannot add account. The maximum number of accounts for this coin has been reached."
   },
   "exchanges": {
     "method": "Select your payment method",
@@ -693,6 +505,18 @@
       "title": "What does incoming mean?"
     },
     "accountInfo": {
+      "multipleXPubs": {
+        "text": "Each xpub is tied to the \"Type\" shown: either \"Native segwit (bech32)\" or \"Wrapped segwit\". These are script types used by {{coinName}}. The BitBoxApp combines them, supporting multiple script types in the same account. Because each script type gives a different xpub, there are multiple xpubs per account.\n\nIf you consistently receive on the standard address, you only need the \"bech32\" xpub. However, if you also receive funds on the \"compatible address\" type, these will be shown on the \"older segwit\" extended public key.",
+        "title": "Why are there multiple xpubs?"
+      },
+      "privacy": {
+        "text": "For this specific account, the extended public key reveals the entire financial history, your account balance, and all future transactions. But the xpub does not allow anyone to spend your coins.\n\nIf you give an xpub to someone, you should be aware that this person or company can see all other transactions of the same account. Therefore, it’s a good idea to use that account only for this purpose and keep other funds in different accounts.",
+        "title": "Do I need to keep my xpub secret?"
+      },
+      "verify": {
+        "text": "Yes, it’s always a good idea to double-check your xpub. If someone else will generate receive addresses from this xpub to send you money, this is especially important. You need to verify it on the device to ensure that this xpub belongs to you; otherwise, all funds could go to the wrong addresses.",
+        "title": "Do I need to verify the xpub on the device?"
+      },
       "xpub": {
         "text": "An extended public key is a root key from which all receiving addresses of an account are derived.\nIt is provided here for advanced use and interoperability with watch-only wallets, such as Electrum or Sentinel.",
         "title": "What is an extended public key?"
@@ -704,10 +528,10 @@
     },
     "accountRates": {
       "link": {
-        "text": "www.cryptocompare.com",
-        "url": "https://www.cryptocompare.com"
+        "text": "www.coingecko.com",
+        "url": "https://www.coingecko.com/"
       },
-      "text": "We update exchange rates every minute from CryptoCompare. www.cryptocompare.com\n",
+      "text": "We update exchange rates every minute from CoinGecko.",
       "title": "Which exchange rates apply?"
     },
     "accountReload": {
@@ -721,7 +545,7 @@
     "accountSummaryAmount": {
       "link": {
         "text": "www.coingecko.com",
-        "url": "https://www.coingecko.com"
+        "url": "https://www.coingecko.com/"
       },
       "text": "The total amount is the sum of all your crypto accounts. Exchange rates are obtained from coingecko.com.\n\nNote: If you use MyEtherWallet for tokens not supported in the BitBoxApp, they will not be included in the amount displayed.",
       "title": "How is the total amount calculated?"
@@ -749,6 +573,32 @@
     "accountTransactionTime": {
       "text": "The blockchain transaction confirmation time.",
       "title": "What time is displayed?"
+    },
+    "accounts": {
+      "howManyAccounts": {
+        "text": "Each coin can have a maximum of five accounts.",
+        "title": "How many accounts can I create?"
+      },
+      "howtoAddTokens": {
+        "text": "Tokens using the ERC20 standard are tied to a specific Ethereum account. To enable or disable a particular token, open the \"Manage accounts\" screen, expand your Ethereum account and switch the desired token on or off.",
+        "title": "How can I add additional tokens?"
+      },
+      "moveFunds": {
+        "text": "Yes. But because accounts are independent, you need to send your funds using a regular transaction.",
+        "title": "Can I move funds between accounts?"
+      },
+      "recoverAccounts": {
+        "text": "Yes. The BitBoxApp creates accounts using well-established standards compatible with most other crypto wallets.",
+        "title": "Can I recover my accounts with other wallets?"
+      },
+      "whatAreAccounts": {
+        "text": "Your wallet can manage multiple accounts of the same coin. Accounts are helpful when you want to keep funds separate.",
+        "title": "What are accounts?"
+      },
+      "whyIsThisUseful": {
+        "text": "Accounts are great for managing funds for different people or purposes because they are separated. You can also share the \"extended public key\" of an account without revealing anything about your other accounts. This allows you to repeatedly receive funds without reusing addresses, such as receiving your wage or regularly buying crypto.",
+        "title": "Why is this useful?"
+      }
     },
     "appendix": {
       "href": "https://shiftcrypto.ch/contact",
@@ -820,12 +670,15 @@
     "buy": {
       "exchanges": {
         "link": {
-          "text": "List of exchanges",
-          "url": "/exchanges"
+          "text": "List of exchanges"
         },
         "text": "Here is a list of ones we recommend depending on your region and purchasing preferences.",
         "title": "Looking for an exchange?"
       }
+    },
+    "cointracking": {
+      "text": "Click the \"Export\" button and open the downloads folder where you will find the CSV export. Then click the link below, upload your BitBox CSV file and import the data in order to use it for your CoinTracking portfolio manager and to create your tax reports.",
+      "title": "How to import my transactions into CoinTracking?"
     },
     "exchanges": {
       "commission": {
@@ -941,12 +794,8 @@
         "title": "What is Bitcoin bech32?"
       },
       "servers": {
-        "text": "This app communicates with the Shift Crypto servers to check for updates, load transactions, and send information to paired mobile apps.\nThe app also retrieves the latest exchange rates from CryptoCompare. All conversions are calculated locally which means no data about the amount of your transaction is ever transmitted.\nNote: For Ethereum and ERC20 Tokens, we use Etherscan.io APIs.",
+        "text": "This app communicates with the Shift Crypto servers to check for updates, load transactions, and send information to paired mobile apps.\nThe app also retrieves the latest exchange rates from CoinGecko. All conversions are calculated locally which means no data about the amount of your transaction is ever transmitted.\nNote: For Ethereum and ERC20 Tokens, we use Etherscan.io APIs.",
         "title": "Which servers does this app talk to?"
-      },
-      "whyMultipleAccounts": {
-        "text": "Some cryptocurrencies have multiple address and transaction formats. These addresses are separated into extra accounts.",
-        "title": "$t(settings.expert.splitAccounts)"
       }
     },
     "title": "Guide",
@@ -972,7 +821,7 @@
       "getDevice": {
         "link": {
           "text": "Order a BitBox",
-          "url": "https://shiftcrypto.ch/shop"
+          "url": "https://shiftcrypto.shop/"
         },
         "text": "You can buy a BitBox in our online shop:",
         "title": "How can I get a device?"
@@ -1043,6 +892,18 @@
     "successEnable": "Successfully enabled the legacy hidden wallet. Replug your BitBox and enter the hidden device password to access the legacy hidden wallet."
   },
   "loading": "loading…",
+  "manageAccounts": {
+    "addAccount": "$t(addAccount.title)",
+    "editAccount": "Edit",
+    "editAccountNameTitle": "Edit account name",
+    "noAccounts": "no accounts found",
+    "settings": {
+      "hideTokens": "Hide tokens",
+      "showTokens": "Show tokens ({{activeTokenCount}})"
+    },
+    "settingsButtonDescription": "Add and show/hide accounts",
+    "title": "Manage accounts"
+  },
   "mobile": {
     "usingMobileDataWarning": "Mobile data usage: this app may download up to a few hundred megabytes of blockchain header data after unlocking an account. Please connect to Wi-Fi to avoid using mobile data. After dismissing it, this message won't be shown again."
   },
@@ -1122,7 +983,7 @@
     "label": "Your address",
     "onlyThisCoin": {
       "description": "To receive other tokens, enable them in the settings. If you deposit other tokens, they might not be accessible.",
-      "warning": "Make sure to only receive {{accountName}} on this address."
+      "warning": "Make sure to only receive {{coinName}} on this address."
     },
     "showFull": "Show and verify full address on device",
     "title": "Get {{accountName}}",
@@ -1277,9 +1138,6 @@
     "transactionDetails": "Transaction details"
   },
   "settings": {
-    "accounts": {
-      "title": "Active accounts"
-    },
     "electrum": {
       "add": "Add a server",
       "add-server": "Add",
@@ -1308,14 +1166,12 @@
       "title-tltc": "Litecoin Testnet Electrum servers"
     },
     "expert": {
-      "base": "BitBoxBase Management",
       "coinControl": "Enable coin control",
       "electrum": {
         "title": "Connect your own full node"
       },
       "fee": "Enable custom fees",
       "setProxyAddress": "Set proxy address",
-      "splitAccounts": "Separate accounts by address type (legacy behavior)",
       "title": "Expert settings",
       "useProxy": "Enable tor proxy"
     },
@@ -1333,8 +1189,6 @@
   "sidebar": {
     "accounts": "Accounts",
     "addAccount": "Add account",
-    "bitboxBase": "BitBoxBase",
-    "bitboxBaseConnect": "Connect BitBoxBase",
     "buy": "Buy crypto",
     "device": "Manage device",
     "leave": "Leave",
@@ -1423,6 +1277,7 @@
     "sendPairing": "Please pair the BitBox to securely verify transaction details. Go to 'Manage device' in the sidebar."
   },
   "welcome": {
+    "getStarted": "Let's get started by installing firmware on your BitBox02.",
     "insertBitBox02": "For the BitBox02, please tap the device to continue.",
     "insertDevice": "Please connect your device to get started",
     "title": "Welcome"

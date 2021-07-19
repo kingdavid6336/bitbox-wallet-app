@@ -18,6 +18,7 @@
 import { Component, h, RenderableProps } from 'preact';
 import { route } from 'preact-router';
 import * as accountApi from '../../../api/account';
+import { TDevices } from '../../../api/devices';
 import { alertUser } from '../../../components/alert/Alert';
 import { CopyableInput } from '../../../components/copy/Copy';
 import { Dialog } from '../../../components/dialog/dialog';
@@ -30,15 +31,13 @@ import Status from '../../../components/status/status';
 import { load } from '../../../decorators/load';
 import { translate, TranslateProps } from '../../../decorators/translate';
 import { apiGet, apiPost } from '../../../utils/request';
-import { Devices } from '../../device/deviceswitch';
-import { IAccount } from '../account';
 import { isEthereumBased } from '../utils';
 import * as style from './receive.css';
 
 interface ReceiveProps {
     code?: string;
-    devices: Devices;
-    accounts: IAccount[];
+    devices: TDevices;
+    accounts: accountApi.IAccount[];
     deviceIDs: string[];
 }
 
@@ -61,14 +60,11 @@ interface LoadedReceiveProps {
 type Props = LoadedReceiveProps & ReceiveProps & TranslateProps;
 
 class Receive extends Component<Props, State> {
-    constructor(props) {
-        super(props);
-        this.state = {
-            verifying: false,
-            activeIndex: 0,
-            paired: null,
-            addressType: 0,
-        };
+    public readonly state: State = {
+        verifying: false,
+        activeIndex: 0,
+        paired: null,
+        addressType: 0,
     }
 
     public componentDidMount() {
@@ -299,7 +295,9 @@ class Receive extends Component<Props, State> {
                                     isEthereumBased(account.coinCode) &&
                                     <p>
                                         <strong>
-                                            {t('receive.onlyThisCoin.warning', { accountName: account.name })}
+                                            {t('receive.onlyThisCoin.warning', {
+                                                coinName: account.coinName,
+                                            })}
                                         </strong><br />
                                         {t('receive.onlyThisCoin.description')}
                                     </p>
@@ -319,10 +317,10 @@ class Receive extends Component<Props, State> {
         return (
             <div class="contentWithGuide">
                 <div class="container">
-                    <Status type="warning">
-                        {paired === false && t('warning.receivePairing')}
+                    <Status type="warning" hidden={paired !== false}>
+                        {t('warning.receivePairing')}
                     </Status>
-                    <Header title={<h2>{t('receive.title', { accountName: account.name })}</h2>} />
+                    <Header title={<h2>{t('receive.title', { accountName: account.coinName })}</h2>} />
                     <div class="innerContainer scrollableContainer">
                         <div class="content narrow isVerticallyCentered">
                             <div class="box large text-center">

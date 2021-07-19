@@ -1,15 +1,19 @@
 Name "BitBoxApp"
 
-RequestExecutionLevel highest
+# Need admin privileges for writing to $PROGRAMFILES64 and HKLM.
+# Unfortunately, the installer mixes per-user and system-wide things.
+# TODO: Switch to per-user install and drop admin execution level.
+RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 
 # General Symbol Definitions
 !define REGKEY "SOFTWARE\$(^Name)"
-!define VERSION 4.26.0.0
+!define VERSION 4.28.2.0
 !define COMPANY "Shift Crypto AG"
 !define URL https://github.com/digitalbitbox/bitbox-wallet-app/releases/
 !define BINDIR "build\windows"
 !define ICONDIR "resources\win"
+!define APP_EXE "BitBox.exe"
 
 # MUI Symbol Definitions
 !define MUI_ICON "${ICONDIR}\icon.ico"
@@ -23,7 +27,7 @@ SetCompressor /SOLID lzma
 !define MUI_STARTMENUPAGE_REGISTRY_VALUENAME StartMenuGroup
 !define MUI_STARTMENUPAGE_DEFAULTFOLDER "BitBox"
 !define MUI_FINISHPAGE_RUN "$WINDIR\explorer.exe"
-!define MUI_FINISHPAGE_RUN_PARAMETERS $INSTDIR\BitBox.exe
+!define MUI_FINISHPAGE_RUN_PARAMETERS "$INSTDIR\${APP_EXE}"
 !define MUI_UNICON "${ICONDIR}\icon.ico"
 !define MUI_UNWELCOMEFINISHPAGE_UNICON "${ICONDIR}\icon.ico"
 !define MUI_UNFINISHPAGE_NOAUTOCLOSE
@@ -68,6 +72,13 @@ ShowUninstDetails show
 
 # Installer sections
 Section -Main SEC0000
+    DetailPrint "Shutting down any running instances of ${APP_EXE}"
+    ExecWait "taskkill /IM ${APP_EXE} /F"
+    # taskkill may exit before the process actually terminates.
+    # Give it a couple seconds to release any open files.
+    Sleep 3000
+    DetailPrint "Proceeding with the installation"
+
     SetOutPath $INSTDIR
     SetOverwrite on
     File /r "build\windows\*"
@@ -84,7 +95,7 @@ Section -post SEC0001
     WriteUninstaller $INSTDIR\uninstall.exe
     !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
     CreateDirectory $SMPROGRAMS\$StartMenuGroup
-    CreateShortcut "$SMPROGRAMS\$StartMenuGroup\$(^Name).lnk" $INSTDIR\BitBox.exe
+    CreateShortcut "$SMPROGRAMS\$StartMenuGroup\$(^Name).lnk" "$INSTDIR\${APP_EXE}"
     CreateShortcut "$SMPROGRAMS\$StartMenuGroup\Uninstall $(^Name).lnk" $INSTDIR\uninstall.exe
     !insertmacro MUI_STARTMENU_WRITE_END
     WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" DisplayName "$(^Name)"
