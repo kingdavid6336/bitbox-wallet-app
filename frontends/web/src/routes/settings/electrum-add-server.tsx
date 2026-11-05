@@ -1,0 +1,136 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { checkElectrum, downloadCert, TElectrumServer } from '@/api/node';
+import { Button, Input } from '@/components/forms';
+import { alertUser } from '@/components/alert/Alert';
+import style from './electrum.module.css';
+
+type Props = {
+  onAdd: (server: TElectrumServer) => void;
+};
+
+export const ElectrumAddServer = ({
+  onAdd,
+}: Props) => {
+  const { t } = useTranslation();
+  const [valid, setValid] = useState<boolean>();
+  const [electrumServer, setElectrumServer] = useState<string>('');
+  const [electrumCert, setElectrumCert] = useState<string>('');
+  const [loadingCheck, setLoadingCheck] = useState<boolean>(false);
+  const [loadingCert, setLoadingCert] = useState<boolean>(false);
+
+  const getServer = (): TElectrumServer => {
+    return {
+      server: electrumServer.trim(),
+      pemCert: electrumCert,
+      tls: electrumCert !== '',
+    };
+  };
+
+  const add = () => {
+    onAdd(getServer());
+    setElectrumServer('');
+    setElectrumCert('');
+  };
+
+  const downloadCertificate = async () => {
+    setLoadingCert(true);
+    const data = await downloadCert(electrumServer.trim());
+    if (data.success) {
+      setElectrumCert(data.pemCert);
+    } else {
+      alertUser(data.errorMessage || t('genericError'));
+    }
+    setLoadingCert(false);
+  };
+
+  const check = async () => {
+    setLoadingCheck(true);
+    const response = await checkElectrum(getServer());
+    if (response.success) {
+      alertUser(t('settings.electrum.checkSuccess', { host: electrumServer }));
+    } else if (response.errorMessage) {
+      alertUser(t('settings.electrum.checkFailed') + ':\n' + response.errorMessage);
+    } else {
+      alertUser(t('settings.electrum.checkFailed'));
+    }
+    setValid(response.success);
+    setLoadingCheck(false);
+  };
+
+  const downloadCertButtonDisabled: boolean = electrumServer.trim().length === 0 || electrumCert.trim().length > 0 || loadingCert;
+
+  const checkConnectionButtonDisabled: boolean = electrumServer.trim().length === 0 || loadingCheck;
+
+  return (
+    <div className={style.addServer}>
+      <div className="flex flex-row flex-start flex-wrap">
+        <p className={style.badge}>{t('settings.electrum.step1')}</p>
+        <div className="flex-1">
+          <p>{t('settings.electrum.step1-text')}</p>
+        </div>
+      </div>
+      <Input
+        name="electrumServer"
+        onInput={event => setElectrumServer(event.target.value)}
+        value={electrumServer}
+        placeholder="host:port"
+      />
+      <div className="flex flex-row flex-start flex-wrap">
+        <p className={style.badge}>{t('settings.electrum.step2')}</p>
+        <div className="flex-1">
+          <p>{t('settings.electrum.step2-text')}</p>
+          <p>{t('settings.electrum.step2-text-tcp')}</p>
+        </div>
+      </div>
+      <textarea
+        className={style.textarea}
+        rows={10}
+        cols={80}
+        name="electrumCert"
+        onInput={event => setElectrumCert((event.target as HTMLTextAreaElement).value)}
+        value={electrumCert}
+        placeholder={'-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'}
+      />
+      <div className={[style.block, 'flex flex-row flex-end'].join(' ')}>
+        <Button primary disabled={downloadCertButtonDisabled} onClick={downloadCertificate}>
+          {
+            loadingCert && (
+              <div className={style.miniSpinnerContainer}>
+                <div className={style.miniSpinner}></div>
+              </div>
+            )
+          }
+          {t('settings.electrum.download-cert')}
+        </Button>
+      </div>
+      <div className="flex flex-row flex-start flex-wrap">
+        <p className={style.badge}>{t('settings.electrum.step3')}</p>
+        <div className="flex-1">
+          <p>{t('settings.electrum.step3-text')}</p>
+        </div>
+      </div>
+      <div className={['flex flex-row flex-end spaced', style.block].join(' ')}>
+        <Button primary disabled={checkConnectionButtonDisabled} onClick={check}>
+          {
+            loadingCheck && (
+              <div className={style.miniSpinnerContainer}>
+                <div className={style.miniSpinner}></div>
+              </div>
+            )
+          }
+          { loadingCheck ? t('settings.electrum.checking') : t('settings.electrum.check') }
+        </Button>
+        <Button primary disabled={!valid} onClick={add}>{t('settings.electrum.add-server')}</Button>
+      </div>
+      <div className="flex flex-row flex-start flex-wrap">
+        <p className={style.badge}>{t('settings.electrum.step4')}</p>
+        <div className="flex-1">
+          <p>{t('settings.electrum.step4-text')}</p>
+        </div>
+      </div>
+    </div>
+  );
+};

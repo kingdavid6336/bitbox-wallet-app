@@ -1,33 +1,21 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package test
 
 import (
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/logging"
+	"github.com/btcsuite/btcd/btcutil/v2/hdkeychain"
 	"github.com/sirupsen/logrus"
 )
 
 // TstTempFile gets the filename for creating a temporary file.
 func TstTempFile(name string) string {
-	f, err := ioutil.TempFile("", name)
+	f, err := os.CreateTemp("", name)
 	if err != nil {
 		panic(err)
 	}
@@ -42,7 +30,7 @@ func TstTempFile(name string) string {
 
 // TstTempDir creates a temporary dir and returns its path.
 func TstTempDir(name string) string {
-	f, err := ioutil.TempDir("", name)
+	f, err := os.MkdirTemp("", name)
 	if err != nil {
 		panic(err)
 	}
@@ -62,4 +50,13 @@ func DecodeHandlerResponse(t *testing.T, v interface{}, r io.Reader) {
 	if err := json.NewDecoder(r).Decode(v); err != nil {
 		t.Fatalf("DecodeHandlerResponse: %v", err)
 	}
+}
+
+// TstMustXKey parses an xpub/xprv and panics on error.
+func TstMustXKey(key string) *hdkeychain.ExtendedKey {
+	xkey, err := hdkeychain.NewKeyFromString(key)
+	if err != nil {
+		panic(err)
+	}
+	return xkey
 }

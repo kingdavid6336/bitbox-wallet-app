@@ -1,295 +1,254 @@
-/**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, JSX, RenderableProps } from 'preact';
-import { Link, Match } from 'preact-router/match';
-import { IAccount } from '../../api/account';
-import coins from '../../assets/icons/coins.svg';
-import ejectIcon from '../../assets/icons/eject.svg';
-import info from '../../assets/icons/info.svg';
-import settings from '../../assets/icons/settings-alt.svg';
-import settingsGrey from '../../assets/icons/settings-alt_disabled.svg';
-import deviceSettings from '../../assets/icons/wallet-light.svg';
-import { SharedProps as SharedPanelProps, store as panelStore } from '../../components/guide/guide';
-import { share } from '../../decorators/share';
-import { subscribe } from '../../decorators/subscribe';
-import { translate, TranslateProps } from '../../decorators/translate';
-import { debug } from '../../utils/env';
-import { apiPost } from '../../utils/request';
-import Logo, { AppLogoInverted } from '../icon/logo';
+import React, { useContext, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Link } from 'wouter';
+import { NavLink, useLocation } from '@/utils/router-compatability';
+import { useKeystores } from '@/hooks/backend';
+import { useLightning } from '@/hooks/lightning';
+import type { TDevices } from '@/api/devices';
+import type { TAccount } from '@/api/account';
+import { deregisterTest } from '@/api/keystores';
+import { getVersion } from '@/api/bitbox02';
+import { debug } from '@/utils/env';
+import { AppLogoInverted, Logo } from '@/components/icon/logo';
+import { CloseXWhite, CogLight, Coins, Device, Eject, Linechart, RedDot } from '@/components/icon';
+import { getAccountsByKeystore } from '@/routes/account/utils';
+import { SkipForTesting } from '@/routes/device/components/skipfortesting';
+import { AppContext } from '@/contexts/AppContext';
+import { Button } from '@/components/forms';
+import { NewBadge } from '@/components/new-badge/new-badge';
+import { ConnectedKeystore } from '../keystore/connected-keystore';
+import style from './sidebar.module.css';
 
-interface SidebarProps {
-    deviceIDs: string[];
-    accounts: IAccount[];
-}
+type SidebarProps = {
+  devices: TDevices;
+  accounts: TAccount[];
+};
 
-interface SubscribedProps {
-    keystores: Array<{ type: 'hardware' | 'software' }>;
-}
+type TGetAccountLinkProps = TAccount & { handleSidebarItemClick: ((e: React.SyntheticEvent) => void) };
 
-type Props = SubscribedProps & SharedPanelProps & SidebarProps & TranslateProps;
+const GetAccountLink = ({
+  coinCode,
+  code,
+  name,
+  handleSidebarItemClick
+}: TGetAccountLinkProps) => {
+  const { pathname } = useLocation();
+  const active = (pathname === `/account/${code}`) || (pathname.startsWith(`/account/${code}/`));
+  return (
+    <div className={style.sidebarItem}>
+      <Link
+        className={active ? style.sidebarActive : ''}
+        to={`/account/${code}`}
+        onClick={handleSidebarItemClick}
+        title={name}>
+        <Logo stacked coinCode={coinCode} alt={name} />
+        <span className={style.sidebarLabel}>{name}</span>
+      </Link>
+    </div>
+  );
+};
 
-interface SwipeAttributes {
-    x: number;
-    y: number;
-    active?: boolean;
-}
+const GetLightningLink = ({ handleSidebarItemClick }: { handleSidebarItemClick: ((e: React.SyntheticEvent) => void) }) => {
+  const { t } = useTranslation();
+  const lightningName = t('lightning.accountLabel');
+  return (
+    <div className={style.sidebarItem}>
+      <NavLink
+        className={({ isActive }) => isActive ? (style.sidebarActive || '') : ''}
+        to={'/lightning'}
+        onClick={handleSidebarItemClick}
+        title={lightningName}>
+        <div className={style.single}>
+          <Logo coinCode="lightning" alt={lightningName} />
+        </div>
+        <span className={style.sidebarLabel}>{lightningName}</span>
+      </NavLink>
+    </div>
+  );
+};
 
-export function toggleSidebar() {
-    const toggled = !panelStore.state.activeSidebar;
-    panelStore.setState({ activeSidebar: toggled });
-}
+const eject = (e: React.SyntheticEvent): void => {
+  deregisterTest();
+  e.preventDefault();
+};
 
-export function setSidebarStatus(status: string) {
-    panelStore.setState({ sidebarStatus: status });
-}
+const Sidebar = ({
+  devices,
+  accounts,
+}: SidebarProps) => {
+  const { t } = useTranslation();
+  const { pathname } = useLocation();
+  const [ canUpgrade, setCanUpgrade ] = useState(false);
+  const { activeSidebar, toggleSidebar } = useContext(AppContext);
+  const { lightningAccount } = useLightning();
+  const hasPortfolio = accounts.length > 0 || !!lightningAccount;
 
-class Sidebar extends Component<Props> {
-    private swipe!: SwipeAttributes;
+  const deviceIDs: string[] = Object.keys(devices);
+  const isBitboxBootloader = Object.values(devices).includes('bitbox02-bootloader');
 
-    public componentDidMount() {
-        this.registerTouchEvents();
-    }
+  useEffect(() => {
+    const checkUpgradableDevices = async () => {
+      setCanUpgrade(false);
+      const bitbox02Devices = Object.keys(devices).filter(deviceID => devices[deviceID] === 'bitbox02');
 
-    public componentWillUnmount() {
-        this.removeTouchEvents();
-    }
-
-    private registerTouchEvents = () => {
-        document.addEventListener('touchstart', this.handleTouchStart);
-        document.addEventListener('touchmove', this.handleTouchMove);
-        document.addEventListener('touchend', this.handleTouchEnd);
-    }
-
-    private removeTouchEvents = () => {
-        document.removeEventListener('touchstart', this.handleTouchStart);
-        document.removeEventListener('touchmove', this.handleTouchMove);
-        document.removeEventListener('touchend', this.handleTouchEnd);
-    }
-
-    private handleTouchStart = (e: TouchEvent) => {
-        const touch = e.touches[0];
-        this.swipe = {
-            x: touch.clientX,
-            y: touch.clientY,
-        };
-    }
-
-    private handleTouchMove = (e: TouchEvent) => {
-        if (this.props.sidebarStatus !== 'forceHidden') {
-            if (e.changedTouches && e.changedTouches.length) {
-                this.swipe.active = true;
-            }
+      for (const deviceID of bitbox02Devices) {
+        const { canUpgrade } = await getVersion(deviceID);
+        if (canUpgrade) {
+          setCanUpgrade(true);
+          // exit early as we found an upgradable device
+          return;
         }
-    }
+      }
+    };
 
-    private handleTouchEnd = (e: TouchEvent) => {
-        if (this.props.sidebarStatus !== 'forceHidden') {
-            const touch = e.changedTouches[0];
-            const travelX = Math.abs(touch.clientX - this.swipe.x);
-            const travelY = Math.abs(touch.clientY - this.swipe.y);
-            const validSwipe = window.innerWidth <= 901 && this.swipe.active && travelY < 100 && travelX > 70;
-            if ((!panelStore.state.activeSidebar && validSwipe && this.swipe.x < 60) ||
-                (panelStore.state.activeSidebar && validSwipe && this.swipe.x > 230)) {
-                toggleSidebar();
-            }
-            this.swipe = {
-                x: 0,
-                y: 0,
-                active: false,
-            };
-        }
-    }
+    checkUpgradableDevices();
+  }, [devices]);
 
-    private handleSidebarItemClick = (e: MouseEvent) => {
-        const el = (e.target as Element).closest('a');
-        if (el!.classList.contains('sidebar-active') && window.innerWidth <= 901) {
-            toggleSidebar();
-        }
-    }
+  const keystores = useKeystores();
 
-    private getAccountLink = ({ coinCode, code, name }: IAccount): JSX.Element => {
-        return (
-            <div key={code} className="sidebarItem">
-                <Match>
-                    {({ url }) => this.getBackLink(coinCode, code, name, url === `/account/${code}` || url.startsWith(`/account/${code}/`))}
-                </Match>
+  const handleSidebarItemClick = (event: React.SyntheticEvent) => {
+    const el = (event.target as Element).closest('a');
+    if (el!.classList.contains('sidebarActive') && window.innerWidth <= 901) {
+      toggleSidebar();
+    }
+  };
+
+  const accountsByKeystore = getAccountsByKeystore(accounts);
+  const inMarketSection = pathname.startsWith('/market');
+
+  const homePath = (
+    isBitboxBootloader && deviceIDs.length > 0
+      ? `/settings/device-settings/${deviceIDs[0] || ''}`
+      : hasPortfolio ? '/account-summary' : '/'
+  );
+
+  return (
+    <div className={style.sidebarContainer}>
+      <div key="overlay" className={[style.sidebarOverlay, activeSidebar ? style.active : ''].join(' ')} onClick={toggleSidebar}></div>
+      <nav className={[style.sidebar, activeSidebar ? style.forceShow : ''].join(' ')}>
+        <div key="app-logo" className={style.sidebarLogoContainer}>
+          <Link
+            to={homePath}
+            onClick={handleSidebarItemClick}>
+            <AppLogoInverted className={style.sidebarLogo} />
+          </Link>
+          <button className={style.closeButton} onClick={toggleSidebar}>
+            <CloseXWhite />
+          </button>
+        </div>
+
+        { hasPortfolio ? (
+          <div
+            key="account-summary"
+            className={`${style.sidebarItem || ''} ${style.sidebarPortfolio || ''}`}
+          >
+            <NavLink
+              className={({ isActive }) => isActive ? (style.sidebarActive || '') : ''}
+              to={'/account-summary'}
+              title={t('accountSummary.title')}
+              onClick={handleSidebarItemClick}>
+              <div className={style.single}>
+                <Linechart />
+              </div>
+              <span className={style.sidebarLabel}>{t('accountSummary.title')}</span>
+            </NavLink>
+          </div>
+        ) : null }
+
+        {lightningAccount && (
+          <GetLightningLink key="lightning" handleSidebarItemClick={handleSidebarItemClick} />
+        )}
+
+        <div data-testid="sidebar-keystores">
+          { accountsByKeystore.map(keystore => (
+            <div key={`keystore-${keystore.keystore.rootFingerprint}`}>
+              <div className={style.sidebarHeaderContainer}>
+                <ConnectedKeystore
+                  accountsByKeystore={accountsByKeystore}
+                  className={style.sidebarHeader}
+                  keystore={keystore.keystore}
+                  connectedIconOnly={true}
+                />
+              </div>
+              { keystore.accounts.map(acc => (
+                <GetAccountLink key={`account-${acc.code}`} {...acc} handleSidebarItemClick={handleSidebarItemClick} />
+              ))}
             </div>
-        );
-    }
+          )) }
+        </div>
 
-    private getBackLink = (coinCode: string, code: string, name: string, active: boolean): JSX.Element => {
-        return (
-            <Link
-                activeClassName="sidebar-active"
-                className={active ? 'sidebar-active' : ''}
-                href={`/account/${code}`}
-                onClick={this.handleSidebarItemClick}
-                title={name}>
-                <Logo stacked coinCode={coinCode} className="sidebar_icon" alt={name} />
-                <span className="sidebar_label">{name}</span>
-            </Link>
-        );
-    }
-
-    public render(
-        {
-            t,
-            deviceIDs,
-            accounts,
-            keystores,
-            shown,
-            activeSidebar,
-            sidebarStatus,
-        }: RenderableProps<Props>,
-    ) {
-        const hidden = ['forceHidden', 'forceCollapsed'].includes(sidebarStatus);
-        return (
-            <div className={['sidebarContainer', hidden ? 'forceHide' : ''].join(' ')}>
-                <div className={['sidebarOverlay', activeSidebar ? 'active' : ''].join(' ')} onClick={toggleSidebar}></div>
-                <nav className={['sidebar', activeSidebar ? 'forceShow' : '', shown ? 'withGuide' : ''].join(' ')}>
-                    <Link
-                        activeClassName=""
-                        href={accounts.length ? '/account-summary' : '/'}
-                        onClick={this.handleSidebarItemClick}>
-                        <div className="sidebarLogoContainer">
-                            <AppLogoInverted className="sidebarLogo" />
-                        </div>
-                    </Link>
-                    <div className="sidebarHeaderContainer">
-                        <span className="sidebarHeader" hidden={!keystores.length}>
-                            {t('sidebar.accounts')}
-                        </span>
-                    </div>
-                    {/* <div className="activeGroup">
-                        <div className="sidebarItem">
-                            <a href="#" className="sidebar-active">
-                                <div className="single">
-                                    <img draggable={false} className="sidebar_settings" src={info} alt={t('sidebar.addAccount')} />
-                                </div>
-                                <span className="sidebar_label">Hello</span>
-                                <svg className="sidebarArrow" xmlns="http://www.w3.org/2000/svg" x="0" y="0" width="18" height="18" viewBox="0, 0, 18, 18">
-                                    <path d="M0,4.5 L9,13.5 L18,4.5" fill="#FFFFFF"/>
-                                </svg>
-                            </a>
-                            <div className="sidebarSubmenu">
-                                <a href="#">
-                                    <div className="single">
-                                        <img draggable={false} className="sidebar_settings" src={info} alt={t('sidebar.addAccount')} />
-                                    </div>
-                                    <span className="sidebar_label">One</span>
-                                </a>
-                                <a href="#">
-                                    <div className="single">
-                                        <img draggable={false} className="sidebar_settings" src={info} alt={t('sidebar.addAccount')} />
-                                    </div>
-                                    <span className="sidebar_label">Two</span>
-                                </a>
-                            </div>
-                        </div>
-                    </div> */}
-                    { accounts.length ? (
-                        <div className="sidebarItem">
-                            <Link
-                                activeClassName="sidebar-active"
-                                href={`/account-summary`}
-                                title={t('accountSummary.title')}
-                                onClick={this.handleSidebarItemClick}>
-                                <div className="single">
-                                    <img draggable={false} className="sidebar_settings" src={info} alt={t('sidebar.addAccount')} />
-                                </div>
-                                <span className="sidebar_label">{t('accountSummary.title')}</span>
-                            </Link>
-                        </div>
-                    ) : null }
-                    { accounts && accounts.map(this.getAccountLink) }
-                    <div className="sidebarHeaderContainer end"></div>
-                    { accounts.length ? (
-                    <div key="buy" className="sidebarItem">
-                        <Link
-                            activeClassName="sidebar-active"
-                            href="/buy/info"
-                        >
-                            <div className="single">
-                                <img draggable={false} className="sidebar_settings" src={coins} alt={t('sidebar.exchanges')} />
-                            </div>
-                            <span className="sidebar_label">
-                                {t('sidebar.buy')}
-                            </span>
-                        </Link>
-                    </div>
-                    ) : null }
-                    { deviceIDs.map(deviceID => (
-                        <div key={deviceID} className="sidebarItem">
-                            <Link
-                                href={`/device/${deviceID}`}
-                                activeClassName="sidebar-active"
-                                title={t('sidebar.device')}
-                                onClick={this.handleSidebarItemClick}>
-                                <div className="single">
-                                    <img draggable={false} className="sidebar_settings" src={deviceSettings} alt={t('sidebar.device')} />
-                                </div>
-                                <span className="sidebar_label">{t('sidebar.device')}</span>
-                            </Link>
-                        </div>
-                    )) }
-                    <div key="settings" className="sidebarItem">
-                        <Link
-                            activeClassName="sidebar-active"
-                            href={`/settings`}
-                            title={t('sidebar.settings')}
-                            onClick={this.handleSidebarItemClick}>
-                            <div className="stacked">
-                                <img draggable={false} className="sidebar_settings" src={settingsGrey} alt={t('sidebar.settings')} />
-                                <img draggable={false} className="sidebar_settings" src={settings} alt={t('sidebar.settings')} />
-                            </div>
-                            <span className="sidebar_label">{t('sidebar.settings')}</span>
-                        </Link>
-                    </div>
-                    {(debug && keystores.some(({ type }) => type === 'software') && deviceIDs.length === 0) && (
-                        <div key="eject" className="sidebarItem">
-                            <a href="#" onClick={eject}>
-                                <div className="single">
-                                    <img
-                                        draggable={false}
-                                        className="sidebar_settings"
-                                        src={ejectIcon}
-                                        alt={t('sidebar.leave')} />
-                                </div>
-                            </a>
-                        </div>
-                    )}
-                </nav>
+        <div key="services" className={[style.sidebarHeaderContainer, style.end].join(' ')}></div>
+        { hasPortfolio ? (
+          <>
+            <div key="market" className={style.sidebarItem}>
+              <NavLink
+                className={({ isActive }) => isActive || inMarketSection ? (style.sidebarActive || '') : ''}
+                to="/market/select">
+                <div className={style.single}>
+                  <Coins />
+                </div>
+                <span className={`${style.sidebarLabel || ''} ${style.marketplaceLabel || ''}`}>
+                  {t('generic.buySell')}
+                  <NewBadge
+                    className={style.marketplaceNudgeDot}
+                    configKey="hasSeenMarketplaceNudge"
+                    hideOnPathPrefix="/market/"
+                    pathname={pathname}
+                    type="dot"
+                  />
+                </span>
+              </NavLink>
             </div>
-        );
-    }
-}
+          </>
+        ) : null }
 
-function eject(e: Event): void {
-    apiPost('test/deregister');
-    e.preventDefault();
-}
+        <div key="settings" className={style.sidebarItem}>
+          <NavLink
+            className={({ isActive }) => isActive ? (style.sidebarActive || '') : ''}
+            to={'/settings'}
+            title={t('sidebar.settings')}
+            onClick={handleSidebarItemClick}>
+            <div className={style.single}>
+              <CogLight alt={t('sidebar.settings')} />
+            </div>
+            <span className={style.sidebarLabel}>
+              {t('sidebar.settings')}
+              {canUpgrade && (
+                <RedDot className={style.canUpgradeDot} width={8} height={8} />
+              )}
+            </span>
+          </NavLink>
+        </div>
 
-const subscribeHOC = subscribe<SubscribedProps, SharedPanelProps & SidebarProps & TranslateProps>(
-    { keystores: 'keystores' },
-    true,
-    false,
-)(Sidebar);
+        { !keystores || keystores.length === 0 ? (
+          <div key="unlock-software-keystore" className={style.sidebarItem}>
+            <SkipForTesting className={style.closeSoftwareKeystore}>
+              <div className={style.single}>
+                <Device />
+              </div>
+              <span className={style.sidebarLabel}>
+                {t('testWallet.connect.title')}
+              </span>
+            </SkipForTesting>
+          </div>
+        ) : null }
+        {(debug && keystores?.some(({ type }) => type === 'software') && deviceIDs.length === 0) && (
+          <div key="eject" className={style.sidebarItem}>
+            <Button transparent onClick={eject} className={style.closeSoftwareKeystore}>
+              <div className={style.single}>
+                <Eject alt={t('sidebar.leave')} />
+              </div>
+              <span className={style.sidebarLabel}>
+                {t('testWallet.disconnect.title')}
+              </span>
+            </Button>
+          </div>
+        )}
+      </nav>
+    </div>
+  );
+};
 
-const guideShareHOC = share<SharedPanelProps, SidebarProps & TranslateProps>(panelStore)(subscribeHOC);
-const translateHOC = translate<SidebarProps>()(guideShareHOC);
-export { translateHOC as Sidebar };
+export { Sidebar };

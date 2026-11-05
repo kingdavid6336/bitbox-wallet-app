@@ -1,48 +1,63 @@
-/**
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { subscribeEndpoint } from './subscribe';
-import { Unsubscribe } from '../utils/event';
-import { IAccount} from './account';
+import type { TUnsubscribe } from '@/utils/transport-common';
+import type { AccountCode, TAccount, TStatus, TTransactions } from './account';
+import { TSubscriptionCallback, subscribeEndpoint } from './subscribe';
 
 /**
  * Subscribes the given function on the "account" event and receives the
  * list of all available accounts from the backend.
  * Returns a method to unsubscribe.
  */
-
 export const syncAccountsList = (
-    cb: (accounts: IAccount[],) => void
-): Unsubscribe => {
-    return subscribeEndpoint('accounts', cb);
+  cb: (accounts: TAccount[]) => void
+): TUnsubscribe => {
+  return subscribeEndpoint('accounts', cb);
 };
 
 /**
- * Subscribes the given function on an "account/<CODE>/synced-addresses-count" event
- * to receive the progress of the address sync.
+ * Returns a function that subscribes a callback on a "account/<CODE>/synced-addresses-count"
+ * event to receive the progress of the address sync.
+ * Meant to be used with `useSubscribe`.
+ */
+export const syncAddressesCount = (code: AccountCode) => {
+  return (
+    cb: TSubscriptionCallback<number>
+  ) => {
+    return subscribeEndpoint(`account/${code}/synced-addresses-count`, cb);
+  };
+};
+
+/**
+ * Fired when status of an account changed, mostly
+ * used as event to call accountAPI.getStatus(code).
  * Returns a method to unsubscribe.
  */
+export const statusChanged = (
+  code: AccountCode,
+  cb: TSubscriptionCallback<TStatus>,
+): TUnsubscribe => {
+  return subscribeEndpoint(`account/${code}/status`, cb);
+};
 
-export const syncAddressesCount = (
-    code: string,
-    cb: (code: string, syncedAddressesCount: number) => void,
-): Unsubscribe => {
-    return subscribeEndpoint(`account/${code}/synced-addresses-count`, (
-        data: number,
-    ) => {
-        cb(code, data);
-    });
+/**
+ * Fired when the account is fully synced.
+ * Returns a method to unsubscribe.
+ */
+export const syncdone = (
+  code: AccountCode,
+  cb: () => void,
+): TUnsubscribe => {
+  return subscribeEndpoint(`account/${code}/sync-done`, cb);
+};
+
+/**
+ * Fired when the account transaction list changed.
+ * Returns a method to unsubscribe.
+ */
+export const transactionsChanged = (
+  code: AccountCode,
+  cb: TSubscriptionCallback<TTransactions>,
+): TUnsubscribe => {
+  return subscribeEndpoint(`account/${code}/transactions`, cb);
 };

@@ -1,6 +1,10 @@
 package rates
 
-import "time"
+import (
+	"time"
+
+	"golang.org/x/time/rate"
+)
 
 const (
 	// See the following for docs and details: https://www.coingecko.com/en/api.
@@ -16,21 +20,19 @@ const (
 	maxGeckoRange = 364 * 24 * time.Hour
 )
 
-// apiRateLimit specifies the minimal interval between equally spaced API calls
+// apiRateLimit specifies the maximum number of API calls per second
 // to one of the supported exchange rates providers.
-func apiRateLimit(baseURL string) time.Duration {
+func apiRateLimit(baseURL string) rate.Limit {
 	switch baseURL {
 	default:
-		return time.Second // arbitrary; localhost, staging, etc.
+		return rate.Limit(1) // arbitrary; localhost, staging, etc.
 	case coingeckoAPIV3:
 		// API calls. From https://www.coingecko.com/en/api:
 		// > Generous rate limits with up to 100 requests/minute
 		// We use slightly lower value.
-		return 2 * time.Second
+		return rate.Limit(0.5)
 	case shiftGeckoMirrorAPIV3:
-		// Avoid zero to prevent unexpected panics like in time.NewTicker
-		// and leave some room to breathe.
-		return 10 * time.Millisecond
+		return rate.Limit(100)
 	}
 }
 
@@ -42,18 +44,16 @@ var (
 		"ltc": "litecoin",
 		"eth": "ethereum",
 		// Useful for testing with testnets.
-		"tbtc": "bitcoin",
-		"rbtc": "bitcoin",
-		"tltc": "litecoin",
-		"teth": "ethereum",
-		"reth": "ethereum",
+		"tbtc":   "bitcoin",
+		"rbtc":   "bitcoin",
+		"tltc":   "litecoin",
+		"sepeth": "ethereum",
 		// ERC20 tokens as used in the backend.
 		// Frontend and app config use unprefixed name, without "eth-erc20-".
 		"eth-erc20-bat":       "basic-attention-token",
 		"eth-erc20-dai0x6b17": "dai",
 		"eth-erc20-link":      "chainlink",
 		"eth-erc20-mkr":       "maker",
-		"eth-erc20-sai0x89d2": "sai",
 		"eth-erc20-usdc":      "usd-coin",
 		"eth-erc20-usdt":      "tether",
 		"eth-erc20-zrx":       "0x",
@@ -72,7 +72,6 @@ var (
 		"dai":                   "DAI",
 		"chainlink":             "LINK",
 		"maker":                 "MKR",
-		"sai":                   "SAI",
 		"usd-coin":              "USDC",
 		"tether":                "USDT",
 		"0x":                    "ZRX",
@@ -98,6 +97,13 @@ var (
 		"SGD": "sgd",
 		"HKD": "hkd",
 		"BRL": "brl",
+		"NOK": "nok",
+		"NZD": "nzd",
+		"SEK": "sek",
+		"PLN": "pln",
+		"CZK": "czk",
+		// Satoshi rates are converted manually in the backend using Bitcoin.
+		"sat": "btc",
 	}
 
 	// Copied from https://api.coingecko.com/api/v3/simple/supported_vs_currencies.
@@ -118,5 +124,10 @@ var (
 		"sgd": "SGD",
 		"hkd": "HKD",
 		"brl": "BRL",
+		"nok": "NOK",
+		"nzd": "NZD",
+		"sek": "SEK",
+		"pln": "PLN",
+		"czk": "CZK",
 	}
 )

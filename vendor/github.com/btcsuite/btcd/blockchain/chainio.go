@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
 	"github.com/btcsuite/btcd/database"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/wire/v2"
 )
 
 const (
@@ -50,6 +50,10 @@ var (
 	// chainStateKeyName is the name of the db key used to store the best
 	// chain state.
 	chainStateKeyName = []byte("chainstate")
+
+	// utxoStateConsistencyKeyName is the name of the db key used to store the
+	// consistency status of the utxo state.
+	utxoStateConsistencyKeyName = []byte("utxostateconsistency")
 
 	// spendJournalVersionKeyName is the name of the db key used to store
 	// the version of the spend journal currently in the database.
@@ -243,10 +247,10 @@ type SpentTxOut struct {
 	// Amount is the amount of the output.
 	Amount int64
 
-	// PkScipt is the the public key script for the output.
+	// PkScript is the public key script for the output.
 	PkScript []byte
 
-	// Height is the height of the the block containing the creating tx.
+	// Height is the height of the block containing the creating tx.
 	Height int32
 
 	// Denotes if the creating tx is a coinbase.
@@ -494,6 +498,21 @@ func dbRemoveSpendJournalEntry(dbTx database.Tx, blockHash *chainhash.Hash) erro
 	return spendBucket.Delete(blockHash[:])
 }
 
+// dbPruneSpendJournalEntry uses an existing database transaction to remove all
+// the spend journal entries for the pruned blocks.
+func dbPruneSpendJournalEntry(dbTx database.Tx, blockHashes []chainhash.Hash) error {
+	spendBucket := dbTx.Metadata().Bucket(spendJournalBucketName)
+
+	for _, blockHash := range blockHashes {
+		err := spendBucket.Delete(blockHash[:])
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // -----------------------------------------------------------------------------
 // The unspent transaction output (utxo) set consists of an entry for each
 // unspent output using a format that is optimized to reduce space using domain
@@ -729,11 +748,12 @@ func dbFetchUtxoEntryByHash(dbTx database.Tx, hash *chainhash.Hash) (*UtxoEntry,
 //
 // When there is no entry for the provided output, nil will be returned for both
 // the entry and the error.
-func dbFetchUtxoEntry(dbTx database.Tx, outpoint wire.OutPoint) (*UtxoEntry, error) {
+func dbFetchUtxoEntry(dbTx database.Tx, utxoBucket database.Bucket,
+	outpoint wire.OutPoint) (*UtxoEntry, error) {
+
 	// Fetch the unspent transaction output information for the passed
 	// transaction output.  Return now when there is no entry.
 	key := outpointKey(outpoint)
-	utxoBucket := dbTx.Metadata().Bucket(utxoSetBucketName)
 	serializedUtxo := utxoBucket.Get(*key)
 	recycleOutpointKey(key)
 	if serializedUtxo == nil {
@@ -771,6 +791,11 @@ func dbFetchUtxoEntry(dbTx database.Tx, outpoint wire.OutPoint) (*UtxoEntry, err
 // particular, only the entries that have been marked as modified are written
 // to the database.
 func dbPutUtxoView(dbTx database.Tx, view *UtxoViewpoint) error {
+	// Return early if the view is nil.
+	if view == nil {
+		return nil
+	}
+
 	utxoBucket := dbTx.Metadata().Bucket(utxoSetBucketName)
 	for outpoint, entry := range view.entries {
 		// No need to update the database if the entry was not modified.
@@ -780,32 +805,54 @@ func dbPutUtxoView(dbTx database.Tx, view *UtxoViewpoint) error {
 
 		// Remove the utxo entry if it is spent.
 		if entry.IsSpent() {
-			key := outpointKey(outpoint)
-			err := utxoBucket.Delete(*key)
-			recycleOutpointKey(key)
+			err := dbDeleteUtxoEntry(utxoBucket, outpoint)
 			if err != nil {
 				return err
 			}
-
-			continue
-		}
-
-		// Serialize and store the utxo entry.
-		serialized, err := serializeUtxoEntry(entry)
-		if err != nil {
-			return err
-		}
-		key := outpointKey(outpoint)
-		err = utxoBucket.Put(*key, serialized)
-		// NOTE: The key is intentionally not recycled here since the
-		// database interface contract prohibits modifications.  It will
-		// be garbage collected normally when the database is done with
-		// it.
-		if err != nil {
-			return err
+		} else {
+			err := dbPutUtxoEntry(utxoBucket, outpoint, entry)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
+	return nil
+}
+
+// dbDeleteUtxoEntry uses an existing database transaction to delete the utxo
+// entry from the database.
+func dbDeleteUtxoEntry(utxoBucket database.Bucket, outpoint wire.OutPoint) error {
+	key := outpointKey(outpoint)
+	err := utxoBucket.Delete(*key)
+	recycleOutpointKey(key)
+	return err
+}
+
+// dbPutUtxoEntry uses an existing database transaction to update the utxo entry
+// in the database.
+func dbPutUtxoEntry(utxoBucket database.Bucket, outpoint wire.OutPoint,
+	entry *UtxoEntry) error {
+
+	if entry == nil || entry.IsSpent() {
+		return AssertError("trying to store nil or spent entry")
+	}
+
+	// Serialize and store the utxo entry.
+	serialized, err := serializeUtxoEntry(entry)
+	if err != nil {
+		return err
+	}
+	key := outpointKey(outpoint)
+	err = utxoBucket.Put(*key, serialized)
+	if err != nil {
+		return err
+	}
+
+	// NOTE: The key is intentionally not recycled here since the
+	// database interface contract prohibits modifications.  It will
+	// be garbage collected normally when the database is done with
+	// it.
 	return nil
 }
 
@@ -999,6 +1046,28 @@ func dbPutBestState(dbTx database.Tx, snapshot *BestState, workSum *big.Int) err
 	return dbTx.Metadata().Put(chainStateKeyName, serializedData)
 }
 
+// dbPutUtxoStateConsistency uses an existing database transaction to
+// update the utxo state consistency status with the given parameters.
+func dbPutUtxoStateConsistency(dbTx database.Tx, hash *chainhash.Hash) error {
+	// Store the utxo state consistency status into the database.
+	return dbTx.Metadata().Put(utxoStateConsistencyKeyName, hash[:])
+}
+
+// dbFetchUtxoStateConsistency uses an existing database transaction to retrieve
+// the utxo state consistency status from the database.  The code is 0 when
+// nothing was found.
+func dbFetchUtxoStateConsistency(dbTx database.Tx) []byte {
+	// Fetch the serialized data from the database.
+	statusBytes := dbTx.Metadata().Get(utxoStateConsistencyKeyName)
+	if statusBytes != nil {
+		result := make([]byte, len(statusBytes))
+		copy(result, statusBytes)
+		return result
+	}
+
+	return nil
+}
+
 // createChainState initializes both the database and the chain state to the
 // genesis block.  This includes creating the necessary buckets and inserting
 // the genesis block, so it must only be called on an uninitialized database.
@@ -1010,6 +1079,7 @@ func (b *BlockChain) createChainState() error {
 	node := newBlockNode(header, nil)
 	node.status = statusDataStored | statusValid
 	b.bestChain.SetTip(node)
+	b.bestHeader.SetTip(node)
 
 	// Add the new node to the index which is used for faster lookups.
 	b.index.addNode(node)
@@ -1096,6 +1166,35 @@ func (b *BlockChain) createChainState() error {
 		return dbStoreBlock(dbTx, genesisBlock)
 	})
 	return err
+}
+
+// DBBlockFromBytes deserializes a block fetched from the local database,
+// tolerating trailing bytes rather than rejecting them outright.  Databases
+// written by older btcd versions may have persisted blocks with trailing
+// bytes, and failing here would make such blocks permanently unreadable.
+// Instead, any trailing bytes are logged, ignored, and excluded from the
+// serialization cached in the returned block.
+//
+// This lenient parsing is only appropriate for blocks read back from the
+// node's own database.  Blocks from external sources (p2p, RPC) should be
+// parsed with the strict btcutil.NewBlockFromBytes instead.
+func DBBlockFromBytes(blockBytes []byte, hash chainhash.Hash) (*btcutil.Block,
+	error) {
+
+	blockReader := bytes.NewReader(blockBytes)
+	var msgBlock wire.MsgBlock
+	if err := msgBlock.Deserialize(blockReader); err != nil {
+		return nil, err
+	}
+	if trailing := blockReader.Len(); trailing > 0 {
+		log.Debugf("Block %v has %d trailing bytes in the database; "+
+			"ignoring them", hash, trailing)
+		blockBytes = blockBytes[:len(blockBytes)-trailing]
+	}
+
+	// Cache the exact serialization on the block so downstream consumers
+	// of the raw bytes never observe the trailing bytes.
+	return btcutil.NewBlockFromBlockAndBytes(&msgBlock, blockBytes), nil
 }
 
 // initChainState attempts to load and initialize the chain state from the
@@ -1193,21 +1292,21 @@ func (b *BlockChain) initChainState() error {
 			i++
 		}
 
-		// Set the best chain view to the stored best state.
+		// Set the best chain view and the best header to the stored best state.
 		tip := b.index.LookupNode(&state.hash)
 		if tip == nil {
 			return AssertError(fmt.Sprintf("initChainState: cannot find "+
 				"chain tip %s in block index", state.hash))
 		}
 		b.bestChain.SetTip(tip)
+		b.bestHeader.SetTip(tip)
 
 		// Load the raw block bytes for the best block.
 		blockBytes, err := dbTx.FetchBlock(&state.hash)
 		if err != nil {
 			return err
 		}
-		var block wire.MsgBlock
-		err = block.Deserialize(bytes.NewReader(blockBytes))
+		block, err := DBBlockFromBytes(blockBytes, state.hash)
 		if err != nil {
 			return err
 		}
@@ -1231,12 +1330,19 @@ func (b *BlockChain) initChainState() error {
 			}
 		}
 
-		// Initialize the state related to the best block.
-		blockSize := uint64(len(blockBytes))
-		blockWeight := uint64(GetBlockWeight(btcutil.NewBlock(&block)))
-		numTxns := uint64(len(block.Transactions))
+		// Initialize the state related to the best block.  The block
+		// bytes are re-derived from the block itself so any trailing
+		// bytes ignored during deserialization are excluded from the
+		// recorded size.
+		serializedBlock, err := block.Bytes()
+		if err != nil {
+			return err
+		}
+		blockSize := uint64(len(serializedBlock))
+		blockWeight := uint64(GetBlockWeight(block))
+		numTxns := uint64(len(block.MsgBlock().Transactions))
 		b.stateSnapshot = newBestState(tip, blockSize, blockWeight,
-			numTxns, state.totalTxns, tip.CalcPastMedianTime())
+			numTxns, state.totalTxns, CalcPastMedianTime(tip))
 
 		return nil
 	})
@@ -1308,7 +1414,7 @@ func dbFetchBlockByNode(dbTx database.Tx, node *blockNode) (*btcutil.Block, erro
 	}
 
 	// Create the encapsulated block and set the height appropriately.
-	block, err := btcutil.NewBlockFromBytes(blockBytes)
+	block, err := DBBlockFromBytes(blockBytes, node.hash)
 	if err != nil {
 		return nil, err
 	}

@@ -1,25 +1,15 @@
-// Copyright 2018 Shift Devices AG
-// Copyright 2020 Shift Crypto AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package coin
 
 import (
-	"github.com/digitalbitbox/bitbox-wallet-app/util/observable"
+	"math/big"
+
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable"
 )
 
 // Coin models the currency of a blockchain.
+//
 //go:generate moq -pkg mocks -out mocks/coin.go . Coin
 type Coin interface {
 	observable.Interface
@@ -39,6 +29,9 @@ type Coin interface {
 	// The fee unit is usually the same as the main unit, but can differ.
 	Unit(isFee bool) string
 
+	// GetFormatUnit sets the unit used to format the amount, e.g. "BTC" or "sat".
+	GetFormatUnit(isFee bool) string
+
 	// Number of decimal places in the standard unit, e.g. 8 for Bitcoin. Must be in the range
 	// [0..31].
 	Decimals(isFee bool) uint
@@ -48,6 +41,14 @@ type Coin interface {
 
 	// ToUnit returns the given amount in the unit as returned above.
 	ToUnit(amount Amount, isFee bool) float64
+
+	// SetAmount return an Amount object representing the *big.Rat given amount
+	// e.g. BTC 1/2 => 50000000
+	SetAmount(amount *big.Rat, isFee bool) Amount
+
+	// ParseAmount parse a String representing a given amount, considering the formatting unit.
+	// e.g. if the formatUnit is set as "sat", the amount will be considered as being sats
+	ParseAmount(amount string) (Amount, error)
 
 	// // Server returns the host and port of the full node used for blockchain synchronization.
 	// Server() string
@@ -60,11 +61,21 @@ type Coin interface {
 	BlockExplorerTransactionURLPrefix() string
 
 	// Initialize initializes the coin by connecting to a full node, downloading the headers, etc.
-	Initialize()
+	Initialize() error
 
 	// SmallestUnit returns the name of the smallest unit of a given coin
 	SmallestUnit() string
 
 	// Close shuts down all resources obtained by the coin (network connections, databases, etc.).
 	Close() error
+}
+
+// DecimalsExp returns the conversion exponential from the smallest unit to the selected unit
+// (BTC, LTC; ETH, etc.). e.g. 1e8 for Bitcoin/Litecoin, 1e18 for Ethereum, etc.
+func DecimalsExp(coin Coin, isFee bool) *big.Int {
+	return new(big.Int).Exp(
+		big.NewInt(10),
+		big.NewInt(int64(coin.Decimals(isFee))),
+		nil,
+	)
 }

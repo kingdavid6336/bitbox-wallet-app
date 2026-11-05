@@ -1,23 +1,20 @@
-import { Component, h, RenderableProps } from 'preact';
-import * as style from './settingsButton.module.css';
+// SPDX-License-Identifier: Apache-2.0
 
-interface SettingsItemProps {
-    optionalText?: string | null;
-}
+import { ReactNode } from 'react';
+import style from './settingsButton.module.css';
 
-class SettingsItem extends Component<SettingsItemProps> {
-    public render({ optionalText, children }: RenderableProps<SettingsItemProps>) {
-        return (
-            <div className={[style.container, style.item].join(' ')}>
-                {children}
-                {
-                    optionalText && (
-                        <span className={style.optionalText}>{optionalText}</span>
-                    )
-                }
-            </div>
-        );
-    }
-}
+type TProps = {
+  optionalText?: string;
+  optionalIcon?: JSX.Element;
+  children: ReactNode;
+};
+export const SettingsItem = ({ optionalText, optionalIcon, children }: TProps) => {
+  return (
+    <div className={[style.container, style.item].join(' ')}>
+      {children}
+      {optionalText && <span className={style.optionalText}>{optionalText}</span>}
+      {optionalIcon}
+    </div>
+  );
 
-export { SettingsItem };
+};

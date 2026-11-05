@@ -1,0 +1,10 @@
+.skeletonWrapper {
+    margin-bottom: var(--space-half);
+}
+
+
+@media (max-width: 768px) {
+    .skeletonWrapper {
+         margin-bottom: 2px;
+    }
+}

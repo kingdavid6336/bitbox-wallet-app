@@ -1,36 +1,25 @@
-/**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
- /* Imported svg source (excluding BitBox logos): http://cryptoicons.co/ */
+/* Imported svg source (excluding BitBox logos): http://cryptoicons.co/ */
 
-import { h } from 'preact';
+import type { CoinCode } from '@/api/account';
 import AppLogoInvertedImg from './assets/app-logo-inverted.svg';
 import AppLogoImg from './assets/app-logo.svg';
 import BitBoxLogo from './assets/bitbox-logo.svg';
 import BitBoxSwissInvertedLogo from './assets/bitbox-swisscross-inverted-logo.svg';
 import BitBoxSwissLogo from './assets/bitbox-swisscross-logo.svg';
 import BitBox02Logo from './assets/bitbox02-logo.svg';
+import BitBox02InvertedLogo from './assets/bitbox02inverted-logo.svg';
+import BitBox02NovaLogo from './assets/bitbox02nova-logo.svg';
+import BitBox02NovaInvertedLogo from './assets/bitbox02nova-inverted-logo.svg';
 import BTC from './assets/btc-color.svg';
 import BTC_GREY from './assets/btc-white.svg';
 import ETH from './assets/eth-color.svg';
 import ETH_GREY from './assets/eth-white.svg';
 import LTC from './assets/ltc-color.svg';
 import LTC_GREY from './assets/ltc-white.svg';
-import SwissOpenSource from './assets/swiss_made_open_source.svg';
+import SwissOpenSourceLight from './assets/swiss-made-open-source-light.svg';
+import SwissOpenSourceDark from './assets/swiss-made-open-source-dark.svg';
 
 import BAT from './assets/bat-color.svg';
 import BAT_GREY from './assets/bat-white.svg';
@@ -38,10 +27,10 @@ import DAI from './assets/dai-color.svg';
 import DAI_GREY from './assets/dai-white.svg';
 import LINK from './assets/link-color.svg';
 import LINK_GREY from './assets/link-white.svg';
+import LIGHTNING from './assets/lightning-color.svg';
+import LIGHTNING_GREY from './assets/lightning-white.svg';
 import MKR from './assets/mkr-color.svg';
 import MKR_GREY from './assets/mkr-white.svg';
-import SAI from './assets/sai-color.svg';
-import SAI_GREY from './assets/sai-white.svg';
 import USDC from './assets/usdc-color.svg';
 import USDC_GREY from './assets/usdc-white.svg';
 import USDT from './assets/usdt-color.svg';
@@ -54,71 +43,82 @@ import PAXG from './assets/paxg-color.svg';
 import PAXG_GREY from './assets/paxg-white.svg';
 
 import ShiftLogo from './assets/shift-cryptosecurity-logo.svg';
-import * as style from './logo.module.css';
+import style from './logo.module.css';
 
-interface GenericProps {
-    [property: string]: any;
-}
 
-export const BitBox = (props: GenericProps) => <img {...props} draggable={false} src={BitBoxLogo} alt="BitBox" class={style.logo} />;
-export const BitBox02 = (props: GenericProps) => <img {...props} draggable={false} src={BitBox02Logo} alt="BitBox02" class={style.logo} />;
-export const AppLogo = (props: GenericProps) => <img {...props} draggable={false} src={AppLogoImg} alt="BitBox" className={style.logo} />;
-export const AppLogoInverted = (props: GenericProps) => <img {...props} draggable={false} src={AppLogoInvertedImg} alt="BitBox" className={style.logo} />;
-export const BitBoxSwiss = (props: GenericProps) => <img {...props} draggable={false} src={BitBoxSwissLogo} alt="BitBox" className={style.logo} />;
-export const BitBoxSwissInverted = (props: GenericProps) => <img {...props} draggable={false} src={BitBoxSwissInvertedLogo} alt="BitBox" className={style.logo} />;
-export const Shift = (props: GenericProps) => <img {...props} draggable={false} src={ShiftLogo} alt="Shift Crypto" className={style.logo} />;
-export const SwissMadeOpenSource = (props: GenericProps) => <img {...props} draggable={false} src={SwissOpenSource} alt="Swiss Made Open Source" className={[style.swissOpenSource, props.large ? style.large : ''].join(' ')} />;
+type ImgProps = JSX.IntrinsicElements['img'];
 
-const logoMap = {
-    'btc': [BTC, BTC_GREY],
-    'tbtc': [BTC, BTC_GREY],
-    'rbtc': [BTC, BTC_GREY],
-    'ltc': [LTC, LTC_GREY],
-    'tltc': [LTC, LTC_GREY],
-    'eth': [ETH, ETH_GREY],
-    'teth': [ETH, ETH_GREY],
-    'reth': [ETH, ETH_GREY],
-    'erc20Test': [ETH, ETH_GREY],
+export const BitBox = (props: ImgProps) => <img {...props} draggable={false} src={BitBoxLogo} alt="BitBox" className={style.logo} />;
+export const BitBox02 = (props: ImgProps) => <img {...props} draggable={false} src={BitBox02Logo} alt="BitBox02" className={style.logo} />;
+export const BitBox02Inverted = (props: ImgProps) => <img {...props} draggable={false} src={BitBox02InvertedLogo} alt="BitBox02" className={style.logo} />;
+export const BitBox02Nova = (props: ImgProps) => <img {...props} draggable={false} src={BitBox02NovaLogo} alt="BitBox02Nova" className={style.logo} />;
+export const BitBox02NovaInverted = (props: ImgProps) => <img {...props} draggable={false} src={BitBox02NovaInvertedLogo} alt="BitBox02Nova" className={style.logo} />;
+export const AppLogo = (props: ImgProps) => <img {...props} draggable={false} src={AppLogoImg} alt="BitBox" className={style.logo} />;
+export const AppLogoInverted = (props: ImgProps) => <img {...props} draggable={false} src={AppLogoInvertedImg} alt="BitBox" className={style.logo} />;
+export const BitBoxSwiss = (props: ImgProps) => <img {...props} draggable={false} src={BitBoxSwissLogo} alt="BitBox" className={style.logo} />;
+export const BitBoxSwissInverted = (props: ImgProps) => <img {...props} draggable={false} src={BitBoxSwissInvertedLogo} alt="BitBox" className={style.logo} />;
+export const Shift = (props: ImgProps) => <img {...props} draggable={false} src={ShiftLogo} alt="Shift Crypto" className={style.logo} />;
+export const SwissMadeOpenSource = ({ className, ...props }: ImgProps) => <img {...props} draggable={false} src={SwissOpenSourceLight} alt="Swiss Made Open Source" className={`${style.swissOpenSource || ''} ${className ? className : ''}`} />;
+export const SwissMadeOpenSourceDark = ({ className, ...props }: ImgProps) => <img {...props} draggable={false} src={SwissOpenSourceDark} alt="Swiss Made Open Source" className={`${style.swissOpenSource || ''} ${className ? className : ''}`} />;
 
-    'eth-erc20-usdt': [USDT, USDT_GREY],
-    'eth-erc20-usdc': [USDC, USDC_GREY],
-    'eth-erc20-sai0x89d2': [SAI, SAI_GREY],
-    'eth-erc20-dai0x6b17': [DAI, DAI_GREY],
-    'eth-erc20-link': [LINK, LINK_GREY],
-    'eth-erc20-bat': [BAT, BAT_GREY],
-    'eth-erc20-mkr': [MKR, MKR_GREY],
-    'eth-erc20-zrx': [ZRX, ZRX_GREY],
-    'eth-erc20-wbtc': [WBTC, WBTC_GREY],
-    'eth-erc20-paxg': [PAXG, PAXG_GREY],
+type LogoMap = {
+  [key in CoinCode]: string[];
 };
 
-interface Props {
-    active?: boolean;
-    alt?: string;
-    className?: string;
-    coinCode: string;
-    stacked?: boolean;
-}
+const logoMap: LogoMap = {
+  'btc': [BTC, BTC_GREY],
+  'tbtc': [BTC, BTC_GREY],
+  'rbtc': [BTC, BTC_GREY],
+  'ltc': [LTC, LTC_GREY],
+  'tltc': [LTC, LTC_GREY],
+  'eth': [ETH, ETH_GREY],
+  'sepeth': [ETH, ETH_GREY],
+  'erc20Test': [ETH, ETH_GREY],
+  'eth-erc20-usdt': [USDT, USDT_GREY],
+  'eth-erc20-usdc': [USDC, USDC_GREY],
+  'eth-erc20-dai0x6b17': [DAI, DAI_GREY],
+  'eth-erc20-link': [LINK, LINK_GREY],
+  'eth-erc20-bat': [BAT, BAT_GREY],
+  'eth-erc20-mkr': [MKR, MKR_GREY],
+  'eth-erc20-zrx': [ZRX, ZRX_GREY],
+  'eth-erc20-wbtc': [WBTC, WBTC_GREY],
+  'eth-erc20-paxg': [PAXG, PAXG_GREY],
+  'lightning': [LIGHTNING, LIGHTNING_GREY],
+};
 
-function Logo({ coinCode, active, stacked, ...rest }: Props) {
-    if (!logoMap[coinCode]) {
-        console.error('logo undefined for ', coinCode);
-        return null;
-    }
-    if (!stacked) {
-        return (
-            <img draggable={false} src={logoMap[coinCode][0]} {...rest} />
-        );
-    }
+type LogoProps = {
+  active?: boolean;
+  alt?: string;
+  className?: string;
+  coinCode: CoinCode;
+  stacked?: boolean;
+};
+
+export const Logo = ({
+  coinCode,
+  active,
+  stacked,
+  ...rest
+}: LogoProps) => {
+  if (!logoMap[coinCode]) {
+    console.error('logo undefined for ', coinCode);
+    return null;
+  }
+  if (!stacked) {
     return (
-        <div>
-            { active ? <img draggable={false} src={logoMap[coinCode][0]} {...rest}/>
-              : <div class="stacked">
-                  <img draggable={false} src={logoMap[coinCode][1]} {...rest} />
-                  <img draggable={false} src={logoMap[coinCode][0]} {...rest} />
-              </div>}
-        </div>
+      <img draggable={false} src={logoMap[coinCode][0]} {...rest} />
     );
-}
-
-export default Logo;
+  }
+  return (
+    <div>
+      { active ? (
+        <img draggable={false} src={logoMap[coinCode][0]} {...rest}/>
+      ) : (
+        <div className="stacked">
+          <img draggable={false} src={logoMap[coinCode][1]} {...rest} />
+          <img draggable={false} src={logoMap[coinCode][0]} {...rest} />
+        </div>
+      )}
+    </div>
+  );
+};

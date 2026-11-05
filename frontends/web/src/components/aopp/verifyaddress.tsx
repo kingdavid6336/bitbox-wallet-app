@@ -1,63 +1,52 @@
-/**
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import * as accountAPI from '../../api/account';
-import { translate, TranslateProps } from '../../decorators/translate';
-import { Button } from '../forms';
-import { WaitDialog } from '../wait-dialog/wait-dialog';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import * as accountAPI from '@/api/account';
+import { Button } from '@/components/forms';
+import { alertUser } from '@/components/alert/Alert';
+import { WaitDialog } from '@/components/wait-dialog/wait-dialog';
+import { PointToBitBox02 } from '../icon';
 
-interface State {
-    verifying: boolean;
-}
+type TProps = {
+  accountCode: accountAPI.AccountCode;
+  displayAddress: string;
+  addressID: string;
+};
 
-interface VerifyAddressProps {
-    accountCode: string;
-    address: string;
-    addressID: string;
-}
-
-type Props = VerifyAddressProps & TranslateProps;
-
-class VerifyAddress extends Component<Props, State> {
-    private verifyAddress = () => {
-        this.setState({ verifying: true });
-        accountAPI.verifyAddress(this.props.accountCode, this.props.addressID).then(() => {
-            this.setState({ verifying: false });
-        });
+export const VerifyAddress = ({ accountCode, displayAddress, addressID }: TProps) => {
+  const [verifying, setVerifying] = useState(false);
+  const { t } = useTranslation();
+  const verifyAddress = async () => {
+    setVerifying(true);
+    try {
+      const result = await accountAPI.verifyAddress(accountCode, addressID);
+      if (!result.success) {
+        alertUser(result.errorMessage || t('genericError'));
+      }
+    } finally {
+      setVerifying(false);
     }
+  };
 
-    public render(
-        { t, address }: RenderableProps<Props>,
-        { verifying }: State,
-    ) {
-        return (
-            <div className="flex flex-column">
-                <Button secondary onClick={this.verifyAddress}>
-                    {t('receive.verifyBitBox02')}
-                </Button>
-                { verifying ? (
-                    <WaitDialog title={t('receive.verifyBitBox02')}>
-                        { address }
-                    </WaitDialog>
-                ) : null }
-            </div>
-        );
-    }
-}
-
-const translateHOC = translate<VerifyAddressProps>()(VerifyAddress);
-export { translateHOC as VerifyAddress };
+  return (
+    <>
+      <Button secondary onClick={verifyAddress}>
+        {t('receive.verifyBitBox02')}
+      </Button>
+      { verifying ? (
+        <WaitDialog
+          noSidebarOffset
+          medium
+          title={t('receive.verifyBitBox02')}>
+          <div>
+            { displayAddress }
+            <br />
+            <br />
+            <PointToBitBox02 />
+          </div>
+        </WaitDialog>
+      ) : null }
+    </>
+  );
+};

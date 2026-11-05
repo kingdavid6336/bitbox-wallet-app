@@ -1,7 +1,8 @@
+@import "./fonts.css";
 @import "./variables.css";
 @import "./base.css";
 @import "./layout.css";
 @import "./grid.css";
-@import "../components/sidebar/sidebar.css";
 @import "./forms.css";
 @import "./icons.css";
+

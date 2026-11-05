@@ -1,143 +1,217 @@
-.balanceTable {
-    margin: 0 0 var(--spacing-large) 0;
-}
-.coincode {
-    height: 24px;
-    /* padding: 0px 0px 4px 10px; */
+.coinUnit {
+    color: var(--color-secondary);
+    font-weight: normal;
+    font-size: var(--size-smaller);
 }
 
-.coinheader {
+.keystoreName {
+    font-size: var(--font-size-default);
+}
+
+
+.assetBalanceRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    width: 100%;
+}
+
+.clickable {
+    cursor: pointer;
+    transition: background-color 120ms ease;
+}
+
+.clickable:active {
+    background-color: var(--background-tap-active);
+}
+
+.assetBalanceInfo {
     display: flex;
     flex-direction: row;
     align-items: center;
+    gap: var(--space-half);
+    min-width: 0;
 }
 
-.coinheader > div:first-child {
-    height: 24px;
-    margin-right: calc(var(--space-half) / 2);
+.assetBalanceNameCol {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-eight);
+    min-width: 0;
+    overflow: hidden;
 }
 
-.dataMissing {
-    text-align: center;
-}
-
-.table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: var(--spacing-default);
-    border: solid 1px var(--color-mediumgray);
-}
-
-.table tr td,
-.table tr th {
-    height: 52px;
-    padding: var(--space-half);
-    text-align: left;
-    font-weight: 400;
-}
-
-.table tr > td:not(:first-child),
-.table tr > th:not(:first-child) {
-    text-align: right;
-}
-
-.table thead th,
-.table tfoot th {
-    font-size: var(--size-small);
-    background-color: var(--color-mediumgray);
-    color: var(--color-default);
-}
-
-.table tr td,
-.table tr td {
-    font-size: var(--size-default) !important;
-    line-height: 1.5714;
-}
-
-.table tbody td {
-    background-color: var(--color-white);
-}
-
-.summaryTableBalance {
+.assetBalanceName {
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.table tfoot th,
-.table tfoot td {
-    background-color: var(--color-mediumgray);
-}
-
-.coinName {
+.assetBalanceAmounts {
     display: flex;
+    flex-direction: column;
+    gap: var(--space-eight);
+    align-items: flex-end;
+    min-height: 46px;
 }
 
-.coinName img {
+.assetBalanceWarning {
+    height: 24px;
+    width: 24px;
+}
+
+.assetBalanceUnavailable {
+    align-items: center;
+    display: flex;
+    gap: var(--space-quarter);
+    margin: auto 0;
+}
+
+.keystoreContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.keystoreHeader {
+    display: flex;
+    flex-direction: row;
+    padding: 0 var(--space-half);
+    justify-content: space-between;
+}
+
+.keystoreBalanceAmount {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-eight);
+}
+
+.coinGroupList {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.coinGroupCard {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-half);
+    border-radius: var(--radius-xl);
+    background-color: var(--background-secondary);
+    width: 100%;
+}
+
+.coinGroupTotal {
+    margin: var(--space-quarter) 0;
+}
+
+.totalLabel {
+    font-size: 12px;
+}
+
+.totalNameCol {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-eight);
+    min-width: 0;
+    overflow: hidden;
+}
+
+.tokenItem {
+    padding-left: 4px;
+}
+
+.tokenItemFirst {
+    margin-top: var(--space-quarter);
+}
+
+.noAccountText {
+    text-align: center;
+    font-size: var(--size-small);
+}
+
+
+.keystoresContainer {
+    margin-top: var(--space-default);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-default);
+    padding: var(--space-half);
+}
+
+
+.assetBalanceInfoFull {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-half);
+    min-width: 0;
+    width: 100%;
+}
+
+.assetBalanceLogo {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    object-fit: contain;
+}
+
+.assetBalanceDetailsRow {
+    display: flex;
+    flex-direction: row;
+    gap: var(--space-eight);
+    width: 100%;
+    min-width: 0;
+}
+
+.assetBalanceDetailsRowCentered {
+    align-items: center;
+}
+
+.assetBalanceDetailsCol {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+}
+
+.assetBalanceNameFlex {
+    flex-basis: 50%;
+    flex-grow: 0;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.assetBalanceAmountFixed {
+    flex-basis: 50%;
+    flex-grow: 1;
     flex-shrink: 0;
-    margin-right: var(--spacing-default);
-    vertical-align: middle;
+    overflow: hidden;
+    white-space: nowrap;
 }
 
-.coinUnit {
-  color: var(--color-secondary);
+.unitPrice {
+    color: var(--color-secondary);
 }
 
-.table progress {
-    appearance: none;
+.fadeIn {
+    animation: fade-in 200ms ease-out;
 }
 
-.table progress::-webkit-progress-bar {
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
-.table progress::-webkit-progress-value {
-}
-
-@media (max-width: 640px) {
-    .table tr td,
-    .table tr th {
-      padding: var(--spacing-default);
-    }
-
-    .table thead {
-        display: none;
-    }
-
-    .table,
-    .table tbody,
-    .table tbody tr,
-    .table tfoot {
-        display: block;
-    }
-
-    .table tfoot tr {
-        background-color: var(--color-mediumgray);
-        display: flex;
-        justify-content: space-between;
-    }
-
-    .table tbody td {
-        display: flex;
-        justify-content: space-between;
-        height: auto;
-        padding-bottom: 0;
-    }
-
-    .table tbody td::before {
-        content: attr(data-label);
-        white-space: nowrap;
-    }
-
-    .table tbody td:last-child {
-        border-bottom: solid 1px var(--color-mediumgray);
-        padding-bottom: var(--spacing-default);
-    }
-
-    .coinName {
-        position: relative;
-    }
-
-    .coinName img {
-        left: -2rem;
-        position: absolute;
-        top: -3px;
+@media (prefers-reduced-motion: reduce) {
+    .fadeIn {
+        animation: none;
     }
 }

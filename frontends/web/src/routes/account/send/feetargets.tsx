@@ -1,249 +1,278 @@
-/**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import * as accountApi from '../../../api/account';
-import { Input, Select } from '../../../components/forms';
-import { load } from '../../../decorators/load';
-import { translate, TranslateProps } from '../../../decorators/translate';
-import { customFeeUnit, getCoinCode, isEthereumBased } from '../utils';
-import * as style from './feetargets.module.css';
+import { useState, useEffect, useRef, useCallback, useContext } from 'react';
+import { useTranslation } from 'react-i18next';
+import { RatesContext } from '@/contexts/RatesContext';
+import { useLoad } from '@/hooks/api';
+import * as accountApi from '@/api/account';
+import { useConfig } from '@/contexts/ConfigProvider';
+import { Input, NumberInput } from '@/components/forms';
+import { Message } from '@/components/message/message';
+import { customFeeUnit, getCoinCode, isEthereumBased } from '@/utils/coin';
+import { Dropdown, TOption as TDropdownOption } from '@/components/dropdown/dropdown';
+import style from './feetargets.module.css';
 
-interface LoadedProps {
-    config: any;
-}
+type Props = {
+  accountCode: accountApi.AccountCode;
+  coinCode: accountApi.CoinCode;
+  disabled: boolean;
+  proposedFee?: accountApi.TAmountWithConversions;
+  highFeePercentage?: string;
+  customFee: string;
+  showCalculatingFeeLabel?: boolean;
+  onFeeTargetChange: (code: accountApi.FeeTargetCode) => void;
+  onCustomFee: (customFee: string) => void;
+  error?: string;
+};
 
-interface FeeTargetsProps {
-    accountCode: string;
-    coinCode: accountApi.CoinCode;
-    disabled: boolean;
-    fiatUnit: accountApi.Fiat;
-    proposedFee?: accountApi.IAmount;
-    customFee: string;
-    showCalculatingFeeLabel?: boolean;
-    onFeeTargetChange: (code: accountApi.FeeTargetCode) => void;
-    onCustomFee: (customFee: string) => void;
-    error?: string;
-}
+type TOption = {
+  value: accountApi.FeeTargetCode;
+  label: string;
+  isDisabled?: boolean;
+};
 
-export type Props = LoadedProps & FeeTargetsProps & TranslateProps;
+export const FeeTargets = ({
+  accountCode,
+  coinCode,
+  disabled,
+  proposedFee,
+  highFeePercentage,
+  customFee,
+  showCalculatingFeeLabel,
+  onFeeTargetChange,
+  onCustomFee,
+  error
+}: Props) => {
+  const { t } = useTranslation();
+  const { config } = useConfig();
+  const { defaultCurrency } = useContext(RatesContext);
+  const [feeTarget, setFeeTarget] = useState<accountApi.FeeTargetCode>();
+  const [options, setOptions] = useState<TOption[] | null>(null);
+  const [noFeeTargets, setNoFeeTargets] = useState<boolean>(false);
 
-interface Options {
-    value: accountApi.FeeTargetCode;
-    text: string;
-}
+  const feeTargets = useLoad(() => accountApi.getFeeTargetList(accountCode), [accountCode]);
 
-interface State {
-    feeTarget?: string;
-    options: Options[] | null;
-}
+  const inputRef = useRef<HTMLInputElement & { autofocus: boolean }>(null);
 
-class FeeTargets extends Component<Props, State> {
-    public readonly state: State = {
-        feeTarget: undefined,
-        options: null,
-    };
+  const focusInput = useCallback(() => {
+    if (!disabled && inputRef.current && inputRef.current.autofocus) {
+      inputRef.current.focus();
+    }
+  }, [disabled]);
 
-    public componentDidMount() {
-        this.updateFeeTargets(this.props.accountCode);
+  useEffect(() => {
+    setFeeTarget(undefined);
+    setOptions(null);
+    setNoFeeTargets(false);
+  }, [accountCode]);
+
+  useEffect(() => {
+    if (!config || !feeTargets) {
+      return;
+    }
+    const withCustomFee = config.frontend.expertFee || feeTargets.feeTargets.length === 0;
+    const options = feeTargets.feeTargets.map(({ code, feeRateInfo }) => ({
+      value: code,
+      label: t(`send.feeTarget.label.${code}`) + (withCustomFee && feeRateInfo ? ` (${feeRateInfo})` : ''),
+      isDisabled: false,
+    }));
+    if (withCustomFee) {
+      options.push({
+        value: 'custom',
+        label: t('send.feeTarget.label.custom'),
+        isDisabled: disabled,
+      });
+    }
+    setOptions(options);
+    if (feeTarget) {
+      return;
+    }
+    setFeeTarget(feeTargets.defaultFeeTarget);
+    onFeeTargetChange(feeTargets.defaultFeeTarget);
+    if (feeTargets.feeTargets.length === 0) {
+      setNoFeeTargets(true);
+    }
+    focusInput();
+  }, [t, feeTarget, feeTargets, focusInput, accountCode, config, onFeeTargetChange, disabled]);
+
+  const handleFeeTargetChange = (value: accountApi.FeeTargetCode) => {
+    setFeeTarget(value);
+    onFeeTargetChange(value);
+  };
+
+  const getProposeFeeText = (): string => {
+    if (!proposedFee) {
+      return '';
+    }
+    const { amount, unit, conversions } = proposedFee;
+    const conversion = (conversions && conversions[defaultCurrency]) ? ` = ${conversions[defaultCurrency]} ${defaultCurrency}` : '';
+    return `${amount} ${unit} ${conversion}`;
+  };
+
+  if (options === null) {
+    return (
+      <Input
+        label={t('send.priority')}
+        id="feetarget"
+        placeholder={t('send.feeTarget.placeholder')}
+        disabled
+        value="" />
+    );
+  }
+
+  const isCustom = feeTarget === 'custom';
+  const hasOptions = options.length > 0;
+  const proposeFeeText = getProposeFeeText();
+  const preventFocus = document.activeElement && document.activeElement.nodeName === 'INPUT';
+
+  const renderOption = (
+    option: TDropdownOption<accountApi.FeeTargetCode | undefined>
+  ) => {
+    if (option === undefined) {
+      return null;
     }
 
-    public componentWillReceiveProps({ accountCode }) {
-        if (this.props.accountCode !== accountCode) {
-            this.updateFeeTargets(accountCode);
-        }
+    if (!config) {
+      return null;
     }
-
-    private updateFeeTargets = (accountCode: string) => {
-        accountApi.getFeeTargetList(accountCode)
-            .then(({ feeTargets, defaultFeeTarget }) => {
-                const expert = this.props.config.frontend.expertFee;
-                const options = feeTargets.map(({ code, feeRateInfo }) => ({
-                    value: code,
-                    text: this.props.t(`send.feeTarget.label.${code}`) + (expert && feeRateInfo ? ` (${feeRateInfo})` : ''),
-                }));
-                if (expert) {
-                    options.push({
-                        value: 'custom',
-                        text: this.props.t('send.feeTarget.label.custom'),
-                    });
-                }
-                this.setState({ options });
-                this.setFeeTarget(defaultFeeTarget);
-            })
-            .catch(console.error);
+    const feetargetInfo = feeTargets?.feeTargets.find(({ code }) => code === option.value);
+    const withCustomFee = config.frontend.expertFee || feeTargets?.feeTargets.length === 0;
+    if (withCustomFee && feetargetInfo) {
+      return (
+        <>
+          {t(`send.feeTarget.label.${option.value || ''}`)}
+          {' '}
+          <span className={style.unit}>
+            ({feetargetInfo?.feeRateInfo || ''})
+          </span>
+        </>
+      );
     }
+    return t(`send.feeTarget.label.${option.value || ''}`);
+  };
 
-    private handleFeeTargetChange = (event: Event) => {
-        const target = event.target as HTMLSelectElement;
-        this.setFeeTarget(target.options[target.selectedIndex].value as accountApi.FeeTargetCode);
-    }
-
-    private handleCustomFee = (event: Event) => {
-        const target = event.target as HTMLInputElement;
-        this.props.onCustomFee(target.value);
-    }
-
-    private setFeeTarget = (feeTarget: accountApi.FeeTargetCode) => {
-        this.setState({ feeTarget });
-        this.props.onFeeTargetChange(feeTarget);
-    }
-
-    private getProposeFeeText = (): string => {
-        if (!this.props.proposedFee) {
-            return '';
-        }
-        const { amount, unit, conversions } = this.props.proposedFee;
-        const fiatUnit = this.props.fiatUnit;
-        return `${amount} ${unit} ${conversions ? ` = ${conversions[fiatUnit]} ${fiatUnit}` : ''}`;
-    }
-
-    public render(
-    {
-        t,
-        coinCode,
-        disabled,
-        error,
-        showCalculatingFeeLabel = false,
-        customFee,
-    }: RenderableProps<Props>,
-    {
-        feeTarget,
-        options,
-    }: State) {
-        if (options === null) {
-            return (
-                <Input
-                    label={t('send.priority')}
-                    id="feetarget"
-                    placeholder={t('send.feeTarget.placeholder')}
-                    disabled
-                    transparent />
-            );
-        }
-        const isCustom = feeTarget === 'custom';
-        const hasOptions = options.length > 0;
-        const proposeFeeText = this.getProposeFeeText();
-        const preventFocus = document.activeElement && document.activeElement.nodeName === 'INPUT';
-        return (
-            hasOptions ? (
-                <div>
-                    {!isCustom ? (
-                        showCalculatingFeeLabel ? (
-                            <Input
-                                disabled
-                                label={t('send.priority')}
-                                placeholder={t('send.feeTarget.placeholder')}
-                                transparent />
-                        ) : (
-                            <Select
-                                className={style.priority}
-                                label={t('send.priority')}
-                                id="feeTarget"
-                                disabled={disabled}
-                                onChange={this.handleFeeTargetChange}
-                                selectedOption={feeTarget}
-                                value={feeTarget}
-                                options={options} />
-                        )
-                    ) : (
-                        <div className={style.rowCustomFee}>
-                            <div className={style.column}>
-                                <Select
-                                    className={style.priority}
-                                    label={t('send.priority')}
-                                    id="feeTarget"
-                                    disabled={disabled}
-                                    onChange={this.handleFeeTargetChange}
-                                    selectedOption={feeTarget}
-                                    value={feeTarget}
-                                    options={options} />
-                            </div>
-                            <div className={style.column}>
-                                <Input
-                                    type={disabled ? 'text' : 'number'}
-                                    min="0"
-                                    step="any"
-                                    autoFocus={!preventFocus}
-                                    align="right"
-                                    className={`${style.fee} ${style.feeCustom}`}
-                                    disabled={disabled}
-                                    label={t('send.feeTarget.customLabel', {
-                                        context: isEthereumBased(coinCode) ? 'eth' : ''
-                                    })}
-                                    id="proposedFee"
-                                    placeholder={t('send.fee.customPlaceholder')}
-                                    error={error}
-                                    transparent
-                                    onInput={this.handleCustomFee}
-                                    getRef={input => {
-                                        setTimeout(() => {
-                                            if (!disabled && input && input.autofocus) {
-                                                input.focus();
-                                            }
-                                        });
-                                    }}
-                                    value={customFee}
-                                >
-                                    <span className={style.customFeeUnit}>
-                                        { customFeeUnit(this.props.coinCode) }
-                                    </span>
-                                </Input>
-                            </div>
-                        </div>
-                    )}
-                    { feeTarget && (
-                        <div>
-                            {(showCalculatingFeeLabel || proposeFeeText ? (
-                                <p class={style.feeProposed}>
-                                    {t('send.fee.label')}:
-                                    {' '}
-                                    {showCalculatingFeeLabel ? t('send.feeTarget.placeholder') : proposeFeeText}
-                                </p>
-                            ) : null)}
-                            { !isCustom ? (
-                                <p class={style.feeDescription}>
-                                    {t('send.feeTarget.estimate')}
-                                    {' '}
-                                    {t(`send.feeTarget.description.${feeTarget}`, {
-                                        context: getCoinCode(coinCode) || '',
-                                    })}
-                                </p>
-                            ) : null }
-                        </div>
-                    )}
-                </div>
-            ) : (
-                <Input
-                    disabled
-                    label={t('send.fee.label')}
-                    id="proposedFee"
-                    placeholder={t('send.fee.placeholder')}
-                    error={error}
-                    transparent
-                    value={proposeFeeText}
-                />
-            )
-        );
-    }
-}
-
-const loadedHOC = load<LoadedProps, FeeTargetsProps & TranslateProps>(
-    { config: 'config' },
-)(FeeTargets);
-const TranslatedFeeTargets = translate<FeeTargetsProps>()(loadedHOC);
-export { TranslatedFeeTargets as FeeTargets };
+  return (
+    hasOptions ? (
+      <div>
+        {!isCustom ? (
+          showCalculatingFeeLabel ? (
+            <Input
+              disabled
+              className={style.calculatingFeePlaceholder}
+              label={t('send.priority')}
+              placeholder={t('send.feeTarget.placeholder')}
+              value="" />
+          ) : (
+            <>
+              <label>{t('send.priority')}</label>
+              <Dropdown
+                isSearchable={false}
+                className={style.priority}
+                renderOptions={renderOption}
+                onChange={(newValue) => {
+                  if (newValue.value) {
+                    handleFeeTargetChange(newValue.value);
+                  }
+                }}
+                defaultValue={[{
+                  label: feeTarget as string,
+                  value: feeTarget,
+                }]}
+                options={options} />
+            </>
+          )
+        ) : (
+          <div className={style.rowCustomFee}>
+            { noFeeTargets ? (
+              <Message type="warning">
+                <label>
+                  {t('send.noFeeTargets')}
+                </label>
+              </Message>
+            ) : null }
+            <div className={style.column}>
+              <label>{t('send.priority')}</label>
+              <Dropdown
+                isSearchable={false}
+                className={style.priority}
+                defaultValue={[{
+                  label: feeTarget as string,
+                  value: feeTarget,
+                }]}
+                id="feeTarget"
+                onChange={(newValue) => handleFeeTargetChange(newValue.value)}
+                renderOptions={renderOption}
+                options={options} />
+            </div>
+            <div className={style.column}>
+              <NumberInput
+                min="0"
+                step="any"
+                autoFocus={!preventFocus}
+                align="right"
+                className={style.fee}
+                disabled={disabled}
+                label={error
+                  ? (
+                    <span className={style.errorText}>
+                      {error.trim()}
+                    </span>
+                  )
+                  : t('send.feeTarget.customLabel', {
+                    context: isEthereumBased(coinCode) ? 'eth' : ''
+                  })}
+                id="proposedFee"
+                placeholder={t('send.fee.customPlaceholder')}
+                onChange={onCustomFee}
+                ref={inputRef}
+                value={customFee}
+              >
+                <label
+                  htmlFor="proposedFee"
+                  className={style.customFeeUnit}>
+                  { customFeeUnit(coinCode) }
+                </label>
+              </NumberInput>
+            </div>
+          </div>
+        )}
+        {highFeePercentage && !showCalculatingFeeLabel && !error && (
+          <Message type="warning" className={style.highFeeWarning}>
+            <span>{t('send.fee.highFee')}</span>
+            {': '}
+            <span>{t('send.fee.highFeeWarning', { percentage: highFeePercentage })}</span>
+          </Message>
+        )}
+        { feeTarget && !error && (
+          <div className={style.feeDescription}>
+            { !isCustom ? (
+              <p>
+                {t('send.feeTarget.estimate')}
+                {' '}
+                {t(`send.feeTarget.description.${feeTarget}`, {
+                  context: getCoinCode(coinCode) || '',
+                })}
+              </p>
+            ) : null }
+            {(showCalculatingFeeLabel || proposeFeeText ? (
+              <p>
+                {t('send.fee.label')}:
+                {' '}
+                {showCalculatingFeeLabel ? t('send.feeTarget.placeholder') : proposeFeeText}
+              </p>
+            ) : null)}
+          </div>
+        )}
+      </div>
+    ) : (
+      <Input
+        disabled
+        label={t('send.fee.label')}
+        id="proposedFee"
+        placeholder={t('send.fee.placeholder')}
+        error={error}
+        value={proposeFeeText}
+      />
+    )
+  );
+};

@@ -1,196 +1,261 @@
-/**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import * as style from './dialog.module.css';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { CloseXDark, CloseXWhite } from '@/components/icon';
+import { UseBackButton } from '@/hooks/backbutton';
+import { useEsc, useFocusTrap } from '@/hooks/keyboard';
+import { useMediaQuery } from '@/hooks/mediaquery';
+import { MobileDialog } from './mobile-dialog';
+import style from './dialog.module.css';
 
-interface Props {
-    title?: string;
-    small?: boolean;
-    medium?: boolean;
-    large?: boolean;
-    slim?: boolean;
-    centered?: boolean;
-    disableEscape?: boolean;
-    onClose?: (e?: Event) => void;
-    disabledClose?: boolean;
-}
+type TDialogContainerProps = {
+  centered?: boolean;
+  children: React.ReactNode;
+  contentContainerRef: React.RefObject<HTMLDivElement>;
+  handleCloseClick: () => void;
+  onClose?: () => void;
+  slim?: boolean;
+  title?: string;
+};
 
-interface State {
-    active: boolean;
-    currentTab: number;
-}
+const DialogContainer = ({
+  centered,
+  children,
+  contentContainerRef,
+  handleCloseClick,
+  onClose,
+  slim,
+  title,
+}: TDialogContainerProps) => {
 
-class Dialog extends Component<Props, State> {
-    private overlay?: HTMLDivElement | null;
-    private modal?: HTMLDivElement | null;
-    private modalContent?: HTMLDivElement | null;
-    private focusableChildren!: NodeListOf<HTMLElement>;
+  const headerClass = `
+    ${style.header || ''}
+    ${centered && !onClose && style.centered || ''}
+  `.trim();
 
-    public readonly state: State = {
-        active: false,
-        currentTab: 0,
+  const contentClass = `
+    ${style.contentContainer || ''}
+    ${slim && style.slim || ''}
+  `.trim();
+
+  return (
+    <>
+      {title && (
+        <div className={headerClass}>
+          <h3 className={style.title}>
+            {title}
+          </h3>
+          {onClose && (
+            <button
+              className={style.closeButton}
+              onClick={handleCloseClick}
+              data-testid="close-button">
+              <CloseXDark className="show-in-lightmode" />
+              <CloseXWhite className="show-in-darkmode" />
+            </button>
+          )}
+        </div>
+      )}
+      <div className={contentClass} ref={contentContainerRef}>
+        {children}
+      </div>
+    </>
+  );
+};
+
+type TProps = {
+  title?: string;
+  small?: boolean;
+  medium?: boolean;
+  large?: boolean;
+  slim?: boolean;
+  centered?: boolean;
+  noSidebarOffset?: boolean;
+  onClose?: () => void;
+  children: React.ReactNode;
+  open: boolean;
+};
+
+export const Dialog = ({
+  title,
+  small,
+  medium,
+  large,
+  slim,
+  centered,
+  noSidebarOffset = false,
+  onClose,
+  children,
+  open,
+}: TProps) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'opening' | 'open' | 'closing'>('idle');
+  const modalRef = useRef<HTMLDivElement>(null);
+  const contentContainerRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isMobile = useMediaQuery('(max-width: 768px)');
+
+  useFocusTrap(modalRef, status === 'open');
+
+  // create a stable ref so deactivate() doesn't recreate
+  // on every parent re-render
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  /**
+   * Deactivate (close) animation handler.
+   * If fireOnClose = true, it means user action triggered the close,
+   * so we call onClose(). If false, it means parent controlled it, so skip.
+   */
+  const deactivate = useCallback((fireOnClose: boolean) => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+    }
+    setStatus('closing');
+
+    closeTimerRef.current = setTimeout(() => {
+      setIsVisible(false);
+      setStatus('idle');
+
+      if (fireOnClose && onCloseRef.current) {
+        onCloseRef.current();
+      }
+    }, 400); // match CSS transition
+
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+      }
     };
+  }, []);
 
-    public componentDidMount() {
-        setTimeout(this.activate, 10);
+  // Handle external open state changes.
+  useEffect(() => {
+    if (open) {
+      setIsVisible(true);
+      setStatus('opening');
+      const id = setTimeout(() => setStatus('open'), 20);
+      return () => clearTimeout(id);
+    } else if (isVisible) {
+      // When parent closes it (open=false), skip firing onClose again.
+      deactivate(false);
     }
+  }, [open, isVisible, deactivate]);
 
-    public componentWillUnmount() {
-        document.removeEventListener('keydown', this.handleKeyDown);
+  // ESC closes dialog (fires onClose)
+  useEsc(() => {
+    if (open && onClose) {
+      deactivate(true);
     }
+  });
 
-    private handleFocus = (e: FocusEvent) => {
-        const input = e.target as HTMLElement;
-        const index = input.getAttribute('index');
-        this.setState({ currentTab: Number(index) });
-    }
+  // Overlay click closes dialog (fires onClose)
+  const mouseDownTarget = useRef<EventTarget | null>(null);
 
-    private focusWithin = () => {
-        if (this.modalContent) {
-            this.focusableChildren = this.modalContent.querySelectorAll('a, button, input, textarea');
-            const focusables = Array.from(this.focusableChildren);
-            for (const c of focusables) {
-                c.classList.add('tabbable');
-                c.setAttribute('index', focusables.indexOf(c).toString());
-                c.addEventListener('focus', this.handleFocus);
-            }
-            document.addEventListener('keydown', this.handleKeyDown);
-        }
-    }
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    mouseDownTarget.current = e.target;
+  };
 
-    private focusFirst = () => {
-        const focusables = this.focusableChildren;
-        if (focusables.length && focusables[0].getAttribute('autofocus') !== 'false') {
-            focusables[0].focus();
-        }
-    }
-
-    private updateIndex = (isNext: boolean) => {
-        const target = this.getNextIndex(isNext);
-        this.setState({ currentTab: target }, () => {
-            this.focusableChildren[target].focus();
-        });
-    }
-
-    private getNextIndex(isNext: boolean) {
-        const { currentTab } = this.state;
-        const focusables = Array.from(this.focusableChildren);
-        const arr = isNext ? focusables : focusables.reverse();
-        const current = isNext ? currentTab : (arr.length - 1) - currentTab;
-        let next = isNext ? currentTab + 1 : arr.length - currentTab;
-        next = arr.findIndex((item, i) => (i >= next && !item.hasAttribute('disabled')));
-        next = next < 0 ? arr.findIndex((item, i) => (i <= current && !item.hasAttribute('disabled'))) : next;
-        return isNext ? next : (arr.length - 1) - next;
-    }
-
-    private handleKeyDown = (e: KeyboardEvent) => {
-        const { disableEscape } = this.props;
-        const isEsc = e.keyCode === 27;
-        const isTab = e.keyCode === 9;
-        if (!disableEscape && isEsc) {
-            this.deactivate();
-        } else if (isTab) {
-            e.preventDefault();
-        }
-        if (isTab && e.shiftKey) {
-            this.updateIndex(false);
-        } else if (isTab) {
-            this.updateIndex(true);
-        }
-    }
-
-    private deactivate = () => {
-        if (!this.modal || !this.overlay) {
-            return;
-        }
-        this.modal.classList.remove(style.activeModal);
-        this.setState({ active: false, currentTab: 0 }, () => {
-            document.removeEventListener('keydown', this.handleKeyDown);
-            if (this.props.onClose) {
-                this.props.onClose();
-            }
-        });
-        this.overlay.classList.remove(style.activeOverlay);
-    }
-
-    private activate = () => {
-        this.setState({ active: true }, () => {
-            if (!this.modal || !this.overlay) {
-                return;
-            }
-            this.overlay.classList.add(style.activeOverlay);
-            this.modal.classList.add(style.activeModal);
-            this.focusWithin();
-            this.focusFirst();
-        });
-    }
-
-    public render(
-        {
-            title,
-            small,
-            medium,
-            large,
-            slim,
-            centered,
-            onClose,
-            disabledClose,
-            children,
-        }: RenderableProps<Props>,
-        {}: State,
+  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (
+      mouseDownTarget.current === e.currentTarget
+      && e.target === e.currentTarget
+      && open
+      && onClose
     ) {
-        const isSmall = small ? style.small : '';
-        const isMedium = medium ? style.medium : '';
-        const isLarge = large ? style.large : '';
-        const isSlim = slim ? style.slim : '';
-        const isCentered = centered && !onClose ? style.centered : '';
-        return (
-            <div className={style.overlay} ref={element => this.overlay = element}>
-                <div
-                    className={[style.modal, isSmall, isMedium, isLarge].join(' ')}
-                    ref={element => this.modal = element}>
-                    {
-                        title && (
-                            <div className={[style.header, isCentered].join(' ')}>
-                                <h3 class={style.title}>{title}</h3>
-                                { onClose ? (
-                                    <button className={style.closeButton} onClick={this.deactivate} disabled={disabledClose}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                                        </svg>
-                                    </button>
-                                ) : null }
-                            </div>
-                        )
-                    }
-                    <div
-                        className={[style.contentContainer, isSlim].join(' ')}
-                        ref={element => this.modalContent = element}>
-                        <div className={style.content}>
-                            {children}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
+      deactivate(true);
     }
-}
+    mouseDownTarget.current = null;
+  };
+
+  // Close button handler
+  const handleCloseClick = useCallback(() => {
+    if (open && onClose) {
+      deactivate(true);
+    }
+  }, [deactivate, onClose, open]);
+
+  // Back button handler (mobile)
+  const handleBackButton = useCallback(() => {
+    if (onClose) {
+      deactivate(true);
+    }
+    return false;
+  }, [deactivate, onClose]);
+
+  // Drag close handler (mobile bottom sheet)
+  const handleDragClose = useCallback(() => {
+    if (onClose) {
+      deactivate(true);
+    }
+  }, [deactivate, onClose]);
+
+  if (!isVisible) {
+    return null;
+  }
+
+  const modalClass = `
+    ${style.modal || ''}
+    ${small && style.small || ''}
+    ${medium && style.medium || ''}
+    ${large && style.large || ''}
+    ${noSidebarOffset && style.noSidebarOffset || ''}
+    ${status === 'open' && style.open || ''}
+  `.trim();
+
+  const overlayClass = `
+    ${style.overlay || ''}
+    ${(status === 'opening' || status === 'open') && style.activeOverlay || ''}
+    ${status === 'closing' && style.closingOverlay || ''}
+  `.trim();
+
+  return (
+    <div
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      className={overlayClass}
+    >
+      <UseBackButton handler={handleBackButton} />
+      {isMobile ? (
+        <MobileDialog
+          status={status}
+          canClose={!!onClose}
+          onDragClose={handleDragClose}
+          modalClass={modalClass}
+          modalRef={modalRef}
+          contentContainerRef={contentContainerRef}
+        >
+          <DialogContainer
+            centered={centered}
+            contentContainerRef={contentContainerRef}
+            handleCloseClick={handleCloseClick}
+            onClose={onClose}
+            slim={slim}
+            title={title}>
+            {children}
+          </DialogContainer>
+        </MobileDialog>
+      ) : (
+        <div className={modalClass} ref={modalRef}>
+          <DialogContainer
+            centered={centered}
+            contentContainerRef={contentContainerRef}
+            handleCloseClick={handleCloseClick}
+            onClose={onClose}
+            slim={slim}
+            title={title}>
+            {children}
+          </DialogContainer>
+        </div>
+      )}
+    </div>
+  );
+};
+
+type DialogButtonsProps = {
+  children: React.ReactNode;
+};
 
 /**
  * ### Container to place buttons in a dialog
@@ -210,11 +275,25 @@ class Dialog extends Component<Props, State> {
  *   </Dialog>
  * ```
  */
+export const DialogButtons = ({ children }: DialogButtonsProps) => {
+  return (
+    <div className={style.dialogButtons}>
+      {children}
+    </div>
+  );
+};
 
-function DialogButtons({ children }: RenderableProps<{}>) {
-    return (
-        <div class={style.dialogButtons}>{children}</div>
-    );
-}
 
-export { Dialog, DialogButtons };
+type DialogScrollContentProps = {
+  children: React.ReactNode;
+};
+
+export const DialogScrollContent = ({
+  children,
+}: DialogScrollContentProps) => {
+  return (
+    <div className={style.dialogScrollContent}>
+      {children}
+    </div>
+  );
+};

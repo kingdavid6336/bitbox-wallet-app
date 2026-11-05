@@ -1,16 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package main
 
@@ -20,6 +8,9 @@ package main
 #include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
+
+// Workaround to be able to use `const char*` as a param type in the exported Go functions.
+typedef const char cchar_t;
 
 typedef void (*pushNotificationsCallback) (const char*);
 static void pushNotify(pushNotificationsCallback f, const char* msg) {
@@ -35,6 +26,23 @@ typedef void (*notifyUserCallback) (const char*);
 static void notifyUser(notifyUserCallback f, const char* msg) {
     f(msg);
 }
+
+typedef char* (*getSaveFilenameCallback) (const char*);
+static char* getSaveFilename(getSaveFilenameCallback f, const char* suggestedfilename) {
+    return f(suggestedfilename);
+}
+
+// equivalent to C.free but suitable for releasing a memory malloc'ed
+// in a non-posix portable environment, incompatible with cgo.
+// this is especially important on windows where the standard C runtime
+// memory management used by cgo and mingw is different from win32 API used
+// when compiling C++ code with MSVC. hence, the memory allocated with malloc
+// in C++ must always be freed by this function in Go instead of C.free.
+typedef void (*cppHeapFree) (void* ptr);
+static void customHeapFree(cppHeapFree f, void* ptr) {
+	f(ptr);
+}
+
 #endif
 */
 import "C"
@@ -46,11 +54,15 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/bridgecommon"
-	btctypes "github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/types"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/usb"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/system"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/bridgecommon"
+	btctypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox02/simulator"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/usb"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/mobileserver"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/logging"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/system"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/useragent"
 )
 
 // nativeCommunication implements bridge.NativeCommunication.
@@ -70,28 +82,48 @@ func (communication *nativeCommunication) PushNotify(msg string) {
 }
 
 //export backendCall
-func backendCall(queryID C.int, s *C.char) {
+func backendCall(queryID C.int, s *C.cchar_t) {
 	bridgecommon.BackendCall(int(queryID), C.GoString(s))
 }
 
 //export handleURI
-func handleURI(uri *C.char) {
+func handleURI(uri *C.cchar_t) {
 	bridgecommon.HandleURI(C.GoString(uri))
+}
+
+func matchDarkTheme(themeName string) bool {
+	return strings.Contains(strings.ToLower(themeName), "dark")
+}
+
+//export setOnline
+func setOnline(isReachable bool) {
+	bridgecommon.SetOnline(isReachable)
+}
+
+func deviceInfos() []usb.DeviceInfo {
+	testDeviceInfo := simulator.TestDeviceInfo()
+	if testDeviceInfo != nil {
+		return []usb.DeviceInfo{testDeviceInfo}
+	}
+	return usb.DeviceInfos()
 }
 
 //export serve
 func serve(
+	cppHeapFreeFn C.cppHeapFree,
 	pushNotificationsFn C.pushNotificationsCallback,
 	responseFn C.responseCallback,
 	notifyUserFn C.notifyUserCallback,
-	preferredLocale *C.char,
+	preferredDecimalSeparator *C.cchar_t,
+	preferredGroupSeparator *C.cchar_t,
+	preferredLocale *C.cchar_t,
+	getSaveFilenameFn C.getSaveFilenameCallback,
 ) {
 	log := logging.Get().WithGroup("server")
 	log.WithField("args", os.Args).Info("Started Qt application")
-	// workaround: this flag is parsed by qtwebengine, but flag.Parse() quits the app on
-	// unrecognized flags
-	// _ = flag.Int("remote-debugging-port", 0, "")
 	testnet := flag.Bool("testnet", false, "activate testnets")
+	simulatorPort := flag.Int("simulatorPort", 15423, "port for the BitBox02 simulator")
+	useSimulator := flag.Bool("simulator", false, "use the BitBox02 simulator. It implies --testnet.")
 
 	if runtime.GOOS == "darwin" {
 		// eat "-psn_xxxx" on Mac, which is passed when starting an app from Finder for the first time.
@@ -117,39 +149,102 @@ func serve(
 		}
 	}
 
+	if *useSimulator {
+		simulator.Init(*simulatorPort)
+	}
+
 	// Capture C string early to avoid potential use when it's already popped
 	// from the stack.
 	nativeLocale := C.GoString(preferredLocale)
 
+	decimalSeparator := C.GoString(preferredDecimalSeparator)
+	groupSeparator := C.GoString(preferredGroupSeparator)
+
+	var numberFormat *backend.NumberFormat
+
+	if decimalSeparator != "" && groupSeparator != "" {
+		numberFormat = &backend.NumberFormat{
+			DecimalSeparator: decimalSeparator,
+			GroupSeparator:   groupSeparator,
+		}
+	}
+
 	bridgecommon.Serve(
 		*testnet,
+		*useSimulator,
 		gapLimits,
 		&nativeCommunication{
 			respond: func(queryID int, response string) {
 				cResponse := C.CString(response)
+				defer C.free(unsafe.Pointer(cResponse))
 				C.respond(responseFn, C.int(queryID), cResponse)
-				C.free(unsafe.Pointer(cResponse))
 			},
 			pushNotify: func(msg string) {
-				C.pushNotify(pushNotificationsFn, C.CString(msg))
+				cMsg := C.CString(msg)
+				defer C.free(unsafe.Pointer(cMsg))
+				C.pushNotify(pushNotificationsFn, cMsg)
 			},
 		},
 		&bridgecommon.BackendEnvironment{
 			NotifyUserFunc: func(text string) {
-				C.notifyUser(notifyUserFn, C.CString(text))
+				cText := C.CString(text)
+				defer C.free(unsafe.Pointer(cText))
+				C.notifyUser(notifyUserFn, cText)
 			},
-			DeviceInfosFunc:     usb.DeviceInfos,
+			DeviceInfosFunc:     deviceInfos,
 			SystemOpenFunc:      system.Open,
 			UsingMobileDataFunc: func() bool { return false },
 			NativeLocaleFunc:    func() string { return nativeLocale },
+			NumberFormatFunc:    func() *backend.NumberFormat { return numberFormat },
+			GetSaveFilenameFunc: func(suggestedFilename string) string {
+				cSuggestedFilename := C.CString(suggestedFilename)
+				defer C.free(unsafe.Pointer(cSuggestedFilename))
+				cFilename := C.getSaveFilename(getSaveFilenameFn, cSuggestedFilename)
+				if cFilename == nil {
+					return ""
+				}
+				defer C.customHeapFree(cppHeapFreeFn, unsafe.Pointer(cFilename))
+				filename := C.GoString(cFilename)
+				return filename
+			},
+			SetDarkThemeFunc:      func(bool) {},
+			DetectDarkThemeFunc:   detectDarkTheme,
+			UserAgentPlatformFunc: useragent.PlatformFromRuntime,
+			AuthFunc: func() {
+				log.Info("Qt auth")
+				authResult(mobileserver.AuthResultOk)
+			},
+			OnAuthSettingChangedFunc:         func(bool) {},
+			CanEncryptLightningMnemonicFunc:  func() bool { return false },
+			StoreLightningEncryptionKeyFunc:  func(string, string) error { return nil },
+			LoadLightningEncryptionKeyFunc:   func(string) (string, error) { return "", nil },
+			DeleteLightningEncryptionKeyFunc: func(string) error { return nil },
+			BluetoothConnectFunc:             func(string) {},
 		},
 	)
 }
 
 //export systemOpen
-func systemOpen(url *C.char) {
-	_ = system.Open(C.GoString(url))
-	// Not much we can do at this point in case of error.
+func systemOpen(url *C.cchar_t) {
+	goURL := C.GoString(url)
+	if err := system.Open(goURL); err != nil {
+		logging.Get().WithGroup("server").WithError(err).Errorf("systemOpen: error opening %v", goURL)
+	}
+}
+
+//export goLog
+func goLog(msg *C.cchar_t) {
+	goMsg := C.GoString(msg)
+	logging.Get().WithGroup("qt-frontend").Info(goMsg)
+}
+
+//export backendShutdown
+func backendShutdown() {
+	bridgecommon.Shutdown()
+}
+
+func authResult(result string) {
+	mobileserver.AuthResult(result)
 }
 
 // Don't remove - needed for the C compilation.

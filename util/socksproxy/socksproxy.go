@@ -1,16 +1,4 @@
-// Copyright 2019 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package socksproxy
 
@@ -19,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/logging"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/proxy"
 )
@@ -47,6 +35,14 @@ func NewSocksProxy(useProxy bool, proxyAddress string) SocksProxy {
 	}
 	proxy.fullProxyAddress = "socks5://" + proxyAddress
 	return proxy
+}
+
+// GetProxyAddress returns the configured host:port, or an empty string if the proxy is disabled.
+func (socksProxy SocksProxy) GetProxyAddress() string {
+	if !socksProxy.useProxy {
+		return ""
+	}
+	return socksProxy.proxyAddress
 }
 
 // Validate validates the socks5 proxy endpoint.
@@ -99,7 +95,8 @@ func (socksProxy *SocksProxy) GetHTTPClient() (*http.Client, error) {
 
 		// Make a http.Transport that uses the proxy dialer, and a
 		// http.Client that uses the transport.
-		tbTransport := &http.Transport{Dial: tbDialer.Dial}
+		// SOCKS5 dialers implement proxy.ContextDialer.
+		tbTransport := &http.Transport{DialContext: tbDialer.(proxy.ContextDialer).DialContext}
 		client := &http.Client{Transport: tbTransport}
 		return client, nil
 	}

@@ -1,32 +1,22 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package transactionsdb
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"path"
 	"reflect"
 	"testing"
 	"testing/quick"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/blockchain"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/types"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/test"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/blockchain"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/test"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,14 +36,14 @@ func TestCommit(t *testing.T) {
 
 	expectedGapLimits := types.GapLimits{Receive: 123, Change: 456}
 	store := func() {
-		tx, err := db.Begin()
+		tx, err := db.Begin(true)
 		require.NoError(t, err)
 		defer tx.Rollback()
 		require.NoError(t, tx.PutGapLimits(expectedGapLimits))
 		require.NoError(t, tx.Commit())
 	}
 	retrieve := func() {
-		tx, err := db.Begin()
+		tx, err := db.Begin(false)
 		require.NoError(t, err)
 		defer tx.Rollback()
 		gapLimits, err := tx.GapLimits()
@@ -71,7 +61,7 @@ func testTx(f func(tx *Tx)) {
 			panic(err)
 		}
 	}()
-	tx, err := db.Begin()
+	tx, err := db.Begin(true)
 	if err != nil {
 		panic(err)
 	}
@@ -81,6 +71,83 @@ func testTx(f func(tx *Tx)) {
 
 func getRawValue(tx *Tx, bucketKey string, key []byte) []byte {
 	return tx.tx.Bucket([]byte(bucketKey)).Get(key)
+}
+
+// TestTxSerialization checks that Tx marshaling/unmarshaling work with both current and legacy
+// chainhash.Hash marshaling methods.
+// see https://github.com/btcsuite/btcd/pull/2025.
+func TestTxSerialization(t *testing.T) {
+	db := getDB()
+	defer func() {
+		if err := db.Close(); err != nil {
+			panic(err)
+		}
+	}()
+	dbTx, err := db.Begin(true)
+	require.NoError(t, err)
+	defer dbTx.Rollback()
+
+	// create a new Tx
+	amount := btcutil.Amount(123)
+	tx := &wire.MsgTx{
+		Version: wire.TxVersion,
+		TxIn: []*wire.TxIn{
+			wire.NewTxIn(&wire.OutPoint{Hash: chainhash.HashH(nil), Index: 0}, nil, nil),
+		},
+		TxOut:    []*wire.TxOut{wire.NewTxOut(int64(amount), []byte("dummyPubKeyScript"))},
+		LockTime: 0,
+	}
+	txHash := tx.TxHash()
+
+	dbTx.PutTx(txHash, tx, 999, nil)
+
+	retrievedTx, err := dbTx.TxInfo(txHash)
+	require.NoError(t, err)
+	require.Equal(t, txHash, retrievedTx.Tx.TxHash())
+
+	// Override tx bytes marshaling the prevout hash with legacy method.
+	transactionsBucket, err := dbTx.(*Tx).tx.CreateBucketIfNotExists([]byte(bucketTransactionsKey))
+	require.NoError(t, err)
+
+	hashBytes := [32]byte(tx.TxIn[0].PreviousOutPoint.Hash.CloneBytes())
+	legacyMarshalledHash, err := json.Marshal(hashBytes)
+	require.NoError(t, err)
+	legacySerializedTx := `{
+    "Tx": {
+      "Version": 1,
+      "TxIn": [
+        {
+          "PreviousOutPoint": {
+            "Hash": ` + string(legacyMarshalledHash) + `,
+            "Index": 0
+          },
+          "SignatureScript": null,
+          "Witness": null,
+          "Sequence": 4294967295
+        }
+      ],
+      "TxOut": [
+        {
+          "Value": 123,
+          "PkScript": "ZHVtbXlQdWJLZXlTY3JpcHQ="
+        }
+      ],
+      "LockTime": 0
+    },
+    "Height": 999,
+    "addresses": {},
+    "Verified": null,
+    "ts": null,
+    "created": "2024-05-08T17:26:36.224472769+02:00"
+  }`
+
+	err = transactionsBucket.Put(txHash[:], []byte(legacySerializedTx))
+	require.NoError(t, err)
+
+	retrievedTx2, err := dbTx.TxInfo(txHash)
+	require.NoError(t, err)
+	require.NotNil(t, retrievedTx2)
+	require.Equal(t, retrievedTx.Tx.TxHash(), retrievedTx2.Tx.TxHash())
 }
 
 // TestTxQuick tests the tx related db functions on random data.
@@ -113,8 +180,38 @@ func TestTxQuick(t *testing.T) {
 		}
 		require.True(t, checkTxHashes())
 
-		f := func(expectedTxHash chainhash.Hash, expectedTx *wire.MsgTx, expectedHeight int) bool {
-			if err := tx.PutTx(expectedTxHash, expectedTx, expectedHeight); err != nil {
+		f := func(
+			txVersion int32,
+			txIns []wire.TxIn,
+			txOuts []wire.TxOut,
+			txLocktime uint32,
+			expectedHeight int,
+			setHeaderTimestamp bool,
+			headerTimestampSeconds int32,
+			headerTimestampNanos uint32,
+		) bool {
+			txInRefs := make([]*wire.TxIn, len(txIns))
+			for k, v := range txIns {
+				txInRefs[k] = &v
+			}
+			txOutRefs := make([]*wire.TxOut, len(txOuts))
+			for k, v := range txOuts {
+				txOutRefs[k] = &v
+			}
+			expectedTx := &wire.MsgTx{
+				Version:  txVersion,
+				TxIn:     txInRefs,
+				TxOut:    txOutRefs,
+				LockTime: txLocktime,
+			}
+			expectedTxHash := expectedTx.TxHash()
+			var headerTimestamp *time.Time
+			if setHeaderTimestamp {
+				nanos := int64(headerTimestampNanos % 1e9)
+				timestamp := time.Unix(int64(headerTimestampSeconds), nanos)
+				headerTimestamp = &timestamp
+			}
+			if err := tx.PutTx(expectedTxHash, expectedTx, expectedHeight, headerTimestamp); err != nil {
 				return false
 			}
 			txInfo, err := tx.TxInfo(expectedTxHash)
@@ -130,10 +227,20 @@ func TestTxQuick(t *testing.T) {
 			if txInfo.Height != expectedHeight {
 				return false
 			}
-			if txInfo.HeaderTimestamp != nil {
+			if setHeaderTimestamp {
+				if txInfo.HeaderTimestamp == nil {
+					return false
+				}
+				if txInfo.HeaderTimestamp.UnixNano() != headerTimestamp.UnixNano() {
+					return false
+				}
+			} else if txInfo.HeaderTimestamp != nil {
 				return false
 			}
 			if txInfo.CreatedTimestamp == nil {
+				return false
+			}
+			if txInfo.TxHash.String() != expectedTxHash.String() {
 				return false
 			}
 			allTxHashes[expectedTxHash] = struct{}{}
@@ -143,7 +250,6 @@ func TestTxQuick(t *testing.T) {
 		require.NoError(t, quick.Check(f, nil))
 
 		for txHash := range allUnverifiedTxHashes {
-			txHash := txHash
 			t.Run("", func(t *testing.T) {
 				expectedHeaderTimestamp := time.Unix(time.Now().Unix(), 123)
 				require.NoError(t, tx.MarkTxVerified(txHash, expectedHeaderTimestamp))
@@ -157,11 +263,37 @@ func TestTxQuick(t *testing.T) {
 				require.True(t,
 					!txInfo.CreatedTimestamp.After(now) || *txInfo.CreatedTimestamp == now)
 
-				tx.DeleteTx(txHash)
+				require.NoError(t, tx.DeleteTx(txHash))
 				delete(allTxHashes, txHash)
 				require.True(t, checkTxHashes())
 			})
 		}
+	})
+}
+
+func TestPutTxHeaderTimestampNotOverwrittenWithNil(t *testing.T) {
+	testTx(func(tx *Tx) {
+		msgTx := &wire.MsgTx{
+			Version: wire.TxVersion,
+			TxIn: []*wire.TxIn{
+				wire.NewTxIn(&wire.OutPoint{Hash: chainhash.HashH(nil), Index: 0}, nil, nil),
+			},
+			TxOut:    []*wire.TxOut{wire.NewTxOut(123, []byte("dummyPubKeyScript"))},
+			LockTime: 0,
+		}
+		txHash := msgTx.TxHash()
+
+		t1 := time.Unix(123456, 789)
+		require.NoError(t, tx.PutTx(txHash, msgTx, 100, &t1))
+
+		// Should not clear existing HeaderTimestamp.
+		require.NoError(t, tx.PutTx(txHash, msgTx, 101, nil))
+
+		txInfo, err := tx.TxInfo(txHash)
+		require.NoError(t, err)
+		require.NotNil(t, txInfo.HeaderTimestamp)
+		require.Equal(t, t1.UnixNano(), txInfo.HeaderTimestamp.UnixNano())
+		require.Equal(t, 101, txInfo.Height)
 	})
 }
 
@@ -196,7 +328,7 @@ func TestInput(t *testing.T) {
 		require.Nil(t, input)
 
 		// no-op, does not exist yet
-		tx.DeleteInput(outpoint1)
+		require.NoError(t, tx.DeleteInput(outpoint1))
 
 		require.NoError(t, tx.PutInput(outpoint1, txhash1))
 		require.NoError(t, tx.PutInput(outpoint2, txhash2))
@@ -219,7 +351,7 @@ func TestInput(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, &txhash2, input)
 
-		tx.DeleteInput(outpoint1)
+		require.NoError(t, tx.DeleteInput(outpoint1))
 		input, err = tx.Input(outpoint1)
 		require.NoError(t, err)
 		require.Nil(t, input)
@@ -243,9 +375,8 @@ func TestInputQuick(t *testing.T) {
 		require.NoError(t, quick.Check(f, nil))
 
 		for _, outPoint := range allOutpoints {
-			outPoint := outPoint
 			t.Run("", func(t *testing.T) {
-				tx.DeleteInput(outPoint)
+				require.NoError(t, tx.DeleteInput(outPoint))
 				txHash, err := tx.Input(outPoint)
 				require.NoError(t, err)
 				require.Nil(t, txHash)
@@ -291,11 +422,11 @@ func TestOutput(t *testing.T) {
 		require.NoError(t, tx.PutOutput(outpoint2, output2))
 
 		// Test actual db store against fixtures to ensure compatibility does not break
-		require.Equal(t,
+		require.JSONEq(t,
 			`{"Value":12345,"PkScript":"c2NyaXB0MQ=="}`,
 			string(getRawValue(tx, "outputs", []byte("5555555555555555555555555555555555555555555555555555555555555555:2"))),
 		)
-		require.Equal(t,
+		require.JSONEq(t,
 			`{"Value":67890,"PkScript":"c2NyaXB0Mg=="}`,
 			string(getRawValue(tx, "outputs", []byte("6666666666666666666666666666666666666666666666666666666666666666:32"))),
 		)
@@ -342,10 +473,9 @@ func TestOutputsQuick(t *testing.T) {
 
 		// Test deletion
 		for outPoint := range allOutputs {
-			outPoint := outPoint
 			t.Run("", func(t *testing.T) {
 				delete(allOutputs, outPoint)
-				tx.DeleteOutput(outPoint)
+				require.NoError(t, tx.DeleteOutput(outPoint))
 				require.True(t, checkOutputs())
 				output, err := tx.Output(outPoint)
 				require.NoError(t, err)
@@ -367,17 +497,16 @@ func TestAddressHistory(t *testing.T) {
 			0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66,
 		}
 		txHistory1 := blockchain.TxHistory{
-			{Height: 10, TXHash: blockchain.TXHash(hash1_1), Fee: nil},
-			{Height: 20, TXHash: blockchain.TXHash(hash1_2), Fee: nil},
+			{Height: 10, TXHash: blockchain.TXHash(hash1_1)},
+			{Height: 20, TXHash: blockchain.TXHash(hash1_2)},
 		}
 		const key2 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-		fee := int64(4234)
 		hash2 := [32]byte{
 			0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88,
 			0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88,
 		}
 		txHistory2 := blockchain.TxHistory{
-			{Height: 15, TXHash: blockchain.TXHash(hash2), Fee: &fee},
+			{Height: 15, TXHash: blockchain.TXHash(hash2)},
 		}
 
 		// Does not exist yet.
@@ -389,12 +518,12 @@ func TestAddressHistory(t *testing.T) {
 		require.NoError(t, tx.PutAddressHistory(key2, txHistory2))
 
 		// Test actual db store against fixtures to ensure compatibility does not break
-		require.Equal(t,
-			`[{"height":10,"tx_hash":"5555555555555555555555555555555555555555555555555555555555555555","fee":null},{"height":20,"tx_hash":"6666666666666666666666666666666666666666666666666666666666666666","fee":null}]`,
+		require.JSONEq(t,
+			`[{"height":10,"tx_hash":"5555555555555555555555555555555555555555555555555555555555555555"},{"height":20,"tx_hash":"6666666666666666666666666666666666666666666666666666666666666666"}]`,
 			string(getRawValue(tx, "addressHistories", []byte(key1))),
 		)
-		require.Equal(t,
-			`[{"height":15,"tx_hash":"8888888888888888888888888888888888888888888888888888888888888888","fee":4234}]`,
+		require.JSONEq(t,
+			`[{"height":15,"tx_hash":"8888888888888888888888888888888888888888888888888888888888888888"}]`,
 			string(getRawValue(tx, "addressHistories", []byte(key2))),
 		)
 

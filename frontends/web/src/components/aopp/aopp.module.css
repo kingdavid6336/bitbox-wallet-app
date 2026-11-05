@@ -1,42 +1,14 @@
 .banner {
     background-color: var(--color-blue);
-    color: var(--color-white);
+    color: var(--color-alt);
     font-weight: 400;
     font-size: var(--size-subheader);
     padding: var(--space-half);
     text-align: center;
 }
 
-.caret {
-    display: block;
-    margin: 0 auto;
-}
-
-.device {
-    max-width: 264px;
-    position: relative;
-    right: -16px;
-}
-
-.largeIcon {
-    margin: 0 0 var(--space-default) 0;
-    width: 50%;
-}
-@media (max-width: 768px) {
-    .largeIcon {
-        margin-bottom: var(--space-half);
-        margin-top: var(--space-half);
-        max-width: 160px;
-    }
-}
-
-.smallIcon {
-    margin: auto 0;
-    width: 30px;
-}
-
 .successText {
-    color: var(--color-gray);
+    color: var(--color-secondary);
     font-weight: 400;
     font-size: var(--size-subheader);
     margin-bottom: var(--space-quarter);
@@ -54,9 +26,9 @@
 }
 
 .message {
-    background-color: var(--color-white);
-    border-color: var(--color-mediumgray);
-    border-radius: 2px;
+    background-color: var(--background-secondary);
+    border-color: var(--background-quaternary);
+    border-radius: var(--radius-xl);
     border-style: solid;
     border-width: 1px;
     font-family: var(--font-family);
@@ -70,6 +42,6 @@
 }
 @media (min-width: 1200px) {
     .message {
-        --size-default: 18px;
+        --size-default: 1.8rem;
     }
 }

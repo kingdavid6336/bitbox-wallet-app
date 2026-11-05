@@ -1,0 +1,273 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { useContext, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { AccountCode, CoinCode, CoinUnit, TAccountBase, TAmountWithConversions } from '@/api/account';
+import { syncdone } from '@/api/accountsync';
+import { TLightningAccount, subscribeLightningBalance } from '@/api/lightning';
+import { Button } from '@/components/forms';
+import { Logo } from '@/components/icon/logo';
+import { USBSuccess, ChevronDownDark } from '@/components/icon';
+import { Badge } from '@/components/badge/badge';
+import { SpinnerRingAnimated } from '@/components/spinner/SpinnerAnimation';
+import { InsuredShield } from '@/routes/account/components/insuredtag';
+import { RatesContext } from '@/contexts/RatesContext';
+import { getAccountsByKeystore } from '@/routes/account/utils';
+import { getDisplayedCoinUnit } from '@/utils/coin';
+import { unsubscribe } from '@/utils/subscriptions';
+import { Dropdown, TOption as TDropdownOption, TGroupedOption as TDropdownGroupedOption } from '@/components/dropdown/dropdown';
+import { createGroupedOptions, getBalancesForGroupedAccountSelector } from './services';
+import { AmountWithUnit } from '../amount/amount-with-unit';
+import styles from './groupedaccountselector.module.css';
+
+type TGroupAccountSelector = {
+  connected: boolean;
+};
+
+export type TKeystoreGroupHeader = {
+  connected: boolean;
+  label: string;
+};
+
+type TOptionAccountSelector = {
+  disabled: boolean;
+  syncing?: boolean;
+  active?: boolean;
+  coinCode?: CoinCode;
+  coinUnit?: CoinUnit;
+  balance?: TAmountWithConversions;
+  insured?: boolean;
+};
+
+export type TOption = TDropdownOption<AccountCode> & TOptionAccountSelector;
+
+export type TGroupedOption = TDropdownGroupedOption<AccountCode, TGroupAccountSelector, TOptionAccountSelector>;
+
+type TTriggerContentProps = {
+  option: TOption | undefined;
+  stackedLayout?: boolean;
+};
+
+const missingBalancePlaceholder = '-';
+
+const TriggerContent = ({
+  option,
+  stackedLayout = false,
+}: TTriggerContentProps) => {
+  const { t } = useTranslation();
+  const { btcUnit } = useContext(RatesContext);
+  const displayedCoinUnit = (
+    option?.coinCode && option.coinUnit
+      ? getDisplayedCoinUnit(option.coinCode, option.coinUnit, btcUnit)
+      : undefined
+  );
+  return (
+    option && option.coinCode ? (
+      <div className={styles.triggerContent}>
+        <Logo coinCode={option.coinCode} alt={option.coinCode} />
+        <span className={styles.triggerLabel}>
+          {stackedLayout ? (
+            displayedCoinUnit
+          ) : option.label}
+        </span>
+        {option.insured && <InsuredShield />}
+        {option.syncing && (
+          <span className={styles.syncing} role="status" aria-label={t('account.syncing')}>
+            <SpinnerRingAnimated />
+          </span>
+        )}
+        {stackedLayout ? (
+          <span className={styles.triggerAccountName}>
+            {option.label}
+          </span>
+        ) : (
+          !option.syncing && option.coinCode && (
+            <span className={styles.triggerBalance}>
+              {option.balance ? (
+                <AmountWithUnit
+                  maxDecimals={9}
+                  amount={option.balance}
+                />
+              ) : missingBalancePlaceholder}
+            </span>
+          )
+        )}
+      </div>
+    ) : (
+      <span className={styles.placeholderText}>
+        {t('buy.info.selectLabel')}
+      </span>
+    )
+  );
+};
+
+export const renderKeystoreGroupHeader = (group: TKeystoreGroupHeader) => (
+  <div className={styles.groupHeader}>
+    <span className={styles.groupLabel} data-testid="grouped-account-selector-group-label">{group.label}</span>
+    {group.connected && (
+      <Badge
+        icon={props => <USBSuccess {...props} />}
+        type="success"
+      />
+    )}
+  </div>
+);
+
+type TAccountSelector<T extends TAccountBase> = {
+  title?: string;
+  disabled?: boolean;
+  isAccountDisabled?: (account: T) => boolean;
+  isAccountSyncing?: (account: T) => boolean;
+  selected?: string;
+  onChange: (value: string) => void;
+  onProceed?: () => void;
+  accounts: T[];
+  lightningAccount?: TLightningAccount | null;
+  stackedLayout?: boolean;
+  className?: string;
+};
+
+export const GroupedAccountSelector = <T extends TAccountBase, >({
+  title,
+  disabled,
+  isAccountDisabled,
+  isAccountSyncing,
+  selected,
+  onChange,
+  onProceed,
+  accounts,
+  lightningAccount,
+  stackedLayout,
+  className = '',
+}: TAccountSelector<T>) => {
+  const { t } = useTranslation();
+  const [options, setOptions] = useState<TGroupedOption[]>();
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let balanceRequest = 0;
+    //setting options without balance
+    const accountsByKeystore = getAccountsByKeystore(accounts);
+    const groupedOpts: TGroupedOption[] = createGroupedOptions(accountsByKeystore, isAccountDisabled, isAccountSyncing);
+    if (lightningAccount) {
+      groupedOpts.push({
+        label: t('lightning.accountLabel'),
+        connected: false,
+        options: [{
+          label: t('lightning.accountLabel'),
+          value: lightningAccount.code,
+          coinCode: lightningAccount.coinCode,
+          coinUnit: 'BTC',
+          active: true,
+          disabled: false,
+        }],
+      });
+    }
+    setOptions(groupedOpts);
+    //asynchronously fetching each account's balance
+    const loadBalances = async () => {
+      const currentRequest = ++balanceRequest;
+      try {
+        const nextOptions = await getBalancesForGroupedAccountSelector(groupedOpts);
+        if (!cancelled && currentRequest === balanceRequest) {
+          setOptions(nextOptions);
+        }
+      } catch (error) {
+        if (!cancelled && currentRequest === balanceRequest) {
+          console.error('Failed to load account selector balances', error);
+        }
+      }
+    };
+    const subscriptions = accounts
+      .filter(account => account.active)
+      .map(account => syncdone(account.code, loadBalances));
+    if (lightningAccount) {
+      subscriptions.push(subscribeLightningBalance(loadBalances));
+    }
+    loadBalances();
+    return () => {
+      cancelled = true;
+      unsubscribe(subscriptions);
+    };
+  }, [accounts, isAccountDisabled, isAccountSyncing, lightningAccount, t]);
+
+  if (!options) {
+    return null;
+  }
+
+  const selectedOption: TOption | undefined = (
+    !selected
+      ? { label: t('buy.info.selectLabel'), value: 'choose', disabled: true }
+      : options.flatMap(o => o.options).find(opt => opt.value === selected)
+  );
+  const isProceedDisabled = disabled || !selectedOption || selectedOption.disabled;
+
+  const renderOption = (option: TOption, isSelectedValue: boolean) => {
+    const isStacked = stackedLayout && isSelectedValue;
+    return (
+      <div className={`${styles.valueContainer || ''} ${isStacked ? styles.layoutOnTwoLines || '' : ''}`}>
+        <TriggerContent option={option} stackedLayout={isStacked} />
+      </div>
+    );
+  };
+
+  const renderTrigger = ({ onClick }: { onClick: () => void }) => {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        className={`
+          ${styles.trigger || ''}
+          ${stackedLayout && styles.layoutOnTwoLines || ''}
+        `}
+        onClick={onClick}
+      >
+        <TriggerContent option={selectedOption} stackedLayout={stackedLayout} />
+        <ChevronDownDark />
+      </button>
+    );
+  };
+
+  return (
+    <>
+      {title && (
+        <h1 className="title text-center">{title}</h1>
+      )}
+      <Dropdown<AccountCode, false, TGroupAccountSelector, TOptionAccountSelector>
+        className={`
+          ${styles.select || ''}
+          ${stackedLayout ? styles.stackedSelect || '' : ''}
+          ${className}
+        `.trim()}
+        classNamePrefix="react-select"
+        isDisabled={disabled}
+        options={options}
+        isSearchable={false}
+        value={selectedOption}
+        onChange={(e) => {
+          const value = e?.value || '';
+          onChange(value);
+        }}
+        renderOptions={renderOption}
+        renderGroupHeader={renderKeystoreGroupHeader}
+        mobileFullScreen
+        title={title}
+        isOpen={isOpen}
+        onOpenChange={setIsOpen}
+        renderTrigger={renderTrigger}
+        isOptionDisabled={option => Boolean((option as TOption).disabled)}
+      />
+      {onProceed && (
+        <div className={styles.buttons}>
+          <Button
+            primary
+            onClick={onProceed}
+            disabled={isProceedDisabled}>
+            {t('buy.info.next')}
+          </Button>
+        </div>
+      )}
+    </>
+  );
+};

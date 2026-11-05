@@ -1,0 +1,159 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocation, useParams } from 'wouter';
+import type { AccountCode, TAccount } from '@/api/account';
+import { bitsuranceLookup } from '@/api/bitsurance';
+import { useAppState } from '@/contexts/app-state-context';
+import { Header, GuidedContent, GuideWrapper, Main } from '@/components/layout';
+import { MarketTab } from '@/routes/market/components/markettab';
+import { alertUser } from '@/components/alert/Alert';
+import { A } from '@/components/anchor/anchor';
+import { Button } from '@/components/forms';
+import { Checked, Sync, SyncLight } from '@/components/icon';
+import { Column, ColumnButtons, ResponsiveGrid } from '@/components/layout';
+import { View, ViewContent } from '@/components/view/view';
+import { useDarkmode } from '@/hooks/darkmode';
+import { i18n } from '@/i18n/i18n';
+import { BitsuranceGuide } from './guide';
+import style from './bitsurance.module.css';
+
+type TRouteParams = {
+  code: AccountCode;
+};
+
+export const Bitsurance = () => {
+  const { code = '' } = useParams<TRouteParams>();
+  const { activeAccounts } = useAppState();
+  const { t } = useTranslation();
+  const [, navigate] = useLocation();
+  const { isDarkMode } = useDarkmode();
+
+  const [insuredAccounts, setInsuredAccounts] = useState<TAccount[]>([]);
+  const [scanDone, setScanDone] = useState(false);
+  const [scanLoading, setScanLoading] = useState(false);
+
+  const amount = '100.000€';
+  const hasBitsuranceAccount = activeAccounts.some(({ bitsuranceStatus }) => bitsuranceStatus);
+
+  useEffect(() => {
+    if (code && hasBitsuranceAccount) {
+      // replace current history item when redirecting so that the user can go back
+      navigate(`/market/bitsurance/dashboard/${code}`, { replace: true });
+    }
+
+    return () => setInsuredAccounts([]);
+  }, [code, hasBitsuranceAccount, navigate]);
+
+  const detect = async (redirectToDashboard: boolean) => {
+    setScanLoading(true);
+    setScanDone(false);
+    setInsuredAccounts([]);
+    try {
+      const response = await bitsuranceLookup();
+      if (!response.success) {
+        alertUser(response.errorMessage);
+        return;
+      }
+      const insuredAccountsCodes = response.bitsuranceAccounts.map(account => account.status ? account.code : null);
+      const insured = activeAccounts.filter(({ code }) => insuredAccountsCodes.includes(code));
+      setInsuredAccounts(insured);
+      setScanDone(true);
+      if (insured.length && redirectToDashboard) {
+        navigate(`/market/bitsurance/dashboard/${code}`);
+      }
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
+  const getBitsurancePageLink = (): string => {
+    switch (i18n.resolvedLanguage) {
+    case 'de':
+      return 'https://www.bitsurance.eu/de/bitbox/';
+    default:
+      return 'https://www.bitsurance.eu/en/bitbox/';
+    }
+  };
+
+  const maybeProceed = async () => {
+    // we force a detection to verify if there is any new insured account
+    // before proceeding to the next step.
+    await detect(false);
+    navigate(`/market/bitsurance/account/${code}`);
+  };
+
+  if (hasBitsuranceAccount) {
+    return null;
+  }
+
+  return (
+    <GuideWrapper>
+      <GuidedContent>
+        <Main>
+          <Header title={t('generic.buySell')} />
+          <MarketTab
+            activeTab="insure"
+            code={code}
+          />
+          <View fullscreen={false}>
+            <ViewContent>
+              <p className={style.noVspace}>{t('bitsurance.intro.text1', { amount })}</p>
+              <div className={style.gridContainer}>
+                <ResponsiveGrid col="2" textAlign="start">
+                  <Column asCard>
+                    <h3 className={style.title}>
+                      {t('bitsurance.insure.title')}
+                    </h3>
+                    <p className={style.cardBody}>{t('bitsurance.insure.text')}</p>
+                    <ul className={style.clean}>
+                      <li><Checked/><span>{t('bitsurance.insure.listItem1')}</span></li>
+                      <li><Checked/><span>{t('bitsurance.insure.listItem2')}</span></li>
+                      <li><Checked/><span>{t('bitsurance.insure.listItem3')}</span></li>
+                    </ul>
+                    <p className={style.cardBody2}>
+                      {t('bitsurance.insure.text2')} {' '}
+                      <A href={getBitsurancePageLink()}>{t('bitsurance.intro.link')}</A>.
+                    </p>
+                    <p className={style.cardBody2}>
+                      {t('bitsurance.insure.text3')}
+                    </p>
+                    <ColumnButtons className={style.ctaButton}>
+                      <Button onClick={maybeProceed} primary>
+                        {t('bitsurance.insure.button')}
+                      </Button>
+                    </ColumnButtons>
+                  </Column>
+                  <Column asCard>
+                    <h3 className={style.title}>
+                      {t('bitsurance.detect.title')}
+                    </h3>
+                    <p className={style.cardBody}>{t('bitsurance.detect.text')}</p>
+                    {!insuredAccounts.length && scanDone && (
+                      <p className={`${style.cardBody2 || ''} ${style.errorMessage || ''}`}>
+                        {t('bitsurance.detect.notInsured')}
+                      </p>
+                    )}
+                    <ColumnButtons className={style.ctaButton}>
+                      <Button
+                        onClick={() => detect(true)}
+                        disabled={scanLoading}
+                        secondary
+                      >
+                        {isDarkMode ? <SyncLight/> : <Sync/>}
+                        {t('bitsurance.detect.button')}
+                      </Button>
+                    </ColumnButtons>
+
+                  </Column>
+                </ResponsiveGrid>
+              </div>
+            </ViewContent>
+          </View>
+        </Main>
+      </GuidedContent>
+      <BitsuranceGuide />
+    </GuideWrapper>
+  );
+};

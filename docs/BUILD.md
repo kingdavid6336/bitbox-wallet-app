@@ -3,11 +3,11 @@ systems may be possible but it is explicitly unsupported. The following
 platforms should be viable for development, building, and use of the BitBox
 Wallet application.
 
-* Debian GNU/Linux: Stretch and Buster
-* Ubuntu: 14.04, 16.04, 17.10, and 18.04
-* Fedora: 26, 27, 28, and 29
-* MacOS: 10.13
-* Windows: Windows 7, Windows 10
+* Debian: 11.6+
+* Ubuntu: 22.04+
+* Fedora: 36+
+* MacOS: 12+
+* Windows: Windows 10+
 
 ## Debian, Ubuntu, and Fedora GNU/Linux with Docker
 
@@ -30,8 +30,27 @@ Build artifacts:
 
 ## MacOS
 
-Prepare the MacOS system to have the build environment:
-`make osx-init`
+Install Go 1.26.10, Qt and create-dmg. Note that qt@6 from homebrew does **not** work as it is missing the
+`rcc` tool.
+
+```
+# Install Go. Can also use the official installer
+brew install go@1.26
+brew install create-dmg
+# Install Qt. Can also use the official installer.
+pip install aqtinstall
+aqt list-qt mac desktop --arch 6.8.2
+aqt install-qt mac desktop 6.8.2 --modules qtpositioning qtserialport qtwebchannel qtwebengine --outputdir ~/Qt
+```
+
+Make sure you have `qt@6/bin`,  `qt@6/libexec`, `go@1.26/bin` and `go/bin` in your PATH, i.e. add to your `.zshrc`:
+
+```bash
+export PATH="$PATH:$HOME/Qt/6.8.2/macos/bin"
+export PATH="$PATH:$HOME/Qt/6.8.2/macos/libexec"
+export PATH="$(brew --prefix go@1.26)/bin:$PATH"
+export PATH="$PATH:$HOME/go/bin"
+```
 
 Build the QT frontend for MacOS:
 `make qt-osx`
@@ -41,51 +60,105 @@ Build artifacts:
 
 ### Signing & Notarization
 
-Requires Xcode 10+ and macOS 10.13.6+.
+Requires Xcode 10+ and macOS 12+.
 
 ```
-$ cd frontends/qt/build/osx/
 $ # Sign with hardened runtime:
-$ codesign -f --deep --strict --timestamp -o runtime --entitlements ../../resources/MacOS/entitlements.plist -s CODESIGN_IDENTITY BitBox.app
-$ /usr/bin/ditto -c -k --keepParent BitBox.app BitBox.zip
+$ codesign -f --deep --strict --timestamp -o runtime --entitlements frontends/qt/resources/MacOS/entitlements.plist -s CODESIGN_IDENTITY frontends/qt/build/osx/BitBox.app
+$ # Create DMG installer
+$ make osx-create-dmg
 $ # Notarize
-$ xcrun altool --notarize-app --primary-bundle-id "ch.shiftcrypto.bitboxapp" --username "APPLE_ID" --password "PASSWORD" --file BitBox.zip
+$ xcrun notarytool submit --apple-id "APPLE_ID" --team-id "TEAM_ID" --password "PASSWORD" frontends/qt/build/osx/BitBox_Installer.dmg
 $ # Check notarization status
-$  xcrun altool --notarization-info NOTARIZATION_ID --username "APPLE_ID" --password "PASSWORD"
+$ xcrun notarytool info --apple-id "APPLE_ID" --team-id "TEAM_ID" --password "PASSWORD" NOTARIZATION_ID
+```
+
+If you don't know your TEAM_ID, you can find it in your Apple dev account or with:
+
+```
+xcrun altool --list-providers --username "APPLE_ID" --password "PASSWORD"
 ```
 
 ## Windows
 
-The build requires `mingw-w64`, `bash`, `make`, `Microsoft Visual Studio 2019`, `go 1.16`, `node@14`,
-`QT 5.15.2` and possibly other tools.
+The build requires `Microsoft Visual Studio 2022 Community Edition`, with the `MSVC v143 - VS 2022 C++ x64/x86 build tools (Latest)`
+individual component.
+
+It also requires `mingw-w64`, `bash` (e.g. `git-bash`), `make`,`go 1.26.10`, `node@26`, `QT 6.8.2` with `qtwebengine`, `nsis`
+and possibly other tools.
+
+Some of the tools are easy to install with `choco`:
+
+    choco install git
+    choco install mingw
+    choco install nsis
+    choco install make
 
 Add a system environment variable `MINGW_BIN` pointing to the bin directory of mingw
-(e.g. `/c/MinGW/bin`).
+(e.g. `/c/MinGW/bin` or `/c/Program Files/Git/mingw64/bin`).
+
+Add to the system environment variable `PATH`:
+- Location of `qmake`, e.g. `C:\Qt\6.8.2\msvc2022_64\bin`
+- Location of nsis, e.g. `C:\Program Files (x86)\NSIS\Bin`
 
 Build the QT frontend for Windows: `make qt-windows`
 
 Build artifacts:
 * `frontends\qt\build\windows\*`
-
-To create the installer, run the NSIS UI, then: compile NSI scripts -> frontend/qt/setup.nsi, or run
-`makensis setup.nsi`.
+* `frontends\qt\build\BitBox-installer.exe`
 
 ## Android
 
-EXPERIMENTAL / ALPHA, do not use in production.
-
+### Build
 Enter the Docker environment: `make dockerdev`
 
-Within the Docker dev environment, build the Android App: `make android`
-
-The Android Sdk is assumed to be in `/opt/android-sdk`. Use `make android ANDROID_SDK_ROOT=...` to
-use a different Sdk location.
+Within the Docker dev environment, build the **debug version** of the Android App: `make android`
 
 To update the app icon, execute `frontends/android/mkicon.sh`.
 The script isn't run during `make android` build.
 
 Build artifacts:
 * `frontends/android/BitBoxApp/app/build/outputs/apk/*`
+
+### Deploy
+Adb is required for the deploy, on GNU/Linux install `android-tools-adb`
+
+After connecting the device via USB, it is possible to verify the connection with `adb devices`
+
+Inside `frontends/android` folder: `make deploy-debug`
+
+### Release build
+
+To assemble the signed release .apk and .aab files, run `make android-assemble-release`.
+
+The keystore file `frontends/android/BitBoxApp/app/bitboxapp.jks` must be present.
+
+Build artifacts:
+* `frontends/android/BitBoxApp/app/build/outputs/apk/release/app-release.apk`
+* `frontends/android/BitBoxApp/app/build/outputs/bundle/release/app-release.aab`
+
+
+### Deploy troubleshooting
+If the apk install goes wrong, here are some Android configuration that could help:
+* Enable developer options
+* Enable install via USB
+* Enable USB debugging
+* Set USB configuration to charge when the device is connected
+* Disable MIUI optimization and restart (for Xiaomi devices)
+
+## iOS
+
+The instructions here are preliminary, as the iOS app is still in development.
+
+To build the app and run it in the simulator:
+
+   cd frontends/ios
+   make prepare
+
+
+Open XCode, load the project in /frontends/ios/BitBoxApp/BitBoxApp.xcodeproj.
+
+In the menu, hit Project->Run (or ⌘R).
 
 ## Cross compile from GNU/Linux to Windows
 It is not currently possible to cross compile the BitBox wallet for Windows.

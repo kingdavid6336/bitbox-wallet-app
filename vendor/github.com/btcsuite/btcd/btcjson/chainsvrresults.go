@@ -8,11 +8,12 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/chainhash/v2"
 
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 )
 
 // GetBlockHeaderVerboseResult models the data from the getblockheader command when
@@ -117,6 +118,14 @@ type GetBlockVerboseTxResult struct {
 	NextHash      string        `json:"nextblockhash,omitempty"`
 }
 
+// GetChainTipsResult models the data from the getchaintips command.
+type GetChainTipsResult struct {
+	Height    int32  `json:"height"`
+	Hash      string `json:"hash"`
+	BranchLen int32  `json:"branchlen"`
+	Status    string `json:"status"`
+}
+
 // GetChainTxStatsResult models the data from the getchaintxstats command.
 type GetChainTxStatsResult struct {
 	Time                   int64   `json:"time"`
@@ -139,9 +148,10 @@ type CreateMultiSigResult struct {
 // DecodeScriptResult models the data returned from the decodescript command.
 type DecodeScriptResult struct {
 	Asm       string   `json:"asm"`
-	ReqSigs   int32    `json:"reqSigs,omitempty"`
+	ReqSigs   int32    `json:"reqSigs,omitempty"` // Deprecated: removed in Bitcoin Core
 	Type      string   `json:"type"`
-	Addresses []string `json:"addresses,omitempty"`
+	Address   string   `json:"address,omitempty"`
+	Addresses []string `json:"addresses,omitempty"` // Deprecated: removed in Bitcoin Core
 	P2sh      string   `json:"p2sh,omitempty"`
 }
 
@@ -172,12 +182,13 @@ type SoftForkDescription struct {
 // Bip9SoftForkDescription describes the current state of a defined BIP0009
 // version bits soft-fork.
 type Bip9SoftForkDescription struct {
-	Status     string `json:"status"`
-	Bit        uint8  `json:"bit"`
-	StartTime1 int64  `json:"startTime"`
-	StartTime2 int64  `json:"start_time"`
-	Timeout    int64  `json:"timeout"`
-	Since      int32  `json:"since"`
+	Status              string `json:"status"`
+	Bit                 uint8  `json:"bit"`
+	StartTime1          int64  `json:"startTime"`
+	StartTime2          int64  `json:"start_time"`
+	Timeout             int64  `json:"timeout"`
+	Since               int32  `json:"since"`
+	MinActivationHeight int32  `json:"min_activation_height"`
 }
 
 // StartTime returns the starting time of the softfork as a Unix epoch.
@@ -215,18 +226,19 @@ type UnifiedSoftForks struct {
 // GetBlockChainInfoResult models the data returned from the getblockchaininfo
 // command.
 type GetBlockChainInfoResult struct {
-	Chain                string  `json:"chain"`
-	Blocks               int32   `json:"blocks"`
-	Headers              int32   `json:"headers"`
-	BestBlockHash        string  `json:"bestblockhash"`
-	Difficulty           float64 `json:"difficulty"`
-	MedianTime           int64   `json:"mediantime"`
-	VerificationProgress float64 `json:"verificationprogress,omitempty"`
-	InitialBlockDownload bool    `json:"initialblockdownload,omitempty"`
-	Pruned               bool    `json:"pruned"`
-	PruneHeight          int32   `json:"pruneheight,omitempty"`
-	ChainWork            string  `json:"chainwork,omitempty"`
-	SizeOnDisk           int64   `json:"size_on_disk,omitempty"`
+	Chain                string        `json:"chain"`
+	Blocks               int32         `json:"blocks"`
+	Headers              int32         `json:"headers"`
+	BestBlockHash        string        `json:"bestblockhash"`
+	Difficulty           float64       `json:"difficulty"`
+	MedianTime           int64         `json:"mediantime"`
+	VerificationProgress float64       `json:"verificationprogress,omitempty"`
+	InitialBlockDownload bool          `json:"initialblockdownload,omitempty"`
+	Pruned               bool          `json:"pruned"`
+	PruneHeight          int32         `json:"pruneheight,omitempty"`
+	ChainWork            string        `json:"chainwork,omitempty"`
+	SizeOnDisk           int64         `json:"size_on_disk,omitempty"`
+	Warnings             StringOrArray `json:"warnings"`
 	*SoftForks
 	*UnifiedSoftForks
 }
@@ -294,8 +306,8 @@ type GetBlockTemplateResult struct {
 	NonceRange string   `json:"noncerange,omitempty"`
 
 	// Block proposal from BIP 0023.
-	Capabilities  []string `json:"capabilities,omitempty"`
-	RejectReasion string   `json:"reject-reason,omitempty"`
+	Capabilities []string `json:"capabilities,omitempty"`
+	RejectReason string   `json:"reject-reason,omitempty"`
 }
 
 // GetMempoolEntryResult models the data returned from the getmempoolentry's
@@ -353,6 +365,54 @@ type LocalAddressesResult struct {
 	Score   int32  `json:"score"`
 }
 
+// StringOrArray defines a type that can be used as type that is either a single
+// string value or a string array in JSON-RPC commands, depending on the version
+// of the chain backend.
+type StringOrArray []string
+
+// MarshalJSON implements the json.Marshaler interface.
+func (h StringOrArray) MarshalJSON() ([]byte, error) {
+	// Convert to []string to avoid infinite recursion since calling
+	// json.Marshal on StringOrArray would invoke MarshalJSON again.
+	return json.Marshal([]string(h))
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface.
+func (h *StringOrArray) UnmarshalJSON(data []byte) error {
+	var unmarshalled interface{}
+	if err := json.Unmarshal(data, &unmarshalled); err != nil {
+		return err
+	}
+
+	switch v := unmarshalled.(type) {
+	case nil:
+		*h = nil
+
+	case string:
+		*h = []string{v}
+
+	case []interface{}:
+		s := make([]string, len(v))
+		for i, e := range v {
+			str, ok := e.(string)
+			if !ok {
+				return fmt.Errorf("invalid string_or_array "+
+					"value: %v", unmarshalled)
+			}
+
+			s[i] = str
+		}
+
+		*h = s
+
+	default:
+		return fmt.Errorf("invalid string_or_array value: %v",
+			unmarshalled)
+	}
+
+	return nil
+}
+
 // GetNetworkInfoResult models the data returned from the getnetworkinfo
 // command.
 type GetNetworkInfoResult struct {
@@ -363,12 +423,14 @@ type GetNetworkInfoResult struct {
 	LocalRelay      bool                   `json:"localrelay"`
 	TimeOffset      int64                  `json:"timeoffset"`
 	Connections     int32                  `json:"connections"`
+	ConnectionsIn   int32                  `json:"connections_in"`
+	ConnectionsOut  int32                  `json:"connections_out"`
 	NetworkActive   bool                   `json:"networkactive"`
 	Networks        []NetworksResult       `json:"networks"`
 	RelayFee        float64                `json:"relayfee"`
 	IncrementalFee  float64                `json:"incrementalfee"`
 	LocalAddresses  []LocalAddressesResult `json:"localaddresses"`
-	Warnings        string                 `json:"warnings"`
+	Warnings        StringOrArray          `json:"warnings"`
 }
 
 // GetNodeAddressesResult models the data returned from the getnodeaddresses
@@ -404,6 +466,7 @@ type GetPeerInfoResult struct {
 	BanScore       int32   `json:"banscore"`
 	FeeFilter      int64   `json:"feefilter"`
 	SyncNode       bool    `json:"syncnode"`
+	V2Connection   bool    `json:"v2_connection"`
 }
 
 // GetRawMempoolVerboseResult models the data returned from the getrawmempool
@@ -426,9 +489,10 @@ type GetRawMempoolVerboseResult struct {
 type ScriptPubKeyResult struct {
 	Asm       string   `json:"asm"`
 	Hex       string   `json:"hex,omitempty"`
-	ReqSigs   int32    `json:"reqSigs,omitempty"`
+	ReqSigs   int32    `json:"reqSigs,omitempty"` // Deprecated: removed in Bitcoin Core
 	Type      string   `json:"type"`
-	Addresses []string `json:"addresses,omitempty"`
+	Address   string   `json:"address,omitempty"`
+	Addresses []string `json:"addresses,omitempty"` // Deprecated: removed in Bitcoin Core
 }
 
 // GetTxOutResult models the data from the gettxout command.
@@ -841,4 +905,74 @@ type LoadWalletResult struct {
 // DumpWalletResult models the data from the dumpwallet command
 type DumpWalletResult struct {
 	Filename string `json:"filename"`
+}
+
+// TestMempoolAcceptResult models the data from the testmempoolaccept command.
+// The result of the mempool acceptance test for each raw transaction in the
+// input array. Returns results for each transaction in the same order they
+// were passed in. Transactions that cannot be fully validated due to failures
+// in other transactions will not contain an 'allowed' result.
+type TestMempoolAcceptResult struct {
+	// Txid is the transaction hash in hex.
+	Txid string `json:"txid"`
+
+	// Wtxid is the transaction witness hash in hex.
+	Wtxid string `json:"wtxid"`
+
+	// PackageError is the package validation error, if any (only possible
+	// if rawtxs had more than 1 transaction).
+	PackageError string `json:"package-error"`
+
+	// Allowed specifies whether this tx would be accepted to the mempool
+	// and pass client-specified maxfeerate. If not present, the tx was not
+	// fully validated due to a failure in another tx in the list.
+	Allowed bool `json:"allowed,omitempty"`
+
+	// Vsize is the virtual transaction size as defined in BIP 141. This is
+	// different from actual serialized size for witness transactions as
+	// witness data is discounted (only present when 'allowed' is true)
+	Vsize int32 `json:"vsize,omitempty"`
+
+	// Fees specifies the transaction fees (only present if 'allowed' is
+	// true).
+	Fees *TestMempoolAcceptFees `json:"fees,omitempty"`
+
+	// RejectReason is the rejection string (only present when 'allowed' is
+	// false).
+	RejectReason string `json:"reject-reason,omitempty"`
+}
+
+// TestMempoolAcceptFees models the `fees` section from the testmempoolaccept
+// command.
+type TestMempoolAcceptFees struct {
+	// Base is the transaction fee in BTC.
+	Base float64 `json:"base"`
+
+	// EffectiveFeeRate specifies the effective feerate in BTC per KvB. May
+	// differ from the base feerate if, for example, there are modified
+	// fees from prioritisetransaction or a package feerate was used.
+	//
+	// NOTE: this field only exists in bitcoind v25.0 and above.
+	EffectiveFeeRate float64 `json:"effective-feerate"`
+
+	// EffectiveIncludes specifies transactions whose fees and vsizes are
+	// included in effective-feerate. Each item is a transaction wtxid in
+	// hex.
+	//
+	// NOTE: this field only exists in bitcoind v25.0 and above.
+	EffectiveIncludes []string `json:"effective-includes"`
+}
+
+// GetTxSpendingPrevOutResult defines a single item returned from the
+// gettxspendingprevout command.
+type GetTxSpendingPrevOutResult struct {
+	// Txid is the transaction id of the checked output.
+	Txid string `json:"txid"`
+
+	// Vout is the vout value of the checked output.
+	Vout uint32 `json:"vout"`
+
+	// SpendingTxid is the transaction id of the mempool transaction
+	// spending this output (omitted if unspent).
+	SpendingTxid string `json:"spendingtxid,omitempty"`
 }

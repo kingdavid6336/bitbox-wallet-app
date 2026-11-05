@@ -1,88 +1,147 @@
-/**
- * Copyright 2018 Shift Devices AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, JSX, RenderableProps } from 'preact';
-import MenuIcon from '../../assets/icons/menu.svg';
-import { share } from '../../decorators/share';
-import { translate, TranslateProps } from '../../decorators/translate';
-import { SharedProps as SharedPanelProps, store as panelStore, toggle as toggleGuide } from '../guide/guide';
-import { toggleSidebar } from '../sidebar/sidebar';
-import * as style from './header.module.css';
+import React, { ReactNode, useContext } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ChevronLeftDark, GuideActive, MenuLight, MenuDark } from '@/components/icon';
+import { AppContext } from '@/contexts/AppContext';
+import { useBackNavigation } from '@/contexts/BackNavigationContext';
+import { Button } from '@/components/forms';
+import { UseBackButton } from '@/hooks/backbutton';
+import style from './header.module.css';
 
-interface HeaderProps {
-    toggleSidebar?: () => void;
-    title?: JSX.Element | JSX.Element[];
-    narrow?: boolean;
-}
-type Props = HeaderProps & SharedPanelProps & TranslateProps;
+type TProps = {
+  title?: ReactNode;
+} & ({
+  // Page headings stay large and left-aligned on mobile.
+  variant?: 'page';
+  desktopTitle?: never;
+  hideSidebarToggler?: boolean;
+  children?: ReactNode;
+  mobileBackButton?: never;
+  onBack?: never;
+} | {
+  // Navigation headings stay compact and centered, even without a back button.
+  variant: 'navigation';
+  desktopTitle?: ReactNode;
+  hideSidebarToggler?: boolean;
+  children?: ReactNode;
+  mobileBackButton?: boolean;
+  onBack?: () => void;
+} | {
+  // Fullscreen views have their own desktop heading and no sidebar or guide.
+  variant: 'fullscreen';
+  desktopTitle?: never;
+  hideSidebarToggler?: never;
+  children?: never;
+  mobileBackButton?: boolean;
+  onBack?: () => void;
+});
 
-class Header extends Component<Props> {
-    private toggle = (e: Event) => {
-        e.preventDefault();
-        if (!this.props.shown) {
-            toggleGuide();
-        }
+const HeaderBackButton = ({ onBack }: Pick<TProps, 'onBack'>) => {
+  const { t } = useTranslation();
+  const { goBack } = useBackNavigation();
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+      return;
+    }
+    if (!goBack()) {
+      window.history.back();
+    }
+  };
+
+  return (
+    <>
+      <UseBackButton handler={() => {
+        handleBack();
         return false;
-    }
+      }} />
+      <button
+        aria-label={t('button.back')}
+        className={style.backButton}
+        onClick={handleBack}
+        type="button"
+      >
+        <ChevronLeftDark />
+      </button>
+    </>
+  );
+};
 
-    public render(
-        { t, title, narrow, children, guideExists, shown, sidebarStatus }: RenderableProps<Props>,
-    ) {
-        const hasChildren = Array.isArray(children) && children.length > 0;
-        return (
-            <div className={[style.container, sidebarStatus ? style[sidebarStatus] : ''].join(' ')}>
-                <div className={[style.header, narrow ? style.narrow : ''].join(' ')}>
-                    <div className={style.sidebarToggler} onClick={toggleSidebar}>
-                        <img src={MenuIcon} />
-                    </div>
-                    <div className={style.title}>{title}</div>
-                    <div className={style.children}>
-                        {hasChildren && children}
-                        {
-                            guideExists && (
-                                <span className={style.guideIconContainer}>
-                                    <a href="#" onClick={this.toggle} className={[style.guideIcon, shown ? style.disabled : ''].join(' ')}>
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round">
-                                            <circle cx="12" cy="12" r="10"></circle>
-                                            <circle cx="12" cy="12" r="4"></circle>
-                                            <line x1="4.93" y1="4.93" x2="9.17" y2="9.17"></line>
-                                            <line x1="14.83" y1="14.83" x2="19.07" y2="19.07"></line>
-                                            <line x1="14.83" y1="9.17" x2="19.07" y2="4.93"></line>
-                                            <line x1="14.83" y1="9.17" x2="18.36" y2="5.64"></line>
-                                            <line x1="4.93" y1="19.07" x2="9.17" y2="14.83"></line>
-                                        </svg>
-                                        {t('guide.toggle.open')}
-                                    </a>
-                                </span>
-                            )
-                        }
-                    </div>
-                </div>
-            </div>
-        );
-    }
-}
+export const Header = ({
+  title,
+  desktopTitle = title,
+  hideSidebarToggler,
+  mobileBackButton = false,
+  variant = 'page',
+  onBack,
+  children,
+}: TProps) => {
+  const { t } = useTranslation();
+  const { guideExists, toggleGuide, toggleSidebar } = useContext(AppContext);
 
-const SharedHeader = share<SharedPanelProps, HeaderProps & TranslateProps>(panelStore)(Header);
-const TranslatedHeader = translate<HeaderProps>()(SharedHeader);
-export { TranslatedHeader as Header };
+  const toggle = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    if (!guideExists) {
+      return false;
+    }
+    toggleGuide();
+    return false;
+  };
+
+  return (
+    <div className={`
+      ${style.container || ''}
+      ${variant === 'page' && style.page || ''}
+      ${variant === 'fullscreen' && style.fullscreen || ''}
+    `}>
+      <div className={style.header}>
+        {variant !== 'fullscreen' && (
+          <div
+            className={`
+              hide-on-small
+              ${style.sidebarToggler || ''}
+              ${hideSidebarToggler && style.hideSidebarToggler || ''}
+            `}
+            onClick={toggleSidebar}
+          >
+            <MenuDark className="show-in-lightmode" />
+            <MenuLight className="show-in-darkmode" />
+          </div>
+        )}
+        {variant !== 'page' && (
+          <div className={style.mobileNavigation}>
+            {mobileBackButton && <HeaderBackButton onBack={onBack} />}
+          </div>
+        )}
+        {/* Keep the desktop spacer even when there is no title. */}
+        <div className={style.title}>
+          {variant !== 'fullscreen' && desktopTitle !== undefined && desktopTitle !== null && (
+            <h2 className={style.desktopTitle}>{desktopTitle}</h2>
+          )}
+          {variant !== 'page' && title !== undefined && title !== null && (
+            <h1 className={style.mobileTitle}>{title}</h1>
+          )}
+        </div>
+        {variant !== 'fullscreen' && (
+          <div className={style.children}>
+            {children}
+            {guideExists && (
+              <Button
+                transparent
+                onClick={toggle}
+                className={style.guideClose}
+              >
+                <GuideActive />
+                <span className={`hide-on-small ${style.guideCloseText || ''}`}>
+                  {t('guide.toggle.open')}
+                </span>
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};

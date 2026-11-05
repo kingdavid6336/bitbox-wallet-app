@@ -1,0 +1,25 @@
+.formContainer {
+    display: flex;
+    flex-direction: column;
+}
+
+.formButtonsContainer {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 32px;
+}
+
+.inputFieldWithIcon {
+    padding-left: var(--input-qr-button);
+}
+
+@media (max-width: 768px) {
+    .formButtonsContainer {
+        flex-direction: column-reverse;
+        margin-bottom: 0;
+        margin-top: calc(var(--space-half) + var(--space-quarter));
+    }
+    .formButtonsContainer button + button {
+        margin-bottom: var(--space-half);
+    }
+}

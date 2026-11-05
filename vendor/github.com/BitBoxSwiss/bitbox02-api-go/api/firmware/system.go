@@ -1,0 +1,205 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package firmware
+
+import (
+	"encoding/hex"
+
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
+)
+
+// SetDeviceName sends a request to the device using protobuf to set the device name.
+func (device *Device) SetDeviceName(deviceName string) error {
+	if len(deviceName) > 64 {
+		return errp.New("device name too long")
+	}
+	request := &messages.Request{
+		Request: &messages.Request_DeviceName{
+			DeviceName: &messages.SetDeviceNameRequest{
+				Name: deviceName,
+			},
+		},
+	}
+
+	response, err := device.query(request)
+	if err != nil {
+		return err
+	}
+
+	_, ok := response.Response.(*messages.Response_Success)
+	if !ok {
+		return errp.New("Failed to set device name")
+	}
+
+	return nil
+}
+
+// SetDeviceLanguage asks the user to confirm a change to the device language.
+func (device *Device) SetDeviceLanguage(language string) error {
+	response, err := device.query(&messages.Request{
+		Request: &messages.Request_DeviceLanguage{
+			DeviceLanguage: &messages.SetDeviceLanguageRequest{Language: language},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if _, ok := response.Response.(*messages.Response_Success); !ok {
+		return errp.New("unexpected response")
+	}
+	return nil
+}
+
+// DeviceInfo retrieves the current device info from the bitbox.
+func (device *Device) DeviceInfo() (*DeviceInfo, error) {
+	request := &messages.Request{
+		Request: &messages.Request_DeviceInfo{
+			DeviceInfo: &messages.DeviceInfoRequest{},
+		},
+	}
+
+	response, err := device.query(request)
+	if err != nil {
+		return nil, err
+	}
+
+	deviceInfoResponse, ok := response.Response.(*messages.Response_DeviceInfo)
+	if !ok {
+		return nil, errp.New("Failed to retrieve device info")
+	}
+
+	var bluetooth *BluetoothInfo
+	if deviceInfoResponse.DeviceInfo.Bluetooth != nil {
+		bluetooth = &BluetoothInfo{
+			FirmwareHash:    hex.EncodeToString(deviceInfoResponse.DeviceInfo.Bluetooth.FirmwareHash),
+			FirmwareVersion: deviceInfoResponse.DeviceInfo.Bluetooth.FirmwareVersion,
+			Enabled:         deviceInfoResponse.DeviceInfo.Bluetooth.Enabled,
+		}
+	}
+
+	deviceInfo := &DeviceInfo{
+		Name:                      deviceInfoResponse.DeviceInfo.Name,
+		Language:                  deviceInfoResponse.DeviceInfo.Language,
+		SupportedLanguages:        deviceInfoResponse.DeviceInfo.SupportedLanguages,
+		Version:                   deviceInfoResponse.DeviceInfo.Version,
+		Initialized:               deviceInfoResponse.DeviceInfo.Initialized,
+		MnemonicPassphraseEnabled: deviceInfoResponse.DeviceInfo.MnemonicPassphraseEnabled,
+		SecurechipModel:           deviceInfoResponse.DeviceInfo.SecurechipModel,
+		Bluetooth:                 bluetooth,
+	}
+
+	// Before v9.25.0, this field did not exist and there was only one stretching algo.
+	if device.version.AtLeast(semver.NewSemVer(9, 25, 0)) {
+		deviceInfo.PasswordStretchingAlgo = deviceInfoResponse.DeviceInfo.PasswordStretchingAlgo
+	} else {
+		deviceInfo.PasswordStretchingAlgo = "V1"
+	}
+
+	return deviceInfo, nil
+}
+
+// SetPassword invokes the set password workflow on the device. Should be called only if
+// deviceInfo.Initialized is false.
+//
+// `seed_len` must be exactly 16 or 32, creating a 16-byte or a 32-byte seed, corresponding to 12
+// resp. 24 BIP39 recovery words.
+func (device *Device) SetPassword(seedLen int) error {
+	if seedLen != 16 && seedLen != 32 {
+		return errp.New("invalid seedLen")
+	}
+	if seedLen == 16 && !device.version.AtLeast(semver.NewSemVer(9, 6, 0)) {
+		return UnsupportedError("9.6.0")
+	}
+	if device.status == StatusInitialized {
+		return errp.New("invalid status")
+	}
+	request := &messages.Request{
+		Request: &messages.Request_SetPassword{
+			SetPassword: &messages.SetPasswordRequest{
+				Entropy: bytesOrPanic(seedLen),
+			},
+		},
+	}
+	response, err := device.query(request)
+	if err != nil {
+		return err
+	}
+
+	_, ok := response.Response.(*messages.Response_Success)
+	if !ok {
+		return errp.New("unexpected response")
+	}
+	device.changeStatus(StatusSeeded)
+	return nil
+}
+
+// ChangePassword invokes the password change workflow on the device. Should be called only if
+// the device is initialized (deviceInfo.Initialized is true).
+func (device *Device) ChangePassword() error {
+	if !device.version.AtLeast(semver.NewSemVer(9, 25, 0)) {
+		return UnsupportedError("9.25.0")
+	}
+	if device.status != StatusInitialized {
+		return errp.New("invalid status")
+	}
+	request := &messages.Request{
+		Request: &messages.Request_ChangePassword{
+			ChangePassword: &messages.ChangePasswordRequest{},
+		},
+	}
+	response, err := device.query(request)
+	if err != nil {
+		return err
+	}
+	_, ok := response.Response.(*messages.Response_Success)
+	if !ok {
+		return errp.New("unexpected response")
+	}
+	return nil
+}
+
+func (device *Device) reboot(purpose messages.RebootRequest_Purpose) error {
+	request := &messages.Request{
+		Request: &messages.Request_Reboot{
+			Reboot: &messages.RebootRequest{Purpose: purpose},
+		},
+	}
+
+	_, err := device.query(request)
+	// We only return bb02 errors. Otherwise we assume it's an IO error (read failed) due to the
+	// reboot.
+	if _, ok := errp.Cause(err).(*Error); ok {
+		return err
+	}
+	return nil
+}
+
+// UpgradeFirmware reboots into the bootloader so a firmware can be flashed.
+func (device *Device) UpgradeFirmware() error {
+	return device.reboot(messages.RebootRequest_UPGRADE)
+}
+
+// GotoStartupSettings reboots into the bootloader with a 'Go to startup settings?' confirmation
+// dialog.
+func (device *Device) GotoStartupSettings() error {
+	return device.reboot(messages.RebootRequest_SETTINGS)
+}
+
+// Reset factory resets the device. The device will reobot.
+// You must not use this instance anymore afterwards.
+func (device *Device) Reset() error {
+	request := &messages.Request{
+		Request: &messages.Request_Reset_{
+			Reset_: &messages.ResetRequest{},
+		},
+	}
+	_, err := device.query(request)
+	// We only return bb02 errors. Otherwise we assume it's an IO error (read failed) due to the
+	// reboot.
+	if _, ok := errp.Cause(err).(*Error); ok {
+		return err
+	}
+	return nil
+}

@@ -1,98 +1,68 @@
-/**
- * Copyright 2018 Shift Devices AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import A from '../anchor/anchor';
-import * as style from './guide.module.css';
+import { useState, ReactNode } from 'react';
+import { A } from '@/components/anchor/anchor';
+import style from './guide.module.css';
 
-export interface EntryProp {
-    title: string;
+export type TEntryProp = {
+  title: string;
+  text: string;
+  link?: {
+    url?: string;
     text: string;
-    link?: {
-        url: string;
-        text: string;
-    };
-}
+  };
+};
 
-interface EntryProps {
-    entry: EntryProp | string; // string could be the entry translation key in cimode, e.g. 'guide.waiting.1'.
-    shown?: boolean;
-    highlighted?: boolean;
-}
+type TEntryProps = {
+  entry: TEntryProp;
+  shown?: boolean;
+  children?: ReactNode;
+};
 
-type Props = EntryProps;
+type TProps = TEntryProps;
 
-interface State {
-    shown: boolean;
-    highlighted: boolean;
-}
+export const Entry = (props: TProps) => {
+  const [shown, setShown] = useState<boolean>(props.shown || false);
 
-export class Entry extends Component<Props, State> {
-    constructor(props: Props) {
-        super(props);
-        this.state = {
-            shown: props.shown || props.highlighted || false,
-            highlighted: props.highlighted || false,
-        };
-    }
+  const toggle = () => {
+    setShown(shown => !shown);
+  };
 
-    private toggle = () => {
-        this.setState(state => ({
-            shown: !state.shown,
-            highlighted: false,
-        }));
-    }
-
-    public render(props: RenderableProps<Props>, {
-        shown,
-        highlighted,
-    }: Readonly<State>) {
-        let entry: EntryProp;
-        if (typeof props.entry === 'string') {
-            entry = {
-                title: props.entry + '.title',
-                text: props.entry + '.text',
-                link: {
-                    url: props.entry + '.link.url',
-                    text: props.entry + '.link.text',
-                },
-            };
-        } else {
-            entry = props.entry;
-        }
-        return (
-            <div className={highlighted ? style.highlighted : style.entry}>
-                <div class={style.entryTitle} onClick={this.toggle}>
-                    <div class={style.entryToggle}>{shown ? '–' : '+'}</div>
-                    <div class={style.entryTitleText}>
-                        <h2>{entry.title}</h2>
-                    </div>
-                </div>
-                <div class={[style.entryContent, shown ? style.expanded : ''].join(' ')}>
-                    {shown ? (
-                        <div class="flex-1">
-                            {entry.text.trim().split('\n').map(p => <p key={p}>{p}</p>)}
-                            {entry.link && (
-                                <p><A href={entry.link.url}>{entry.link.text}</A></p>
-                            )}
-                            {props.children}
-                        </div>
-                    ) : null}
-                </div>
-            </div>
-        );
-    }
-}
+  const entry = props.entry;
+  return (
+    <div className={style.entry}>
+      <div className={style.entryTitle} onClick={toggle}>
+        <div className={style.entryToggle}>
+          {shown ? '–' : '+'}
+        </div>
+        <h3 className={style.entryTitleText}>
+          {entry.title}
+        </h3>
+      </div>
+      <div className={[style.entryContent, shown ? style.expanded : ''].join(' ')}>
+        {shown ? (
+          <div className="flex-1">
+            {entry.text.trim().split('\n').map((p, idx) => <p key={idx}>{p}</p>)}
+            {props.children}
+            {entry.link && (
+              <p>
+                {entry.link.url ? (
+                  <A
+                    className={style.link}
+                    data-testid="link"
+                    href={entry.link.url}>
+                    {entry.link.text}
+                  </A>
+                ) : (
+                  <span className={style.link}>
+                    {entry.link.text}
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+};

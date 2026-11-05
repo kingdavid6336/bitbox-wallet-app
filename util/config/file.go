@@ -1,22 +1,9 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package config
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -51,7 +38,7 @@ func (file *File) Remove() error {
 
 // read reads the config file and returns its data (or an error if the config file does not exist).
 func (file *File) read() ([]byte, error) {
-	return ioutil.ReadFile(file.Path())
+	return os.ReadFile(file.Path())
 }
 
 // ReadJSON reads the config file as JSON to the given object. Make sure the config file exists!
@@ -65,10 +52,13 @@ func (file *File) ReadJSON(object interface{}) error {
 
 // write writes the given data to the config file (and creates parent directories if necessary).
 func (file *File) write(data []byte) error {
-	if err := os.MkdirAll(file.dir, 0700); err != nil {
+	if err := EnsurePrivateDir(file.dir); err != nil {
 		return err
 	}
-	return ioutil.WriteFile(file.Path(), data, 0600)
+	if err := os.WriteFile(file.Path(), data, PrivateFileMode); err != nil {
+		return err
+	}
+	return EnsurePrivateFile(file.Path())
 }
 
 // WriteJSON writes the given object as JSON to the config file.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package rates
 
 import (
@@ -6,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	bbolt "github.com/coreos/bbolt"
+	"go.etcd.io/bbolt"
 )
 
 func openRatesDB(dir string) (*bbolt.DB, error) {

@@ -1,89 +1,74 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { MultilineMarkup } from '@/utils/markup';
+import { UseBackButton } from '@/hooks/backbutton';
+import { View, ViewButtons, ViewHeader } from '@/components/view/view';
+import { Button } from '@/components/forms';
+
 /**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Function to activate global alert component with a message
+ * @deprecated better is to show an inline error instead of using this global component
+ * @param message the string to show
+ * @param callback callback function called after user confirm
+ * @param asDialog option to opt-out of rendinging as dialog
  */
 
-import { Component, h, RenderableProps } from 'preact';
-import { translate, TranslateProps } from '../../decorators/translate';
-import { SimpleMarkup } from '../../utils/simplemarkup';
-import { Dialog } from '../dialog/dialog';
-import * as style from '../dialog/dialog.module.css';
-import { Button } from '../forms';
+type AlertUserOptions = {
+  callback?: () => void;
+  asDialog?: boolean;
+};
 
-let alertUser: (message: string, callback?: () => void) => void;
+let alertUser: (message: string, options?: AlertUserOptions) => void;
+let callback: AlertUserOptions['callback'];
 
-interface State {
-    active: boolean;
-    message?: string;
-}
+const Alert = () => {
+  const [active, setActive] = useState(false);
+  const [asDialog, setAsDialog] = useState(true);
+  const [message, setMessage] = useState<string>();
+  const { t } = useTranslation();
 
-class Alert extends Component<TranslateProps, State> {
-    private callback?: () => void; // Assigned when alertUser is called / Called before close.
+  alertUser = (message: string, options: AlertUserOptions = {}) => {
+    const {
+      asDialog = true,
+    } = options;
+    callback = options.callback;
+    setActive(true);
+    setAsDialog(asDialog);
+    setMessage(message);
+  };
 
-    constructor(props: TranslateProps) {
-        super(props);
-        alertUser = this.alertUser;
-        this.state = {
-            active: false,
-        };
+  const handleClose = () => {
+    if (callback) {
+      callback();
     }
+    setActive(false);
+  };
 
-    private handleClose = () => {
-        if (this.callback) {
-            this.callback();
-        }
-        this.setState({
-            active: false,
-        });
-    }
+  return (active && message) ? (
+    <form onSubmit={() => setActive(false)}>
+      <UseBackButton handler={() => {
+        setActive(false); return false;
+      }} />
+      <View
+        key="alert-overlay"
+        dialog={asDialog}
+        fullscreen
+        textCenter={!asDialog}
+        verticallyCentered>
+        <ViewHeader title={<MultilineMarkup tagName="span" markup={message} />} />
+        <ViewButtons>
+          <Button
+            autoFocus
+            primary
+            onClick={handleClose}>
+            {t('button.ok')}
+          </Button>
+        </ViewButtons>
+      </View>
+    </form>
+  ) : null;
+};
 
-    private alertUser = (message: string, callback?: () => void) => {
-        this.callback = callback;
-        this.setState({
-            active: true,
-            message,
-        });
-    }
-
-    public render({ t }: RenderableProps<TranslateProps>, { message, active }: State) {
-        return active ? (
-            <Dialog
-                onClose={this.handleClose}
-                disableEscape>
-                {
-                    message ? message.split('\n').map((line, i) => (
-                        <p
-                            key={i}
-                            className={ i === 0 ? 'first' : '' }>
-                            <SimpleMarkup tagName="span" markup={line} />
-                        </p>
-                    )) : null
-                }
-                <div class={style.actions}>
-                    <Button
-                        primary
-                        onClick={this.handleClose}>
-                        {t('button.ok')}
-                    </Button>
-                </div>
-            </Dialog>
-        ) : null;
-    }
-}
-
-const TranslatedAlert = translate()(Alert);
-
-export { alertUser };
-export { TranslatedAlert as Alert };
+export { Alert, alertUser };

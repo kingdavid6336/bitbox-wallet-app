@@ -1,0 +1,143 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import '../../../../__mocks__/i18n';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Route, Switch } from 'wouter';
+import { MemoryRouter } from '@/utils/test-helpers';
+import * as accountApi from '@/api/account';
+import { connectKeystore } from '@/api/keystores';
+import { alertUser } from '@/components/alert/Alert';
+import { AppStateContext } from '@/contexts/app-state-context';
+import { BackButtonProvider } from '@/contexts/BackButtonContext';
+import { Receive } from './receive';
+
+vi.mock('@/api/account');
+vi.mock('@/api/keystores');
+vi.mock('@/components/alert/Alert', () => ({ alertUser: vi.fn() }));
+vi.mock('@/components/qrcode/qrcode', () => ({ QRCode: () => null }));
+vi.mock('./components/guide', () => ({ ReceiveGuide: () => null }));
+vi.mock('@/components/dialog/firmware-upgrade-required-dialog', () => ({
+  FirmwareUpgradeRequiredDialog: ({ onClose }: { onClose: () => void }) => (
+    <button onClick={onClose}>firmware upgrade required</button>
+  ),
+}));
+
+const account: accountApi.TAccount = {
+  active: true,
+  blockExplorerTxPrefix: '',
+  code: 'btc-account',
+  coinCode: 'btc',
+  coinName: 'Bitcoin',
+  coinUnit: 'BTC',
+  isToken: false,
+  keystore: {
+    connected: true,
+    lastConnected: '',
+    name: 'BitBox02',
+    rootFingerprint: 'f23ab988',
+    watchonly: false,
+  },
+  name: 'Bitcoin Account',
+  receiveScriptType: 'p2tr',
+};
+
+const renderReceive = () => render(
+  <MemoryRouter initialEntries={[`/account/${account.code}/receive`]}>
+    <BackButtonProvider>
+      <AppStateContext.Provider
+        value={{
+          accounts: [account],
+          activeAccounts: [account],
+          deviceIDs: [],
+          devices: {},
+          hasAccounts: true,
+          hasBottomNavigation: false,
+          hasDevices: false,
+          lightningAccount: undefined,
+          hasLightningAccount: false,
+        }}
+      >
+        <Switch>
+          <Route
+            path="/account/:code/receive"
+            component={Receive}
+          />
+        </Switch>
+      </AppStateContext.Provider>
+    </BackButtonProvider>
+  </MemoryRouter>
+);
+
+describe('receive address verification', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(connectKeystore).mockResolvedValue({ success: true });
+    vi.mocked(accountApi.hasSecureOutput).mockReturnValue(async () => ({
+      hasSecureOutput: true,
+      optional: false,
+    }));
+    vi.mocked(accountApi.getReceiveAddressList).mockReturnValue(async () => ({
+      success: true,
+      addresses: [
+        {
+          scriptType: 'p2wpkh',
+          addresses: [{ addressID: 'segwit-address', address: 'bc1qtest', displayAddress: 'bc1qtest' }],
+        },
+        {
+          scriptType: 'p2tr',
+          addresses: [{ addressID: 'taproot-address', address: 'bc1ptest', displayAddress: 'bc1ptest' }],
+        },
+      ],
+    }));
+  });
+
+  it('prompts for an upgrade and allows retrying', async () => {
+    const verify = vi.mocked(accountApi.verifyAddress);
+    verify.mockResolvedValueOnce({ success: false, errorCode: 'firmwareUpgradeRequired' });
+    verify.mockResolvedValue({ success: true });
+    renderReceive();
+
+    await screen.findByDisplayValue('bc1ptest...');
+    fireEvent.click(screen.getByRole('button', { name: 'receive.verifyBitBox02' }));
+
+    const upgradePrompt = await screen.findByRole('button', { name: 'firmware upgrade required' });
+    expect(connectKeystore).toHaveBeenCalledWith(account.keystore.rootFingerprint);
+    expect(verify).toHaveBeenCalledWith(account.code, 'taproot-address');
+    expect(alertUser).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByText('receive.verifyInstruction')).not.toBeInTheDocument());
+
+    fireEvent.click(upgradePrompt);
+    fireEvent.click(screen.getByRole('button', { name: 'receive.verifyBitBox02' }));
+
+    await waitFor(() => expect(verify).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('firmware upgrade required')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'receive.verifyBitBox02' })).toBeEnabled();
+  });
+
+  it('shows other verification errors without prompting for an upgrade', async () => {
+    vi.mocked(accountApi.verifyAddress).mockResolvedValue({ success: false, errorMessage: 'verification failed' });
+    renderReceive();
+
+    await screen.findByDisplayValue('bc1ptest...');
+    fireEvent.click(screen.getByRole('button', { name: 'receive.verifyBitBox02' }));
+
+    await waitFor(() => expect(alertUser).toHaveBeenCalledWith('verification failed'));
+    expect(screen.queryByText('firmware upgrade required')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'receive.verifyBitBox02' })).toBeEnabled();
+  });
+
+  // A failed request must keep navigation available without showing an empty address card.
+  it('shows a receive-address loading failure with back navigation', async () => {
+    vi.mocked(accountApi.getReceiveAddressList).mockReturnValue(async () => ({
+      success: false, errorMessage: 'addresses unavailable',
+    }));
+    const { container } = renderReceive();
+
+    expect(await screen.findByText('addresses unavailable')).toBeInTheDocument();
+    expect(screen.getByText('button.back')).toBeVisible();
+    expect(screen.getAllByRole('heading', { name: 'receive.title' })).not.toHaveLength(0);
+    expect(container.querySelector('.box')).not.toBeVisible();
+    expect(screen.queryByRole('button', { name: 'receive.verifyBitBox02' })).not.toBeInTheDocument();
+  });
+});

@@ -1,16 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package usb
 
@@ -20,16 +8,16 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/bitbox"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/bitbox02"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/bitbox02bootloader"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/device"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/socksproxy"
-	bitbox02common "github.com/digitalbitbox/bitbox02-api-go/api/common"
-	"github.com/digitalbitbox/bitbox02-api-go/communication/u2fhid"
-	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox02"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox02bootloader"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/device"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/logging"
+	bitbox02common "github.com/BitBoxSwiss/bitbox02-api-go/api/common"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware"
+	"github.com/BitBoxSwiss/bitbox02-api-go/communication/u2fhid"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
 	"github.com/sirupsen/logrus"
 )
 
@@ -46,6 +34,8 @@ const (
 
 // DeviceInfo contains the usb descriptor info and a way to open the device for reading and writing.
 type DeviceInfo interface {
+	// IsBluetooth means the communication layer is Bluetooth, otherwise USB.
+	IsBluetooth() bool
 	VendorID() int
 	ProductID() int
 	UsagePage() int
@@ -61,16 +51,20 @@ func isBitBox(deviceInfo DeviceInfo) bool {
 }
 
 func isBitBox02(deviceInfo DeviceInfo) bool {
-	return (deviceInfo.Product() == bitbox02common.FirmwareHIDProductStringStandard ||
-		deviceInfo.Product() == bitbox02common.FirmwareHIDProductStringBTCOnly) &&
+	return (deviceInfo.Product() == bitbox02common.FirmwareDeviceProductStringBitBox02Multi ||
+		deviceInfo.Product() == bitbox02common.FirmwareDeviceProductStringBitBox02BTCOnly ||
+		deviceInfo.Product() == bitbox02common.FirmwareDeviceProductStringBitBox02PlusMulti ||
+		deviceInfo.Product() == bitbox02common.FirmwareDeviceProductStringBitBox02PlusBTCOnly) &&
 		deviceInfo.VendorID() == bitbox02VendorID &&
 		deviceInfo.ProductID() == bitbox02ProductID &&
 		(deviceInfo.UsagePage() == 0xffff || deviceInfo.Interface() == 0)
 }
 
 func isBitBox02Bootloader(deviceInfo DeviceInfo) bool {
-	return (deviceInfo.Product() == bitbox02common.BootloaderHIDProductStringStandard ||
-		deviceInfo.Product() == bitbox02common.BootloaderHIDProductStringBTCOnly) &&
+	return (deviceInfo.Product() == bitbox02common.BootloaderDeviceProductStringBitBox02Multi ||
+		deviceInfo.Product() == bitbox02common.BootloaderDeviceProductStringBitBox02BTCOnly ||
+		deviceInfo.Product() == bitbox02common.BootloaderDeviceProductStringBitBox02PlusMulti ||
+		deviceInfo.Product() == bitbox02common.BootloaderDeviceProductStringBitBox02PlusBTCOnly) &&
 		deviceInfo.VendorID() == bitbox02VendorID &&
 		deviceInfo.ProductID() == bitbox02ProductID &&
 		(deviceInfo.UsagePage() == 0xffff || deviceInfo.Interface() == 0)
@@ -79,39 +73,34 @@ func isBitBox02Bootloader(deviceInfo DeviceInfo) bool {
 // Manager listens for devices and notifies when a device has been inserted or removed.
 type Manager struct {
 	devices           map[string]device.Interface
-	channelConfigDir  string // passed to each bitbox01 device during initialization
 	bitbox02ConfigDir string // passed to each bitbox02 device during initialization
 
 	deviceInfos  func() []DeviceInfo
 	onRegister   func(device.Interface) error
 	onUnregister func(string)
 
-	socksProxy socksproxy.SocksProxy
+	updateCh chan struct{}
+	quitCh   chan struct{}
 
 	log *logrus.Entry
 }
 
 // NewManager creates a new Manager. onRegister is called when a device has been
 // inserted. onUnregister is called when the device has been removed.
-//
-// The channelConfigDir argument is passed to each device during initialization,
-// before onRegister is called.
 func NewManager(
-	channelConfigDir string,
 	bitbox02ConfigDir string,
-	socksProxy socksproxy.SocksProxy,
 	deviceInfos func() []DeviceInfo,
 	onRegister func(device.Interface) error,
 	onUnregister func(string),
 ) *Manager {
 	return &Manager{
 		devices:           map[string]device.Interface{},
-		channelConfigDir:  channelConfigDir,
 		bitbox02ConfigDir: bitbox02ConfigDir,
 		deviceInfos:       deviceInfos,
 		onRegister:        onRegister,
 		onUnregister:      onUnregister,
-		socksProxy:        socksProxy,
+		updateCh:          make(chan struct{}),
+		quitCh:            make(chan struct{}),
 
 		log: logging.Get().WithGroup("manager"),
 	}
@@ -161,13 +150,11 @@ func (manager *Manager) makeBitBox(deviceInfo DeviceInfo) (*bitbox.Device, error
 		deviceID,
 		bootloader,
 		version,
-		manager.channelConfigDir,
 		bitbox.NewCommunication(
 			hidDevice,
 			version,
 			manager.log,
 		),
-		manager.socksProxy,
 	)
 	if err != nil {
 		return nil, errp.WithMessage(err, "Failed to establish communication to device")
@@ -195,7 +182,7 @@ func (manager *Manager) makeBitBox02(deviceInfo DeviceInfo) (*bitbox02.Device, e
 	if err != nil {
 		return nil, err
 	}
-	product, err := bitbox02common.ProductFromHIDProductString(deviceInfo.Product())
+	product, err := bitbox02common.ProductFromDeviceProductString(deviceInfo.Product())
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +196,7 @@ func (manager *Manager) makeBitBox02(deviceInfo DeviceInfo) (*bitbox02.Device, e
 		product,
 		bitbox02.NewConfig(manager.bitbox02ConfigDir),
 		u2fhid.NewCommunication(hidDevice, bitboxCMD),
+		firmware.WithOptionalNoisePairingConfirmation(deviceInfo.IsBluetooth()),
 	), nil
 }
 
@@ -223,7 +211,7 @@ func (manager *Manager) makeBitBox02Bootloader(deviceInfo DeviceInfo) (
 	if err != nil {
 		return nil, err
 	}
-	product, err := bitbox02common.ProductFromHIDProductString(deviceInfo.Product())
+	product, err := bitbox02common.ProductFromDeviceProductString(deviceInfo.Product())
 	if err != nil {
 		return nil, err
 	}
@@ -255,8 +243,27 @@ func (manager *Manager) checkIfRemoved(deviceID string) bool {
 	return true
 }
 
+// Update triggers a scan of the USB devices to detect connects/disconnects.
+func (manager *Manager) Update() {
+	go func() {
+		manager.updateCh <- struct{}{}
+	}()
+}
+
 func (manager *Manager) listen() {
 	for {
+		select {
+		case <-manager.quitCh:
+			return
+		default:
+		}
+
+		select {
+		case <-manager.quitCh:
+			return
+		case <-manager.updateCh:
+		case <-time.After(time.Second):
+		}
 		for deviceID, device := range manager.devices {
 			// Check if device was removed.
 			if manager.checkIfRemoved(deviceID) {
@@ -310,11 +317,23 @@ func (manager *Manager) listen() {
 				manager.log.WithError(err).Error("Failed to execute on-register")
 			}
 		}
-		time.Sleep(time.Second)
 	}
 }
 
 // Start listens for inserted/removed devices forever.
 func (manager *Manager) Start() {
 	go manager.listen()
+	manager.Update()
+}
+
+// Close closes and unregisters all devices.
+func (manager *Manager) Close() {
+	manager.log.Info("Closing devices manager")
+	close(manager.quitCh)
+	for deviceID, device := range manager.devices {
+		manager.log.WithField("device-id", deviceID).Info("manager: closing device")
+		device.Close()
+		delete(manager.devices, deviceID)
+		manager.onUnregister(deviceID)
+	}
 }

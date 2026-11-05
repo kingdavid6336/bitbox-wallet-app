@@ -1,16 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 // Package bridgecommon provides common util functions to bridge the backend to a native
 // environment.
@@ -19,24 +7,27 @@ package bridgecommon
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/arguments"
-	btctypes "github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/types"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/usb"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/handlers"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/config"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/jsonp"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/observable"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/observable/action"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/random"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/arguments"
+	btctypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bluetooth"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/usb"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/handlers"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/versioninfo"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/config"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/jsonp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/logging"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable/action"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/random"
 )
 
 // NativeCommunication provides function to pass responses and push notifications to the native
@@ -56,6 +47,8 @@ var (
 	globalToken string
 
 	globalShutdown func()
+	// Keep the latest launch link if the native activity starts before the backend service.
+	globalPendingURI string
 )
 
 type response struct {
@@ -113,12 +106,45 @@ func BackendCall(queryID int, jsonQuery string) {
 // schemes are registered and handled on each platform (e.g. .desktop entry on Linux, Info.plist on
 // macOS, etc.). All platforms then call this function to handle the URI in the backend.
 func HandleURI(uri string) {
+	mu.Lock()
+	defer mu.Unlock()
+	if globalBackend == nil {
+		globalPendingURI = uri
+		return
+	}
+	globalBackend.HandleURI(uri)
+}
+
+// SetOnline should be called when the network connection changed.
+func SetOnline(isOnline bool) {
 	mu.RLock()
 	defer mu.RUnlock()
 	if globalBackend == nil {
 		return
 	}
-	globalBackend.HandleURI(uri)
+	globalBackend.SetOnline(isOnline)
+}
+
+// TriggerAuth triggers an authentication request notification.
+func TriggerAuth() {
+	mu.Lock()
+	defer mu.Unlock()
+	if globalBackend == nil {
+		return
+	}
+	globalBackend.TriggerAuth()
+}
+
+// AuthResult triggers an authentication result notification
+// on the base of the input value.
+func AuthResult(result backend.AuthResultType) {
+	mu.Lock()
+	defer mu.Unlock()
+	if globalBackend == nil {
+		return
+	}
+
+	globalBackend.AuthResult(result)
 }
 
 // UsingMobileDataChanged should be called when the network connnection changed.
@@ -135,6 +161,20 @@ func UsingMobileDataChanged() {
 	})
 }
 
+// ManualReconnect exposes the ManualReconnect backend method.
+func ManualReconnect() {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	if globalBackend == nil {
+		return
+	}
+	// We pass false as by default we do not want
+	// to reconnect ETH accounts.
+	globalBackend.ManualReconnect(false)
+
+}
+
 // BackendEnvironment implements backend.Environment.
 type BackendEnvironment struct {
 	NotifyUserFunc      func(string)
@@ -143,7 +183,19 @@ type BackendEnvironment struct {
 	UsingMobileDataFunc func() bool
 	// NativeLocaleFunc is used by the backend to query native app layer for user
 	// preferred UI language.
-	NativeLocaleFunc func() string
+	NativeLocaleFunc                 func() string
+	NumberFormatFunc                 func() *backend.NumberFormat
+	GetSaveFilenameFunc              func(string) string
+	SetDarkThemeFunc                 func(bool)
+	DetectDarkThemeFunc              func() bool
+	AuthFunc                         func()
+	OnAuthSettingChangedFunc         func(bool)
+	CanEncryptLightningMnemonicFunc  func() bool
+	StoreLightningEncryptionKeyFunc  func(string, string) error
+	LoadLightningEncryptionKeyFunc   func(string) (string, error)
+	DeleteLightningEncryptionKeyFunc func(string) error
+	BluetoothConnectFunc             func(string)
+	UserAgentPlatformFunc            func() string
 }
 
 // NotifyUser implements backend.Environment.
@@ -185,9 +237,102 @@ func (env *BackendEnvironment) NativeLocale() string {
 	return ""
 }
 
+// NumberFormat implements backend.Environment.
+func (env *BackendEnvironment) NumberFormat() *backend.NumberFormat {
+	if env.NumberFormatFunc != nil {
+		return env.NumberFormatFunc()
+	}
+	return nil
+}
+
+// GetSaveFilename implements backend.Environment.
+func (env *BackendEnvironment) GetSaveFilename(suggestedFilename string) string {
+	if env.GetSaveFilenameFunc != nil {
+		return env.GetSaveFilenameFunc(suggestedFilename)
+	}
+	return ""
+}
+
+// SetDarkTheme implements backend.Environment.
+func (env *BackendEnvironment) SetDarkTheme(isDark bool) {
+	if env.SetDarkThemeFunc != nil {
+		env.SetDarkThemeFunc(isDark)
+	}
+}
+
+// DetectDarkTheme implements backend.Environment.
+func (env *BackendEnvironment) DetectDarkTheme() bool {
+	if env.DetectDarkThemeFunc != nil {
+		return env.DetectDarkThemeFunc()
+	}
+	return false
+}
+
+// Auth implements backend.Environment.
+func (env *BackendEnvironment) Auth() {
+	if env.AuthFunc != nil {
+		env.AuthFunc()
+	}
+}
+
+// OnAuthSettingChanged implements backend.Environment.
+func (env *BackendEnvironment) OnAuthSettingChanged(enabled bool) {
+	if env.OnAuthSettingChangedFunc != nil {
+		env.OnAuthSettingChangedFunc(enabled)
+	}
+}
+
+// CanEncryptLightningMnemonic implements backend.Environment.
+func (env *BackendEnvironment) CanEncryptLightningMnemonic() bool {
+	if env.CanEncryptLightningMnemonicFunc != nil {
+		return env.CanEncryptLightningMnemonicFunc()
+	}
+	return false
+}
+
+// StoreLightningEncryptionKey implements backend.Environment.
+func (env *BackendEnvironment) StoreLightningEncryptionKey(accountCode string, encryptionKey string) error {
+	if env.StoreLightningEncryptionKeyFunc != nil {
+		return env.StoreLightningEncryptionKeyFunc(accountCode, encryptionKey)
+	}
+	return nil
+}
+
+// LoadLightningEncryptionKey implements backend.Environment.
+func (env *BackendEnvironment) LoadLightningEncryptionKey(accountCode string) (string, error) {
+	if env.LoadLightningEncryptionKeyFunc != nil {
+		return env.LoadLightningEncryptionKeyFunc(accountCode)
+	}
+	return "", nil
+}
+
+// DeleteLightningEncryptionKey implements backend.Environment.
+func (env *BackendEnvironment) DeleteLightningEncryptionKey(accountCode string) error {
+	if env.DeleteLightningEncryptionKeyFunc != nil {
+		return env.DeleteLightningEncryptionKeyFunc(accountCode)
+	}
+	return nil
+}
+
+// BluetoothConnect implements backend.Environment.
+func (env *BackendEnvironment) BluetoothConnect(identifier string) {
+	if env.BluetoothConnectFunc != nil {
+		env.BluetoothConnectFunc(identifier)
+	}
+}
+
+// UserAgentPlatform implements backend.Environment.
+func (env *BackendEnvironment) UserAgentPlatform() string {
+	if env.UserAgentPlatformFunc != nil {
+		return env.UserAgentPlatformFunc()
+	}
+	return ""
+}
+
 // Serve serves the BitBox API for use in a native client.
 func Serve(
 	testnet bool,
+	simulator bool,
 	gapLimits *btctypes.GapLimits,
 	communication NativeCommunication,
 	backendEnvironment backend.Environment) {
@@ -203,15 +348,19 @@ func Serve(
 	log.Info("--------------- Started application --------------")
 	log.WithField("goos", runtime.GOOS).
 		WithField("goarch", runtime.GOARCH).
-		WithField("version", backend.Version).
+		WithField("version", versioninfo.Version).
 		Info("environment")
+
+	if simulator {
+		log.Info("Simulator mode enabled, ensuring testnet mode is enabled")
+		testnet = true
+	}
 
 	var err error
 	globalBackend, err = backend.NewBackend(
 		arguments.NewArguments(
 			config.AppDir(),
 			testnet,
-			false,
 			false,
 			false,
 			gapLimits,
@@ -259,6 +408,10 @@ func Serve(
 		}
 	}()
 
+	if globalPendingURI != "" {
+		globalBackend.HandleURI(globalPendingURI)
+		globalPendingURI = ""
+	}
 }
 
 // Shutdown is cleaning up after Serve. It is called when the application is closed or goes to
@@ -269,9 +422,36 @@ func Shutdown() {
 
 	log := logging.Get().WithGroup("server")
 	if globalShutdown != nil {
+		log.Info("Shutdown about to be called")
 		globalShutdown()
-		log.Info("Shutdown called")
+		log.Info("Shutdown finished")
 	} else {
 		log.Info("Shutdown called, but backend not running")
 	}
+}
+
+// UsbUpdate wraps backend.UsbUpdate.
+func UsbUpdate() {
+	mu.RLock()
+	defer mu.RUnlock()
+	if globalBackend == nil {
+		return
+	}
+	globalBackend.UsbUpdate()
+}
+
+// BluetoothSetState wraps backend.Bluetooth().SetState.
+// The json byte are parsed according to `bluetooth.State`.
+func BluetoothSetState(jsonState string) error {
+	mu.RLock()
+	defer mu.RUnlock()
+	if globalBackend == nil {
+		return nil
+	}
+	var state bluetooth.State
+	if err := json.Unmarshal([]byte(jsonState), &state); err != nil {
+		return err
+	}
+	globalBackend.Bluetooth().SetState(&state)
+	return nil
 }

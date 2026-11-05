@@ -1,0 +1,923 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package backend
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts"
+	accountsMocks "github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/mocks"
+	accountsTypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc"
+	coinpkg "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	coinMocks "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin/mocks"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth/erc20"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/config"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/market/swapkit"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/paymentrequest"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/socksproxy"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/stretchr/testify/require"
+)
+
+type swapQuoteTransport func(*http.Request) (*http.Response, error)
+
+func (transport swapQuoteTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	return transport(request)
+}
+
+// Quotes use the sell account's coin, and balance validation stays separate from quote retrieval errors.
+func TestSwapQuoteBalanceValidation(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+	b.registerKeystore(makeBitBox02Multi())
+	accountCode := accountsTypes.Code("v0-55555555-btc-0")
+
+	for _, test := range []struct {
+		name           string
+		balance        int64
+		body           string
+		errorCode      errp.ErrorCode
+		validationCode errp.ErrorCode
+		hasQuote       bool
+	}{
+		{name: "funded", balance: 100000000, body: `{"routes":[{"routeId":"route"}]}`, hasQuote: true},
+		{name: "insufficient funds with routes", body: `{"routes":[{"routeId":"route"}]}`, validationCode: "insufficientFunds", hasQuote: true},
+		{name: "no routes", balance: 100000000, body: `{"routes":[]}`, errorCode: swapkit.ErrNoRoutesFound},
+		{name: "insufficient funds and no routes", body: `{"routes":[]}`, errorCode: swapkit.ErrNoRoutesFound, validationCode: "insufficientFunds"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			setAccountBalance(t, b, accountCode, test.balance)
+			b.httpClient = &http.Client{Transport: swapQuoteTransport(func(request *http.Request) (*http.Response, error) {
+				body := test.body
+				if request.URL.Path == "/providers" {
+					body = `[{"enabledChainIds":["bitcoin"]}]`
+				} else {
+					var quoteRequest swapkit.QuoteRequest
+					require.NoError(t, json.NewDecoder(request.Body).Decode(&quoteRequest))
+					require.Equal(t, "BTC.BTC", quoteRequest.SellAsset)
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(body)),
+					Header:     make(http.Header),
+				}, nil
+			})}
+			result, quoteError := b.SwapQuote(accountCode, "eth", "1")
+			require.Equal(t, test.validationCode, result.ValidationErrorCode)
+			if test.errorCode == "" {
+				require.Nil(t, quoteError)
+			} else {
+				require.NotNil(t, quoteError)
+				require.Equal(t, test.errorCode, quoteError.ErrorCode)
+				if test.errorCode == swapkit.ErrNoRoutesFound {
+					require.Equal(t, &swapkit.APIErrorData{SellCoin: "BTC", BuyCoin: "ETH"}, quoteError.Data)
+				}
+			}
+			if test.hasQuote {
+				require.NotNil(t, result.Quote)
+				require.Len(t, result.Quote.Routes, 1)
+			} else {
+				require.Nil(t, result.Quote)
+			}
+		})
+	}
+}
+
+// Missing accounts and unavailable balances fail before requesting a provider quote.
+func TestSwapQuoteInvalidAccountOrBalance(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+	b.registerKeystore(makeBitBox02Multi())
+	accountCode := accountsTypes.Code("v0-55555555-btc-0")
+	account := b.Accounts().lookup(accountCode).Account.(*accountsMocks.InterfaceMock)
+	account.BalanceFunc = func() (*accounts.Balance, error) { return nil, accounts.ErrSyncInProgress }
+	b.httpClient = &http.Client{Transport: swapQuoteTransport(func(*http.Request) (*http.Response, error) {
+		t.Fatal("invalid account or balance must not request a quote")
+		return nil, nil
+	})}
+
+	for _, test := range []struct {
+		name        string
+		accountCode accountsTypes.Code
+		message     string
+	}{
+		{name: "missing account", message: `unknown account code ""`},
+		{name: "unknown account", accountCode: "unknown", message: `unknown account code "unknown"`},
+		{name: "balance unavailable", accountCode: accountCode, message: accounts.ErrSyncInProgress.Error()},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, quoteError := b.SwapQuote(test.accountCode, "eth", "1")
+			require.Nil(t, result.Quote)
+			require.Empty(t, result.ValidationErrorCode)
+			require.NotNil(t, quoteError)
+			require.Equal(t, swapkit.ErrInvalidRequest, quoteError.ErrorCode)
+			require.Equal(t, test.message, quoteError.Message)
+		})
+	}
+}
+
+// Gas eligibility uses the token's parent account, even when token funds are insufficient,
+// and unavailable parent balances preserve the independent token balance validation.
+func TestCheckSwapQuoteGasFunds(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) { return rootFingerprint1, nil }
+	b.registerKeystore(ks)
+	parentCode, err := b.CreateAndPersistAccountConfig(coinpkg.CodeETH, "Ethereum 2", ks)
+	require.NoError(t, err)
+	require.NoError(t, b.SetTokenActive(parentCode, "eth-erc20-usdc", true))
+	tokenCode := Erc20AccountCode(parentCode, "eth-erc20-usdc")
+	zeroAllAccountBalances(t, b)
+	setAccountBalance(t, b, "v0-55555555-eth-0", 2000000000000000)
+	setAccountBalance(t, b, parentCode, 999999999999999)
+	setAccountBalance(t, b, tokenCode, 1000000)
+	quote := &swapkit.QuoteResponse{Routes: []swapkit.QuoteRoute{{
+		Fees: []swapkit.Fee{{Type: "inbound", Asset: "ETH.ETH", Amount: "0.001"}},
+	}}}
+
+	// Funds in a different ETH account cannot pay this token's gas fee.
+	require.NoError(t, b.checkSwapQuoteGasFunds(tokenCode, quote))
+	require.True(t, quote.Routes[0].InsufficientGasFunds)
+	setAccountBalance(t, b, parentCode, 1000000000000000)
+	require.NoError(t, b.checkSwapQuoteGasFunds(tokenCode, quote))
+	require.False(t, quote.Routes[0].InsufficientGasFunds)
+
+	parent := b.Accounts().lookup(parentCode).Account.(*accountsMocks.InterfaceMock)
+	parent.BalanceFunc = func() (*accounts.Balance, error) { return nil, accounts.ErrSyncInProgress }
+	require.Equal(t, accounts.ErrSyncInProgress, errp.Cause(b.checkSwapQuoteGasFunds(tokenCode, quote)))
+
+	// Native assets do not need the ERC20 gas check.
+	for _, code := range []accountsTypes.Code{parentCode, "v0-55555555-btc-0"} {
+		require.NoError(t, b.checkSwapQuoteGasFunds(code, quote))
+		require.False(t, quote.Routes[0].InsufficientGasFunds)
+	}
+
+	b.httpClient = &http.Client{Transport: swapQuoteTransport(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"routes":[{"routeId":"route"}]}`)),
+			Header:     make(http.Header),
+		}, nil
+	})}
+	for _, unavailable := range []bool{false, true} {
+		setAccountBalance(t, b, parentCode, 0)
+		if unavailable {
+			parent.BalanceFunc = func() (*accounts.Balance, error) { return nil, accounts.ErrSyncInProgress }
+		}
+		result, quoteError := b.SwapQuote(tokenCode, "btc", "2")
+		require.Equal(t, errp.ErrorCode("insufficientFunds"), result.ValidationErrorCode)
+		if unavailable {
+			require.Nil(t, result.Quote)
+			require.NotNil(t, quoteError)
+			require.Equal(t, errp.ErrorCode("unexpectedError"), quoteError.ErrorCode)
+			require.Equal(t, accounts.ErrSyncInProgress.Error(), quoteError.Message)
+		} else {
+			require.Nil(t, quoteError)
+			require.NotNil(t, result.Quote)
+			require.Len(t, result.Quote.Routes, 1)
+			require.True(t, result.Quote.Routes[0].InsufficientGasFunds)
+		}
+	}
+}
+
+func TestSwapBuyAccountsRequireConnectedKeystore(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	allSwapAccounts, err := b.SwapAccounts()
+	require.NoError(t, err)
+	require.Len(t, allSwapAccounts.SellAccounts, 0)
+	require.Len(t, allSwapAccounts.BuyAccounts, 0)
+}
+
+func TestSwapBuyAccountsExcludeDisconnectedWatchonlyAccounts(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	rootFingerprint, err := ks.RootFingerprint()
+	require.NoError(t, err)
+
+	b.registerKeystore(ks)
+	_, swapAccounts, err := b.swapAccounts()
+	require.NoError(t, err)
+	require.NotEmpty(t, swapAccounts)
+
+	require.NoError(t, b.SetWatchonly(rootFingerprint, true))
+	b.DeregisterKeystore()
+
+	allSwapAccounts, err := b.SwapAccounts()
+	require.NoError(t, err)
+	require.Len(t, allSwapAccounts.SellAccounts, 0)
+	require.Len(t, allSwapAccounts.BuyAccounts, 0)
+}
+
+func TestSwapAccountsSellAccountsExcludeInactiveAccounts(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) {
+		return rootFingerprint1, nil
+	}
+	b.registerKeystore(ks)
+	zeroAllAccountBalances(t, b)
+
+	btcAccountCode := accountsTypes.Code("v0-55555555-btc-0")
+	require.NoError(t, b.SetAccountActive(btcAccountCode, false))
+	zeroAllAccountBalances(t, b)
+
+	swapAccounts, err := b.SwapAccounts()
+	require.NoError(t, err)
+	sellAccountCodes := make([]accountsTypes.Code, 0, len(swapAccounts.SellAccounts))
+	for _, account := range swapAccounts.SellAccounts {
+		sellAccountCodes = append(sellAccountCodes, account.AccountConfig.Code)
+	}
+	require.NotContains(t, sellAccountCodes, btcAccountCode)
+
+	buyAccountCodes := make([]accountsTypes.Code, 0, len(swapAccounts.BuyAccounts))
+	for _, account := range swapAccounts.BuyAccounts {
+		buyAccountCodes = append(buyAccountCodes, account.AccountConfig.Code)
+	}
+	require.Contains(t, buyAccountCodes, btcAccountCode)
+}
+
+func TestSwapBuyAccountsExcludeHiddenUnusedAccounts(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) {
+		return rootFingerprint1, nil
+	}
+	b.registerKeystore(ks)
+
+	btcAccountCode := accountsTypes.Code("v0-55555555-btc-0")
+	require.NoError(t, b.accountsDB.Update(func(accountsConfig *config.AccountsConfig) error {
+		accountsConfig.Lookup(btcAccountCode).HiddenBecauseUnused = true
+		return nil
+	}))
+
+	_, swapAccounts, err := b.swapAccounts()
+	require.NoError(t, err)
+	buyAccountCodes := make([]accountsTypes.Code, 0, len(swapAccounts))
+	for _, account := range swapAccounts {
+		buyAccountCodes = append(buyAccountCodes, account.AccountConfig.Code)
+	}
+	require.NotContains(t, buyAccountCodes, btcAccountCode)
+}
+
+func TestSwapBuyAccountsSortOrder(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) {
+		return rootFingerprint1, nil
+	}
+
+	b.registerKeystore(ks)
+
+	btcAccount2Code, err := b.CreateAndPersistAccountConfig(coinpkg.CodeBTC, "Bitcoin account name 2", ks)
+	require.NoError(t, err)
+
+	ltcAccount2Code, err := b.CreateAndPersistAccountConfig(coinpkg.CodeLTC, "Litecoin account name 2", ks)
+	require.NoError(t, err)
+
+	ethAccount2Code, err := b.CreateAndPersistAccountConfig(coinpkg.CodeETH, "Ethereum account name 2", ks)
+	require.NoError(t, err)
+
+	tokenCodes := make([]string, 0, len(ERC20Tokens()))
+	for _, token := range ERC20Tokens() {
+		tokenCodes = append(tokenCodes, string(token.Code))
+	}
+	slices.Sort(tokenCodes)
+
+	ethAccount1Code := accountsTypes.Code("v0-55555555-eth-0")
+	expectedCodes := []accountsTypes.Code{
+		"v0-55555555-btc-0",
+		btcAccount2Code,
+		"v0-55555555-ltc-0",
+		ltcAccount2Code,
+		ethAccount1Code,
+	}
+	for _, tokenCode := range tokenCodes {
+		expectedCodes = append(expectedCodes, Erc20AccountCode(ethAccount1Code, tokenCode))
+	}
+	expectedCodes = append(expectedCodes, ethAccount2Code)
+	for _, tokenCode := range tokenCodes {
+		expectedCodes = append(expectedCodes, Erc20AccountCode(ethAccount2Code, tokenCode))
+	}
+
+	_, swapAccounts, err := b.swapAccounts()
+	require.NoError(t, err)
+	actualCodes := make([]accountsTypes.Code, 0, len(swapAccounts))
+	for _, account := range swapAccounts {
+		actualCodes = append(actualCodes, account.AccountConfig.Code)
+	}
+
+	require.Equal(t, expectedCodes, actualCodes)
+}
+
+func TestSwapSellAccountsIncludeOnlyActiveERC20Accounts(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) {
+		return rootFingerprint1, nil
+	}
+	b.registerKeystore(ks)
+
+	ethAccountCode := accountsTypes.Code("v0-55555555-eth-0")
+	activeTokenCode := string(ERC20Tokens()[0].Code)
+	inactiveTokenCode := string(ERC20Tokens()[1].Code)
+
+	require.NoError(t, b.SetTokenActive(ethAccountCode, activeTokenCode, true))
+	require.NoError(t, b.SetTokenActive(ethAccountCode, inactiveTokenCode, false))
+
+	swapAccounts, _, err := b.swapAccounts()
+	require.NoError(t, err)
+
+	actualCodes := make([]accountsTypes.Code, 0, len(swapAccounts))
+	for _, account := range swapAccounts {
+		actualCodes = append(actualCodes, account.AccountConfig.Code)
+	}
+
+	require.Contains(t, actualCodes, Erc20AccountCode(ethAccountCode, activeTokenCode))
+	require.NotContains(t, actualCodes, Erc20AccountCode(ethAccountCode, inactiveTokenCode))
+}
+
+func TestPrepareSwapActivatesInactiveAccount(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) {
+		return rootFingerprint1, nil
+	}
+	b.registerKeystore(ks)
+
+	btcAccountCode := accountsTypes.Code("v0-55555555-btc-0")
+	require.NoError(t, b.SetAccountActive(btcAccountCode, false))
+	accountsConfig := accountsSnapshot(t, b)
+	require.True(t, accountsConfig.Lookup(btcAccountCode).Inactive)
+
+	require.NoError(t, b.activateSwapBuyAccount(btcAccountCode))
+	accountsConfig = accountsSnapshot(t, b)
+	require.False(t, accountsConfig.Lookup(btcAccountCode).Inactive)
+}
+
+func TestPrepareSwapActivatesParentOfTokenDestination(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) {
+		return rootFingerprint1, nil
+	}
+	b.registerKeystore(ks)
+
+	ethAccountCode := accountsTypes.Code("v0-55555555-eth-0")
+	tokenCode := "eth-erc20-bat"
+	tokenAccountCode := Erc20AccountCode(ethAccountCode, tokenCode)
+
+	require.NoError(t, b.SetTokenActive(ethAccountCode, tokenCode, true))
+	require.NoError(t, b.SetAccountActive(ethAccountCode, false))
+	accountsConfig := accountsSnapshot(t, b)
+	require.True(t, accountsConfig.Lookup(ethAccountCode).Inactive)
+	require.Contains(t, accountsConfig.Lookup(ethAccountCode).ActiveTokens, tokenCode)
+
+	require.NoError(t, b.activateSwapBuyAccount(tokenAccountCode))
+	accountsConfig = accountsSnapshot(t, b)
+	require.False(t, accountsConfig.Lookup(ethAccountCode).Inactive)
+	require.Contains(t, accountsConfig.Lookup(ethAccountCode).ActiveTokens, tokenCode)
+}
+
+func TestPrepareSwapActivatesInactiveTokenDestination(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) {
+		return rootFingerprint1, nil
+	}
+	b.registerKeystore(ks)
+
+	ethAccountCode := accountsTypes.Code("v0-55555555-eth-0")
+	tokenCode := "eth-erc20-bat"
+	tokenAccountCode := Erc20AccountCode(ethAccountCode, tokenCode)
+
+	require.NoError(t, b.SetTokenActive(ethAccountCode, tokenCode, false))
+	accountsConfig := accountsSnapshot(t, b)
+	require.False(t, accountsConfig.Lookup(ethAccountCode).Inactive)
+	require.NotContains(t, accountsConfig.Lookup(ethAccountCode).ActiveTokens, tokenCode)
+
+	require.NoError(t, b.activateSwapBuyAccount(tokenAccountCode))
+	accountsConfig = accountsSnapshot(t, b)
+	require.False(t, accountsConfig.Lookup(ethAccountCode).Inactive)
+	require.Contains(t, accountsConfig.Lookup(ethAccountCode).ActiveTokens, tokenCode)
+}
+
+func TestPrepareSwapReturnsErrorForUnknownAccount(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	err := b.activateSwapBuyAccount(accountsTypes.Code("missing-account"))
+	require.Error(t, err)
+}
+
+func TestValidateSwapAccountSupportedAcceptsMainnetSwapAccounts(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) {
+		return rootFingerprint1, nil
+	}
+	b.registerKeystore(ks)
+
+	require.NoError(t, b.SetTokenActive("v0-55555555-eth-0", "eth-erc20-bat", true))
+
+	testCases := []accountsTypes.Code{
+		"v0-55555555-btc-0",
+		"v0-55555555-ltc-0",
+		"v0-55555555-eth-0",
+		"v0-55555555-eth-0-eth-erc20-bat",
+	}
+	for _, accountCode := range testCases {
+		account := b.Accounts().lookup(accountCode)
+		require.NotNil(t, account)
+		require.NoError(t, validateSwapAccountSupported(account.Account))
+	}
+}
+
+func TestValidateSwapAccountSupportedRejectsUnsupportedMainnetAccount(t *testing.T) {
+	account := &accountsMocks.InterfaceMock{
+		CoinFunc: func() coinpkg.Coin {
+			return &coinMocks.CoinMock{
+				CodeFunc: func() coinpkg.Code { return coinpkg.CodeTLTC },
+			}
+		},
+	}
+	require.EqualError(
+		t,
+		validateSwapAccountSupported(account),
+		"Only supported mainnet BTC/LTC/ETH/ERC20 accounts are currently supported",
+	)
+}
+
+func TestValidateSwapAccountSupportedRejectsTestnetAccounts(t *testing.T) {
+	b := newBackend(t, testnetEnabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) {
+		return rootFingerprint1, nil
+	}
+	b.registerKeystore(ks)
+
+	testCases := []accountsTypes.Code{
+		"v0-55555555-tbtc-0",
+		"v0-55555555-sepeth-0",
+	}
+	for _, accountCode := range testCases {
+		account := b.Accounts().lookup(accountCode)
+		require.NotNil(t, account)
+		require.EqualError(
+			t,
+			validateSwapAccountSupported(account.Account),
+			"Only supported mainnet BTC/LTC/ETH/ERC20 accounts are currently supported",
+		)
+	}
+}
+
+func TestSwapSignTxInputUsesSignedOutput(t *testing.T) {
+	sellCoin := btc.NewCoin(
+		coinpkg.CodeBTC,
+		"Bitcoin",
+		"BTC",
+		coinpkg.BtcUnitSats,
+		&chaincfg.MainNetParams,
+		".",
+		nil,
+		"",
+		"",
+		socksproxy.NewSocksProxy(false, ""),
+	)
+	paymentRequest := &paymentrequest.Slip24{
+		RecipientName: "SWAPKIT (NEAR)",
+		Memos: []paymentrequest.Slip24Memo{
+			{
+				Type: "coinPurchase",
+				CoinPurchase: &paymentrequest.Slip24CoinPurchase{
+					CoinType: 60,
+					Amount:   "31.99475075012798141 ETH",
+					Address:  "0x986f66F28C6a2BBE939dF3161D1D2b238933895c",
+				},
+			},
+		},
+		Outputs: []paymentrequest.Slip24Out{
+			{
+				Amount:  "100000000",
+				Address: "1GqULdYGDRfF3w85yGmEq8LTWecpKn8JMJ",
+			},
+		},
+		Signature: "sig",
+	}
+
+	txInput, err := swapSignTxInput(paymentRequest, sellCoin, &paymentrequest.Slip24AddressDerivation{
+		Eth: &paymentrequest.Slip24EthAddressDerivation{
+			Keypath: []uint32{2147483692, 2147483708, 2147483648, 0, 0},
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "1GqULdYGDRfF3w85yGmEq8LTWecpKn8JMJ", txInput.Address)
+	require.Equal(t, "100000000", txInput.Amount)
+	require.NotNil(t, txInput.PaymentRequest)
+	require.NotNil(t, txInput.PaymentRequest.Memos[0].CoinPurchase)
+	require.NotNil(t, txInput.PaymentRequest.Memos[0].CoinPurchase.AddressDerivation)
+	require.Equal(
+		t,
+		[]uint32{2147483692, 2147483708, 2147483648, 0, 0},
+		txInput.PaymentRequest.Memos[0].CoinPurchase.AddressDerivation.Eth.Keypath,
+	)
+}
+
+func TestSwapSignTxInputUsesBTCDestinationDerivation(t *testing.T) {
+	sellCoin := btc.NewCoin(
+		coinpkg.CodeBTC,
+		"Bitcoin",
+		"BTC",
+		coinpkg.BtcUnitSats,
+		&chaincfg.MainNetParams,
+		".",
+		nil,
+		"",
+		"",
+		socksproxy.NewSocksProxy(false, ""),
+	)
+	paymentRequest := &paymentrequest.Slip24{
+		RecipientName: "SWAPKIT (NEAR)",
+		Memos: []paymentrequest.Slip24Memo{
+			{
+				Type: "coinPurchase",
+				CoinPurchase: &paymentrequest.Slip24CoinPurchase{
+					CoinType: 0,
+					Amount:   "0.01 BTC",
+					Address:  "bc1qpz7m2szz07ca7vtj3zlce43fscdnv2q8hhs0tx",
+				},
+			},
+		},
+		Outputs: []paymentrequest.Slip24Out{
+			{
+				Amount:  "100000000",
+				Address: "1GqULdYGDRfF3w85yGmEq8LTWecpKn8JMJ",
+			},
+		},
+		Signature: "sig",
+	}
+
+	txInput, err := swapSignTxInput(paymentRequest, sellCoin, &paymentrequest.Slip24AddressDerivation{
+		Btc: &paymentrequest.Slip24BtcAddressDerivation{
+			Keypath:    []uint32{2147483697, 2147483648, 2147483648, 0, 5},
+			ScriptType: "p2wpkh",
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, txInput.PaymentRequest)
+	require.NotNil(t, txInput.PaymentRequest.Memos[0].CoinPurchase)
+	require.NotNil(t, txInput.PaymentRequest.Memos[0].CoinPurchase.AddressDerivation)
+	require.Equal(
+		t,
+		[]uint32{2147483697, 2147483648, 2147483648, 0, 5},
+		txInput.PaymentRequest.Memos[0].CoinPurchase.AddressDerivation.Btc.Keypath,
+	)
+	require.Equal(
+		t,
+		"p2wpkh",
+		txInput.PaymentRequest.Memos[0].CoinPurchase.AddressDerivation.Btc.ScriptType,
+	)
+}
+
+func TestSwapSignTxInputSupportsLargeERC20Amount(t *testing.T) {
+	daiCoin := eth.NewCoin(
+		nil,
+		coinpkg.Code("eth-erc20-dai0x6b17"),
+		"Dai",
+		"DAI",
+		"ETH",
+		params.MainnetChainConfig,
+		"",
+		nil,
+		erc20.NewToken("0x6b175474e89094c44da98b954eedeac495271d0f", 18),
+	)
+	paymentRequest := &paymentrequest.Slip24{
+		Outputs: []paymentrequest.Slip24Out{
+			{
+				Amount:  "55000000000000000000",
+				Address: "0x986f66F28C6a2BBE939dF3161D1D2b238933895c",
+			},
+		},
+	}
+
+	txInput, err := swapSignTxInput(paymentRequest, daiCoin, nil)
+	require.NoError(t, err)
+	require.Equal(t, "55", txInput.Amount)
+	require.Equal(t, "55000000000000000000", txInput.PaymentRequest.Outputs[0].Amount)
+}
+
+func setAccountBalance(t *testing.T, b *Backend, accountCode accountsTypes.Code, amount int64) {
+	t.Helper()
+	accountMock, ok := b.Accounts().lookup(accountCode).Account.(*accountsMocks.InterfaceMock)
+	require.True(t, ok)
+	accountMock.BalanceFunc = func() (*accounts.Balance, error) {
+		return accounts.NewBalance(coinpkg.NewAmountFromInt64(amount), coinpkg.NewAmountFromInt64(0)), nil
+	}
+}
+
+func zeroAllAccountBalances(t *testing.T, b *Backend) {
+	t.Helper()
+	accountViews := b.Accounts()
+	for index := range accountViews {
+		accountView := &accountViews[index]
+		setAccountBalance(t, b, accountView.Record.Code, 0)
+	}
+}
+
+func TestSwapAccountsDefaultSellAndBuyPreferEthAndBtc(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) {
+		return rootFingerprint1, nil
+	}
+	b.registerKeystore(ks)
+	zeroAllAccountBalances(t, b)
+	setAccountBalance(t, b, accountsTypes.Code("v0-55555555-eth-0"), 1)
+
+	swapAccounts, err := b.SwapAccounts()
+	require.NoError(t, err)
+	require.NotNil(t, swapAccounts.DefaultSellAccountCode)
+	require.NotNil(t, swapAccounts.DefaultBuyAccountCode)
+	require.Equal(t, accountsTypes.Code("v0-55555555-eth-0"), *swapAccounts.DefaultSellAccountCode)
+	require.Equal(t, accountsTypes.Code("v0-55555555-btc-0"), *swapAccounts.DefaultBuyAccountCode)
+}
+
+func TestSwapAccountsDefaultSellFallsBackToFirstNonBtcWithBalance(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) {
+		return rootFingerprint1, nil
+	}
+	b.registerKeystore(ks)
+	zeroAllAccountBalances(t, b)
+
+	require.NoError(t, b.SetAccountActive(accountsTypes.Code("v0-55555555-eth-0"), false))
+	zeroAllAccountBalances(t, b)
+	setAccountBalance(t, b, accountsTypes.Code("v0-55555555-ltc-0"), 1)
+
+	swapAccounts, err := b.SwapAccounts()
+	require.NoError(t, err)
+	require.NotNil(t, swapAccounts.DefaultSellAccountCode)
+	require.Equal(t, accountsTypes.Code("v0-55555555-ltc-0"), *swapAccounts.DefaultSellAccountCode)
+	require.NotNil(t, swapAccounts.DefaultBuyAccountCode)
+	require.Equal(t, accountsTypes.Code("v0-55555555-btc-0"), *swapAccounts.DefaultBuyAccountCode)
+}
+
+func TestSwapAccountsDefaultSellFallsBackToFirstBtcWithBalance(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) {
+		return rootFingerprint1, nil
+	}
+	b.registerKeystore(ks)
+	zeroAllAccountBalances(t, b)
+
+	require.NoError(t, b.SetAccountActive(accountsTypes.Code("v0-55555555-eth-0"), false))
+	zeroAllAccountBalances(t, b)
+	setAccountBalance(t, b, accountsTypes.Code("v0-55555555-btc-0"), 1)
+
+	swapAccounts, err := b.SwapAccounts()
+	require.NoError(t, err)
+	require.NotNil(t, swapAccounts.DefaultSellAccountCode)
+	require.Equal(t, accountsTypes.Code("v0-55555555-btc-0"), *swapAccounts.DefaultSellAccountCode)
+	require.NotNil(t, swapAccounts.DefaultBuyAccountCode)
+	require.Equal(t, accountsTypes.Code("v0-55555555-eth-0"), *swapAccounts.DefaultBuyAccountCode)
+}
+
+func TestSwapAccountsDefaultSellFallsBackToFirstAvailableWhenAllBalancesAreZero(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	ks := makeBitBox02Multi()
+	ks.RootFingerprintFunc = func() ([]byte, error) {
+		return rootFingerprint1, nil
+	}
+	b.registerKeystore(ks)
+	zeroAllAccountBalances(t, b)
+
+	require.NoError(t, b.SetAccountActive(accountsTypes.Code("v0-55555555-eth-0"), false))
+	zeroAllAccountBalances(t, b)
+
+	swapAccounts, err := b.SwapAccounts()
+	require.NoError(t, err)
+	require.NotNil(t, swapAccounts.DefaultSellAccountCode)
+	require.Equal(t, accountsTypes.Code("v0-55555555-btc-0"), *swapAccounts.DefaultSellAccountCode)
+	require.NotNil(t, swapAccounts.DefaultBuyAccountCode)
+	require.Equal(t, accountsTypes.Code("v0-55555555-eth-0"), *swapAccounts.DefaultBuyAccountCode)
+}
+
+func TestSwapAvailable(t *testing.T) {
+	t.Run("false when no keystore is connected", func(t *testing.T) {
+		b := newBackend(t, testnetDisabled, regtestDisabled)
+		defer b.Close()
+
+		require.False(t, b.swapAvailable())
+	})
+
+	t.Run("false when connected keystore has only bitcoin accounts", func(t *testing.T) {
+		b := newBackend(t, testnetDisabled, regtestDisabled)
+		defer b.Close()
+
+		ks := makeBitBox02BTCOnly()
+		ks.RootFingerprintFunc = func() ([]byte, error) {
+			return rootFingerprint1, nil
+		}
+		b.registerKeystore(ks)
+
+		require.False(t, b.swapAvailable())
+	})
+
+	t.Run("true when connected keystore has inactive non-bitcoin account", func(t *testing.T) {
+		b := newBackend(t, testnetDisabled, regtestDisabled)
+		defer b.Close()
+
+		ks := makeBitBox02Multi()
+		ks.RootFingerprintFunc = func() ([]byte, error) {
+			return rootFingerprint1, nil
+		}
+		b.registerKeystore(ks)
+		require.NoError(t, b.SetAccountActive("v0-55555555-eth-0", false))
+
+		ltcAccountCode, err := b.CreateAndPersistAccountConfig(coinpkg.CodeLTC, "Litecoin account name 2", ks)
+		require.NoError(t, err)
+		require.NoError(t, b.SetAccountActive(ltcAccountCode, false))
+
+		require.True(t, b.swapAvailable())
+	})
+
+	t.Run("true when watch-only account is enabled", func(t *testing.T) {
+		b := newBackend(t, testnetDisabled, regtestDisabled)
+		defer b.Close()
+
+		ks := makeBitBox02Multi()
+		rootFingerprint, err := ks.RootFingerprint()
+		require.NoError(t, err)
+
+		b.registerKeystore(ks)
+		require.NoError(t, b.SetWatchonly(rootFingerprint, true))
+		b.DeregisterKeystore()
+
+		require.True(t, b.swapAvailable())
+	})
+
+	t.Run("false when only bitcoin watch-only account is enabled", func(t *testing.T) {
+		b := newBackend(t, testnetDisabled, regtestDisabled)
+		defer b.Close()
+
+		ks := makeBitBox02BTCOnly()
+		rootFingerprint, err := ks.RootFingerprint()
+		require.NoError(t, err)
+
+		b.registerKeystore(ks)
+		require.NoError(t, b.SetWatchonly(rootFingerprint, true))
+		b.DeregisterKeystore()
+
+		require.False(t, b.swapAvailable())
+	})
+
+	t.Run("false when btc-only keystore shares a seed with previously persisted multi accounts", func(t *testing.T) {
+		b := newBackend(t, testnetDisabled, regtestDisabled)
+		defer b.Close()
+
+		multi := makeBitBox02Multi()
+		btcOnly := makeBitBox02BTCOnly()
+
+		rootFingerprint, err := multi.RootFingerprint()
+		require.NoError(t, err)
+		btcOnlyRootFingerprint, err := btcOnly.RootFingerprint()
+		require.NoError(t, err)
+		require.Equal(t, rootFingerprint, btcOnlyRootFingerprint)
+
+		b.registerKeystore(multi)
+		b.DeregisterKeystore()
+		b.registerKeystore(btcOnly)
+
+		require.False(t, b.swapAvailable())
+	})
+}
+
+func TestSwapConnectedKeystore(t *testing.T) {
+	t.Run("false when no keystore is connected", func(t *testing.T) {
+		b := newBackend(t, testnetDisabled, regtestDisabled)
+		defer b.Close()
+
+		require.Equal(t, swapConnectedKeystoreNone, b.swapConnectedKeystore())
+	})
+
+	t.Run("true when a multi keystore is connected", func(t *testing.T) {
+		b := newBackend(t, testnetDisabled, regtestDisabled)
+		defer b.Close()
+
+		ks := makeBitBox02Multi()
+		ks.RootFingerprintFunc = func() ([]byte, error) {
+			return rootFingerprint1, nil
+		}
+		b.registerKeystore(ks)
+
+		require.Equal(t, swapConnectedKeystoreMulti, b.swapConnectedKeystore())
+	})
+
+	t.Run("false when a bitcoin-only keystore is connected", func(t *testing.T) {
+		b := newBackend(t, testnetDisabled, regtestDisabled)
+		defer b.Close()
+
+		ks := makeBitBox02BTCOnly()
+		ks.RootFingerprintFunc = func() ([]byte, error) {
+			return rootFingerprint1, nil
+		}
+		b.registerKeystore(ks)
+
+		require.Equal(t, swapConnectedKeystoreBTCOnly, b.swapConnectedKeystore())
+	})
+
+	t.Run("false when only watch-only multi accounts are available", func(t *testing.T) {
+		b := newBackend(t, testnetDisabled, regtestDisabled)
+		defer b.Close()
+
+		ks := makeBitBox02Multi()
+		rootFingerprint, err := ks.RootFingerprint()
+		require.NoError(t, err)
+
+		b.registerKeystore(ks)
+		require.NoError(t, b.SetWatchonly(rootFingerprint, true))
+		b.DeregisterKeystore()
+
+		require.Equal(t, swapConnectedKeystoreNone, b.swapConnectedKeystore())
+	})
+
+	t.Run("false when btc-only keystore shares a seed with previously persisted multi accounts", func(t *testing.T) {
+		b := newBackend(t, testnetDisabled, regtestDisabled)
+		defer b.Close()
+
+		multi := makeBitBox02Multi()
+		btcOnly := makeBitBox02BTCOnly()
+
+		rootFingerprint, err := multi.RootFingerprint()
+		require.NoError(t, err)
+		btcOnlyRootFingerprint, err := btcOnly.RootFingerprint()
+		require.NoError(t, err)
+		require.Equal(t, rootFingerprint, btcOnlyRootFingerprint)
+
+		b.registerKeystore(multi)
+		b.DeregisterKeystore()
+		b.registerKeystore(btcOnly)
+
+		require.Equal(t, swapConnectedKeystoreBTCOnly, b.swapConnectedKeystore())
+	})
+}
+
+func TestSwapStatus(t *testing.T) {
+	t.Run("reports availability and connected multi keystore separately", func(t *testing.T) {
+		b := newBackend(t, testnetDisabled, regtestDisabled)
+		defer b.Close()
+
+		ks := makeBitBox02Multi()
+		rootFingerprint, err := ks.RootFingerprint()
+		require.NoError(t, err)
+
+		b.registerKeystore(ks)
+		require.NoError(t, b.SetWatchonly(rootFingerprint, true))
+		b.DeregisterKeystore()
+
+		swapStatus := b.SwapStatus()
+		require.True(t, swapStatus.Available)
+		require.Equal(t, swapConnectedKeystoreNone, swapStatus.ConnectedKeystore)
+	})
+}

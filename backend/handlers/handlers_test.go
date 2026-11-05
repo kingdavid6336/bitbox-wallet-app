@@ -1,16 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package handlers_test
 
@@ -20,40 +8,57 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/arguments"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/usb"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/handlers"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/test"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend"
+	accountsTypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/arguments"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/usb"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/handlers"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/keystore/software"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/test"
 	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/require"
 )
 
 // backendEnv is a backend environment implementation for testing.
 //
 // TODO: Move this to the test pkg. Unfortunately, there's imports cycle:
-//   $ go vet ./backend/...
-//   import cycle not allowed in test
-//   package github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/db/transactionsdb (test)
-//           imports github.com/digitalbitbox/bitbox-wallet-app/util/test
-//           imports github.com/digitalbitbox/bitbox-wallet-app/backend/devices/usb
-//           imports github.com/digitalbitbox/bitbox-wallet-app/backend/devices/bitbox
-//           imports github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc
-//           imports github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/db/transactionsdb
-//   import cycle not allowed in test
-//   package github.com/digitalbitbox/bitbox-wallet-app/backend/devices/bitbox (test)
-//           imports github.com/digitalbitbox/bitbox-wallet-app/util/test
-//           imports github.com/digitalbitbox/bitbox-wallet-app/backend/devices/usb
-//           imports github.com/digitalbitbox/bitbox-wallet-app/backend/devices/bitbox
+//
+//	$ go vet ./backend/...
+//	import cycle not allowed in test
+//	package github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/db/transactionsdb (test)
+//	        imports github.com/BitBoxSwiss/bitbox-wallet-app/util/test
+//	        imports github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/usb
+//	        imports github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox
+//	        imports github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc
+//	        imports github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/db/transactionsdb
+//	import cycle not allowed in test
+//	package github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox (test)
+//	        imports github.com/BitBoxSwiss/bitbox-wallet-app/util/test
+//	        imports github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/usb
+//	        imports github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox
 type backendEnv struct {
 	Locale string // returned by NativeLocale
 }
 
-func (e *backendEnv) NotifyUser(string)             {}
-func (e *backendEnv) SystemOpen(string) error       { return nil }
-func (e *backendEnv) DeviceInfos() []usb.DeviceInfo { return nil }
-func (e *backendEnv) UsingMobileData() bool         { return false }
-func (e *backendEnv) NativeLocale() string          { return e.Locale }
+func (e *backendEnv) NotifyUser(string)                                 {}
+func (e *backendEnv) SystemOpen(string) error                           { return nil }
+func (e *backendEnv) DeviceInfos() []usb.DeviceInfo                     { return nil }
+func (e *backendEnv) UsingMobileData() bool                             { return false }
+func (e *backendEnv) NativeLocale() string                              { return e.Locale }
+func (e *backendEnv) NumberFormat() *backend.NumberFormat               { return nil }
+func (e *backendEnv) GetSaveFilename(string) string                     { return "" }
+func (e *backendEnv) SetDarkTheme(bool)                                 {}
+func (e *backendEnv) DetectDarkTheme() bool                             { return false }
+func (e *backendEnv) Auth()                                             {}
+func (e *backendEnv) OnAuthSettingChanged(bool)                         {}
+func (e *backendEnv) CanEncryptLightningMnemonic() bool                 { return false }
+func (e *backendEnv) StoreLightningEncryptionKey(string, string) error  { return nil }
+func (e *backendEnv) LoadLightningEncryptionKey(string) (string, error) { return "", nil }
+func (e *backendEnv) DeleteLightningEncryptionKey(string) error         { return nil }
+func (e *backendEnv) BluetoothConnect(string)                           {}
+func (e *backendEnv) UserAgentPlatform() string                         { return "linux" }
 
 func TestGetNativeLocale(t *testing.T) {
 	const ptLocale = "pt"
@@ -62,7 +67,6 @@ func TestGetNativeLocale(t *testing.T) {
 		test.TstTempDir("getnativelocale"),
 		true,  // testing
 		false, // regtest
-		false, // devmode
 		true,  // devservers
 		nil,   // gap limits
 	)
@@ -74,7 +78,7 @@ func TestGetNativeLocale(t *testing.T) {
 	defer back.Close()
 
 	h := handlers.NewHandlers(back, handlers.NewConnectionData(0, ""))
-	r := httptest.NewRequest("GET", "/api/native-locale", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/native-locale", nil)
 	w := httptest.NewRecorder()
 	h.Router.ServeHTTP(w, r)
 	res := w.Result()
@@ -88,6 +92,100 @@ func TestGetNativeLocale(t *testing.T) {
 	}
 }
 
+type balanceStatementBackend struct {
+	*backend.Backend
+	accountCodes []accountsTypes.Code
+	snapshotDate time.Time
+	numberFormat *backend.NumberFormat
+}
+
+func (b *balanceStatementBackend) ExportBalanceStatement(
+	accountCodes []accountsTypes.Code, snapshotDate time.Time, numberFormat *backend.NumberFormat,
+) error {
+	b.accountCodes = accountCodes
+	b.snapshotDate = snapshotDate
+	b.numberFormat = numberFormat
+	return nil
+}
+
+// The export route must decode and forward the app's number format along with
+// the account selection and snapshot date, without substituting system defaults.
+func TestExportBalanceStatementNumberFormat(t *testing.T) {
+	back, err := backend.NewBackend(
+		arguments.NewArguments(t.TempDir(), true, true, true, nil), &backendEnv{})
+	require.NoError(t, err)
+	defer back.Close()
+	capture := &balanceStatementBackend{Backend: back}
+	h := handlers.NewHandlers(capture, handlers.NewConnectionData(0, ""))
+	request := httptest.NewRequest(http.MethodPost, "/api/accounts/balance-statement/export", strings.NewReader(
+		`{"accountCodes":["v0-55555555-btc-0"],"snapshotDate":"2025-12-31","numberFormat":{"decimal":",","group":"."}}`))
+	recorder := httptest.NewRecorder()
+	h.Router.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var response struct {
+		Success bool `json:"success"`
+	}
+	test.DecodeHandlerResponse(t, &response, recorder.Result().Body)
+	require.True(t, response.Success)
+	require.Equal(t, []accountsTypes.Code{"v0-55555555-btc-0"}, capture.accountCodes)
+	require.Equal(t, time.Date(2025, 12, 31, 0, 0, 0, 0, time.Local), capture.snapshotDate)
+	require.Equal(t, &backend.NumberFormat{DecimalSeparator: ",", GroupSeparator: "."}, capture.numberFormat)
+}
+
+func TestConnectKeystoreRequiredFeature(t *testing.T) {
+	args := arguments.NewArguments(
+		test.TstTempDir("connect-keystore-feature"),
+		true,
+		false,
+		true,
+		nil,
+	)
+	back, err := backend.NewBackend(args, &backendEnv{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer back.Close()
+	h := handlers.NewHandlers(back, handlers.NewConnectionData(0, ""))
+	require.NoError(t, back.RegisterTestKeystore("0000", software.EditionMulti))
+
+	tests := []struct {
+		name              string
+		requiredFeature   string
+		expectedSuccess   bool
+		expectedErrorCode string
+	}{
+		{name: "no required feature", expectedSuccess: true},
+		{
+			name:            "supported feature",
+			requiredFeature: "messageSigning",
+			expectedSuccess: true,
+		},
+		{
+			name:              "unsupported feature",
+			requiredFeature:   "paymentRequests",
+			expectedErrorCode: "unsupportedFeature",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			body := fmt.Sprintf(`{"rootFingerprint":"","requiredFeature":%q}`, testCase.requiredFeature)
+			request := httptest.NewRequest(http.MethodPost, "/api/connect-keystore", strings.NewReader(body))
+			recorder := httptest.NewRecorder()
+			h.Router.ServeHTTP(recorder, request)
+
+			var response struct {
+				Success   bool   `json:"success"`
+				ErrorCode string `json:"errorCode"`
+			}
+			test.DecodeHandlerResponse(t, &response, recorder.Result().Body)
+			require.Equal(t, testCase.expectedSuccess, response.Success)
+			require.Equal(t, testCase.expectedErrorCode, response.ErrorCode)
+		})
+	}
+}
+
 // List all routes with `go test backend/handlers/handlers_test.go -v`.
 func TestListRoutes(t *testing.T) {
 	const skip = true
@@ -97,7 +195,6 @@ func TestListRoutes(t *testing.T) {
 	connectionData := handlers.NewConnectionData(8082, "")
 	backend, err := backend.NewBackend(arguments.NewArguments(
 		test.TstTempDir("bitbox-wallet-listroutes-"),
-		false,
 		false,
 		false,
 		false,

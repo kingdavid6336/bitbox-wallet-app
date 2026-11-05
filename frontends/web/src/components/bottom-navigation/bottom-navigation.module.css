@@ -1,0 +1,135 @@
+.container {
+  align-items: center;
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  background-color: var(--bottom-navigation-background-color);
+  border: 1px solid var(--bottom-navigation-border-color);
+  border-radius: var(--radius-full);
+  bottom: var(--bottom-navigation-bottom-offset);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.26);
+  display: none;
+  gap: var(--space-eight);
+  height: var(--bottom-navigation-bar-height);
+  justify-content: space-between;
+  left: var(--space-half);
+  padding: var(--space-three-quarter) var(--space-half);
+  position: fixed;
+  right: var(--space-half);
+  z-index: 3;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.bottomGlass {
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  background-color: var(--bottom-navigation-bottom-glass-background-color);
+  bottom: -2px;
+  display: none;
+  height: var(--bottom-navigation-bottom-glass-height);
+  left: 0;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, .2) 40%,
+    rgba(0, 0, 0, .75) 78%,
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, .2) 40%,
+    rgba(0, 0, 0, .75) 78%,
+    #000 100%
+  );
+  pointer-events: none;
+  position: fixed;
+  right: 0;
+  z-index: 2;
+}
+
+.link {
+    align-items: center;
+    color: var(--color-default);
+    container-type: inline-size;
+    display: flex;
+    font-size: 1rem;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 4px;
+    height: 100%;
+    justify-content: center;
+    min-width: 0;
+    position: relative;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.label {
+    font-size: min(1rem, 14cqi);
+}
+
+.menuIcon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+}
+
+.link.active {
+    color: var(--color-primary);
+}
+
+.activeIndicator {
+    content: '';
+    position: absolute;
+    height: 3px;
+    background-color: var(--color-primary);
+    border-radius: var(--radius-xl);
+    pointer-events: none;
+    transition:
+        left 220ms ease-out,
+        width 220ms ease-out;
+}
+
+.marketplaceLabel {
+    align-items: center;
+    display: inline-flex;
+    position: relative;
+}
+
+.settingsLabel {
+    align-items: center;
+    display: inline-flex;
+    position: relative;
+}
+
+.marketplaceNudgeDot {
+    background: var(--color-blue);
+    border-radius: var(--radius-full);
+    display: inline-block;
+    flex-shrink: 0;
+    height: 8px;
+    left: calc(100% + var(--space-eight));
+    max-width: 8px;
+    position: absolute;
+    width: 8px;
+    top: 0;
+}
+
+@media (max-width: 768px) {
+    .container {
+        display: flex;
+    }
+
+    .bottomGlass {
+        display: block;
+    }
+}
+
+.redDot {
+    flex-shrink: 0;
+    left: calc(100% + var(--space-eight));
+    position: absolute;
+    top: 0;
+}

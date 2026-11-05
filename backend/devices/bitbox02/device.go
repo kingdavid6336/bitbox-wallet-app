@@ -1,48 +1,47 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 // Package bitbox02 implements the Device and Keystore interfaces to integrate the bitbox02 into the
 // app.
 package bitbox02
 
 import (
-	"fmt"
+	"slices"
 	"sync"
 
-	event "github.com/digitalbitbox/bitbox-wallet-app/backend/devices/device/event"
-	keystoreInterface "github.com/digitalbitbox/bitbox-wallet-app/backend/keystore"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/observable"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/observable/action"
-	bitbox02common "github.com/digitalbitbox/bitbox02-api-go/api/common"
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware"
-	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
+	deviceevent "github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/device/event"
+	keystoreInterface "github.com/BitBoxSwiss/bitbox-wallet-app/backend/keystore"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/logging"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable/action"
+	bitbox02common "github.com/BitBoxSwiss/bitbox02-api-go/api/common"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
 	"github.com/sirupsen/logrus"
 )
 
-// ProductName is the name of the BitBox02 product.
-// If you change this, be sure to check the frontend and other places which assume this is a
+// If you change these, be sure to check the frontend and other places which assume they are
 // constant.
-const ProductName = "bitbox02"
+const (
+	// BitBox02ProductName is the name of the BitBox02 product.
+	BitBox02ProductName = "bitbox02"
+	// BitBox02NovaProductName is the name of the BitBox02 Nova product.
+	BitBox02NovaProductName = "bitbox02nova"
+	// PlatformName is the name of the BitVox02 platform.
+	PlatformName = "bitbox02"
+)
 
 // Device implements device.Device.
 type Device struct {
 	firmware.Device
-	deviceID string
-	mu       sync.RWMutex
-	onEvent  func(event.Event, interface{})
-	log      *logrus.Entry
+	deviceID    string
+	productName string
+	log         *logrus.Entry
+	keystore    *keystore
+
+	passphraseMu     sync.Mutex
+	passphrase       PassphraseState
+	requestHostEntry func()
+	hostPassphrase   chan *string
 
 	observable.Implementation
 }
@@ -54,32 +53,61 @@ func NewDevice(
 	product bitbox02common.Product,
 	config firmware.ConfigInterface,
 	communication firmware.Communication,
+	opts ...firmware.DeviceOption,
 ) *Device {
+	productName := BitBox02ProductName
+	// BitBox02Plus is the internal code name for the BitBox Nova.
+	if product == bitbox02common.ProductBitBox02PlusBTCOnly ||
+		product == bitbox02common.ProductBitBox02PlusMulti {
+		productName = BitBox02NovaProductName
+	}
 	log := logging.Get().
 		WithGroup("device").
 		WithField("deviceID", deviceID).
-		WithField("productName", ProductName).
+		WithField("productName", productName).
 		WithField("product", product)
 
 	log.Info("Plugged in device")
 	device := &Device{
-		Device: *firmware.NewDevice(
-			version,
-			&product,
-			config,
-			communication, logger{log},
-		),
-		deviceID: deviceID,
-		log:      log,
+		deviceID:    deviceID,
+		productName: productName,
+		log:         log,
+	}
+	opts = append(opts, firmware.WithPassphraseConfig(firmware.PassphraseConfig{
+		OnHostPassphraseAvailable: device.hostPassphraseAvailable,
+		EnterMnemonicPassphrase:   device.enterMnemonicPassphrase,
+	}))
+	device.Device = *firmware.NewDevice(version, &product, config, communication, logger{log}, opts...)
+	device.keystore = &keystore{
+		device: device,
+		log:    device.log,
 	}
 	device.Device.SetOnEvent(func(ev firmware.Event, meta interface{}) {
-		device.fireEvent(event.Event(ev))
 		switch ev {
+		case firmware.EventPassphraseEntered:
+			device.passphraseEntered()
 		case firmware.EventStatusChanged:
-			switch device.Device.Status() {
-			case firmware.StatusInitialized:
-				device.fireEvent(event.EventKeystoreAvailable)
+			status := device.Device.Status()
+			if status != firmware.StatusConnected {
+				device.clearPassphrase()
 			}
+			device.Notify(observable.Event{
+				Subject: "status",
+				Action:  action.Replace,
+				Object:  status,
+			})
+			if status == firmware.StatusInitialized {
+				device.keystore.clearRootFingerprintCache()
+				device.Notify(observable.Event{
+					Subject: string(deviceevent.EventKeystoreAvailable),
+					Action:  action.Replace,
+				})
+			}
+		default:
+			device.Notify(observable.Event{
+				Subject: string(ev),
+				Action:  action.Replace,
+			})
 		}
 	})
 	return device
@@ -95,13 +123,25 @@ func (device *Device) init() {
 	go func() {
 		if err := device.Device.Init(); err != nil {
 			device.log.Error("unknown IO error (most likely the device was unplugged)", err)
+			device.Close()
 		}
 	}()
 }
 
+// Close also releases a pending host passphrase dialog.
+func (device *Device) Close() {
+	device.Device.Close()
+	device.clearPassphrase()
+}
+
 // ProductName implements device.Device.
 func (device *Device) ProductName() string {
-	return ProductName
+	return device.productName
+}
+
+// PlatformName implements device.Device.
+func (device *Device) PlatformName() string {
+	return PlatformName
 }
 
 // Identifier implements device.Device.
@@ -114,27 +154,38 @@ func (device *Device) Keystore() keystoreInterface.Keystore {
 	if device.Status() != firmware.StatusInitialized {
 		return nil
 	}
-	return &keystore{
-		device: device,
-		log:    device.log,
-	}
-}
-
-func (device *Device) fireEvent(event event.Event) {
-	device.mu.RLock()
-	f := device.onEvent
-	device.mu.RUnlock()
-	if f != nil {
-		device.log.Info(fmt.Sprintf("fire event: %s", event))
-		f(event, nil)
-	}
+	return device.keystore
 }
 
 // SetOnEvent implements device.Device.
-func (device *Device) SetOnEvent(onEvent func(event.Event, interface{})) {
-	device.mu.Lock()
-	defer device.mu.Unlock()
-	device.onEvent = onEvent
+func (device *Device) SetOnEvent(onEvent func(deviceevent.Event, interface{})) {
+}
+
+// SetDeviceName updates the device name and notifies keystore observers.
+func (device *Device) SetDeviceName(deviceName string) error {
+	if err := device.Device.SetDeviceName(deviceName); err != nil {
+		return err
+	}
+
+	if ks := device.Keystore(); ks != nil {
+		if bb02Keysytore, ok := ks.(*keystore); ok {
+			rootFingerprint, err := bb02Keysytore.RootFingerprint()
+			if err != nil {
+				// Best effort, not critical.
+				return nil
+			}
+
+			bb02Keysytore.Notify(observable.Event{
+				Subject: string(keystoreInterface.EventNameChanged),
+				Action:  action.Replace,
+				Object: keystoreInterface.NameChangedEvent{
+					Name:            deviceName,
+					RootFingerprint: slices.Clone(rootFingerprint),
+				},
+			})
+		}
+	}
+	return nil
 }
 
 // Reset factory resets the device.
@@ -142,8 +193,10 @@ func (device *Device) Reset() error {
 	if err := device.Device.Reset(); err != nil {
 		return err
 	}
-	device.fireEvent(event.EventKeystoreGone)
-	device.init()
+	device.Notify(observable.Event{
+		Subject: string(deviceevent.EventKeystoreGone),
+		Action:  action.Replace,
+	})
 	return nil
 }
 
@@ -153,8 +206,13 @@ func (device *Device) CreateBackup() error {
 		return err
 	}
 	device.Notify(observable.Event{
-		Subject: fmt.Sprintf("devices/bitbox02/%s/backups/list", device.deviceID),
+		Subject: "backups/list",
 		Action:  action.Reload,
 	})
 	return nil
+}
+
+// DeterministicEntropy implements handlers.BitBox02.
+func (device *Device) DeterministicEntropy() ([]byte, error) {
+	return device.Keystore().DeterministicEntropy()
 }

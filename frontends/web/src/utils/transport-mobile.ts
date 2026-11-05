@@ -1,0 +1,85 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { TMsgCallback, TPayload, TQueryPromiseMap } from './transport-common';
+import { runningInAndroid, runningInIOS, runningOnMobile } from './env';
+
+let queryID: number = 0;
+const queryPromises: TQueryPromiseMap = {};
+const currentListeners: TMsgCallback[] = [];
+
+export const mobileCall = (query: string): Promise<unknown> => {
+  return new Promise((resolve, reject) => {
+    if (runningOnMobile()) {
+      if (typeof window.onMobileCallResponse === 'undefined') {
+        window.onMobileCallResponse = (
+          queryID: number,
+          response: unknown,
+        ) => {
+          queryPromises[queryID]?.resolve(response);
+          delete queryPromises[queryID];
+        };
+      }
+      queryID++;
+      queryPromises[queryID] = { resolve, reject };
+      if (runningInAndroid()) {
+        window.android!.call(queryID, query);
+      } else {
+        // iOS
+        window.webkit!.messageHandlers.goCall.postMessage({ queryID, query });
+      }
+    } else {
+      reject();
+    }
+  });
+};
+
+export const mobileSubscribePushNotifications = (msgCallback: TMsgCallback) => {
+  if (typeof window.onMobilePushNotification === 'undefined') {
+    window.onMobilePushNotification = (msg: TPayload) => {
+      currentListeners.forEach(listener => listener(msg));
+    };
+  }
+
+  currentListeners.push(msgCallback);
+  return () => {
+    if (!currentListeners.includes(msgCallback)) {
+      console.warn('!currentListeners.includes(msgCallback)');
+    }
+    const index = currentListeners.indexOf(msgCallback);
+    currentListeners.splice(index, 1);
+    if (currentListeners.includes(msgCallback)) {
+      console.warn('currentListeners.includes(msgCallback)');
+    }
+  };
+};
+
+type THapticFeedbackStyle = 'medium' | 'heavy';
+
+const triggerHapticFeedbackWithStyle = (style: THapticFeedbackStyle) => {
+  if (runningInIOS() && window.webkit?.messageHandlers.hapticFeedback) {
+    window.webkit.messageHandlers.hapticFeedback.postMessage({ style });
+  }
+};
+
+/**
+ * triggers haptic feedback on iOS devices.
+ * noop on other platforms.
+ */
+export const triggerHapticFeedback = () => triggerHapticFeedbackWithStyle('medium');
+
+export const triggerLongHapticFeedback = () => {
+  if (!runningInIOS() || !window.webkit?.messageHandlers.hapticFeedback) {
+    return;
+  }
+  const PULSES = 3;
+  const GAP_MS = 80;
+  for (let i = 0; i < PULSES; i++) {
+    setTimeout(triggerHapticFeedback, i * GAP_MS);
+  }
+};
+
+/**
+ * triggers stronger haptic feedback on iOS devices.
+ * noop on other platforms.
+ */
+export const triggerStrongHapticFeedback = () => triggerHapticFeedbackWithStyle('heavy');

@@ -1,0 +1,19 @@
+IOS_TEST_DESTINATION ?= platform=iOS Simulator,name=iPhone 17
+
+prepare:
+	cd ../.. && ${MAKE} check-go-vendor
+	cd ../../ && BITBOX_APP_PLATFORM=ios ${MAKE} buildweb
+	rm -rf BitBoxApp/BitBoxApp/assets/web/
+	mkdir -p BitBoxApp/BitBoxApp/assets/web/
+	cp -aR ../web/build/* BitBoxApp/BitBoxApp/assets/web/
+	echo MARKETING_VERSION = $(shell cat ../../APP_VERSION) > BitBoxApp/AppVersion.xcconfig
+	# Build Mobileserver.xcframework. No need to copy it, the xcode project references it
+	# directly from the mobileserver folder.
+	cd ../../backend/mobileserver && ${MAKE} build-ios
+# Build the app, unsigned. Useful for CI to check if the build succeeds.
+build:
+	${MAKE} prepare
+	xcodebuild clean build -project BitBoxApp/BitBoxApp.xcodeproj -scheme BitBoxApp -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
+	xcodebuild clean build -project BitBoxApp/BitBoxApp.xcodeproj -scheme "BitBoxApp Testnet" -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
+iostest:
+	xcodebuild test -project BitBoxApp/BitBoxApp.xcodeproj -scheme BitBoxApp -configuration Debug -destination '$(IOS_TEST_DESTINATION)' -only-testing:BitBoxAppTests CODE_SIGNING_ALLOWED=NO

@@ -1,19 +1,26 @@
 .message {
-    border: solid 1px var(--color-mediumgray);
-    color: var(--color-secondary);
-    border-radius: 2px;
-    padding: var(--spacing-default);
-    margin-bottom: var(--spacing-default);
+    align-items: flex-start;
+    border: solid 1px var(--background-quaternary);
+    border-radius: var(--radius-xl);
+    color: var(--color-default);
     display: flex;
     flex-direction: row;
-    justify-content: flex-start;
-    align-items: flex-start;
     flex-shrink: 0;
+    justify-content: flex-start;
+    margin-bottom: var(--space-half);
     overflow: hidden;
+    padding: var(--space-half);
+    text-align: left;
+}
+
+.content {
+    padding-top: 2px;
+    width: 100%;
 }
 
 .message img {
-    margin-right: var(--spacing-default);
+    margin-right: var(--space-quarter);
+    max-width: var(--size-header);
 }
 
 .message p:last-child {
@@ -22,24 +29,24 @@
 
 .success {
     composes: message;
-    color: var(--color-success);
-    border-color: var(--color-success);
+    background-color: var(--color-success-background);
+    border-color: var(--color-success-border);
 }
 
 .info {
     composes: message;
-    color: var(--color-default);
-    border-color: var(--color-default);
+    background-color: var(--color-info-background);
+    border-color: var(--color-info-border);
 }
 
 .warning {
     composes: message;
-    color: var(--color-warning);
-    border-color: var(--color-warning);
+    background-color: var(--color-warning-background);
+    border-color: var(--color-warning-border);
 }
 
 .error {
     composes: message;
-    color: var(--color-error);
-    border-color: var(--color-error);
+    background-color: var(--color-error-background);
+    border-color: var(--color-error-border);
 }

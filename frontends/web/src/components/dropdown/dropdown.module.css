@@ -1,0 +1,60 @@
+.select :global(.react-select__input-container) {
+    color: var(--color-default);
+}
+
+.select :global(.react-select__placeholder) {
+    color: var(--color-default);
+}
+
+.select :global(.react-select__single-value) {
+    color: var(--color-default);
+}
+
+.select :global(.react-select__value-container) {
+    color: var(--color-default);
+}
+
+.select :global(.react-select__menu) {
+    background-color: var(--background-secondary);
+    z-index: 99;
+}
+
+.select :global(.react-select__option) {
+    background-color: var(--background-secondary);
+    color: var(--color-default);
+}
+
+.select :global(.react-select__option--is-disabled) {
+    color: var(--color-disabled);
+}
+
+/*Hovered option color*/
+.select :global(.react-select__option--is-focused),
+.select :global(.react-select__option):hover {
+    background-color: var(--background-tap-active);
+}
+
+.select :global(.react-select__option--is-disabled):hover {
+    background-color: transparent;
+}
+
+/*Selected option color*/
+.select :global(.react-select__option--is-selected),
+.select :global(.react-select__option--is-selected):hover {
+    color: var(--color-default);
+    background-color: var(--background-custom-select-selected); 
+}
+
+.select :global(.react-select__control) {
+    background-color: var(--background-secondary);
+    border-radius: var(--radius-xl);
+    border-width: var(--border-width);
+    min-height: var(--input-height);
+    padding: var(--space-quarter) var(--space-eight);
+}
+
+.select :global(.react-select__control--is-focused) {
+    border-color: transparent !important;
+    /* using box-shadow instead of border here fixes an ugly Windows rendering bug */
+    box-shadow: 0 0 0 1px var(--color-blue) !important;
+}

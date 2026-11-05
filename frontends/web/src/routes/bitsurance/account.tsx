@@ -1,0 +1,141 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useAppState } from '@/contexts/app-state-context';
+import { useLocation, useParams } from 'wouter';
+import { AccountCode, TAccount } from '@/api/account';
+import { Header, GuidedContent, GuideWrapper, Main } from '@/components/layout';
+import { MarketTab } from '@/routes/market/components/markettab';
+import { GroupedAccountSelector } from '@/components/groupedaccountselector/groupedaccountselector';
+import { Spinner } from '@/components/spinner/Spinner';
+import { View, ViewContent } from '@/components/view/view';
+import { bitsuranceLookup } from '@/api/bitsurance';
+import { alertUser } from '@/components/alert/Alert';
+import { BitsuranceGuide } from './guide';
+import { useFeatureConnect } from '@/hooks/keystore';
+import { FirmwareUpgradeRequiredDialog } from '@/components/dialog/firmware-upgrade-required-dialog';
+
+type TRouteParams = {
+  code: AccountCode;
+};
+
+export const BitsuranceAccount = () => {
+  const { code = '' } = useParams<TRouteParams>();
+  const { t } = useTranslation();
+  const [, navigate] = useLocation();
+  const { activeAccounts } = useAppState();
+
+  const [disabled, setDisabled] = useState<boolean>(false);
+  const [btcAccounts, setBtcAccounts] = useState<TAccount[]>();
+  const {
+    connect,
+    dismissFirmwareUpgrade,
+    firmwareUpgradeRequired,
+  } = useFeatureConnect();
+
+
+  const handleChangeAccount = (accountCode: string) => {
+    navigate(`/market/bitsurance/account/${accountCode}`, { replace: true });
+  };
+
+  const detect = useCallback(async () => {
+    const response = await bitsuranceLookup();
+    if (!response.success) {
+      alertUser(response.errorMessage);
+      return;
+    }
+    // btc accounts that have never been insured, or with a canceled
+    // insurance contract, can be used to make a new contract.
+    const insurableAccounts = activeAccounts.filter(
+      account => account.coinCode === 'btc'
+      && (
+        !account.bitsuranceStatus
+        || account.bitsuranceStatus === 'canceled'
+        || account.bitsuranceStatus === 'refused'
+      )
+    );
+    setBtcAccounts(insurableAccounts);
+  }, [activeAccounts]);
+
+  // check supported accounts
+  useEffect(() => {
+    detect();
+  }, [detect]);
+
+  // if there is only one account available let's automatically redirect to the widget
+  useEffect(() => {
+    if (btcAccounts !== undefined && btcAccounts.length === 1) {
+      const account = btcAccounts[0] as TAccount;
+      connect(account.keystore.rootFingerprint, 'messageSigning').then(success => {
+        if (!success) {
+          return;
+        }
+        // replace current history item when redirecting so that the user can go back
+        navigate(`/market/bitsurance/widget/${account.code}`, { replace: true });
+      });
+    }
+  }, [btcAccounts, connect, navigate]);
+
+  const handleProceed = async () => {
+    setDisabled(true);
+    try {
+      const account = btcAccounts?.find(acc => acc.code === code);
+      if (account === undefined) {
+        return;
+      }
+      if (!await connect(account.keystore.rootFingerprint, 'messageSigning')) {
+        return;
+      }
+    } finally {
+      setDisabled(false);
+    }
+    navigate(`/market/bitsurance/widget/${code}`);
+  };
+
+  if (btcAccounts === undefined) {
+    return <Spinner text={t('loading')} />;
+  }
+
+  return (
+    <GuideWrapper>
+      {firmwareUpgradeRequired && (
+        <FirmwareUpgradeRequiredDialog
+          open
+          onClose={dismissFirmwareUpgrade}
+        />
+      )}
+      <GuidedContent>
+        <Main>
+          <Header title={t('generic.buySell')} />
+          <MarketTab
+            activeTab="insure"
+            code={code}
+          />
+          <View
+            fullscreen={false}
+            minHeight="600px"
+            verticallyCentered
+            width="550px"
+          >
+            <ViewContent>
+              { btcAccounts.length === 0 ? (
+                <div>{t('bitsuranceAccount.noAccount')}</div>
+              ) : (
+                <GroupedAccountSelector
+                  title={t('bitsuranceAccount.select')}
+                  disabled={disabled}
+                  accounts={btcAccounts}
+                  selected={code}
+                  onChange={handleChangeAccount}
+                  onProceed={handleProceed}
+                />
+              )}
+            </ViewContent>
+          </View>
+        </Main>
+      </GuidedContent>
+      <BitsuranceGuide />
+    </GuideWrapper>
+  );
+};

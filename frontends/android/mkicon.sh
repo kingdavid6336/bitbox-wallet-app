@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+
 # This script requires convert tool from ImageMagick and optipng.
 # The output is nondeterministic.
 set -e
 
 thisdir=$(dirname ${0})
-source=${thisdir}/../qt/resources/app_icon_source.png
+source=${thisdir}/icon_source.png
 res=${thisdir}/BitBoxApp/app/src/main/res
 
 convert -resize 48x48 ${source} ${res}/mipmap-mdpi/ic_launcher.png

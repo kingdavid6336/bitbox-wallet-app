@@ -1,21 +1,39 @@
-import { Component, h, RenderableProps } from 'preact';
-import * as style from './badge.module.css';
+// SPDX-License-Identifier: Apache-2.0
 
-interface BadgeProps {
-    type: string;
-    className?: string;
-}
+import { ReactElement, ReactNode } from 'react';
+import style from './badge.module.css';
 
-class Badge extends Component<BadgeProps> {
-    public render(
-        { type, className, children }: RenderableProps<BadgeProps>,
-    ) {
-        return (
-            <span className={[style.container, style[type], className].join(' ')}>
-                {children}
-            </span>
-        );
-    }
-}
+type TBadgeStyles = 'success' | 'warning' | 'danger' | 'info';
 
-export { Badge };
+type TProps = {
+  children?: ReactNode;
+  type?: TBadgeStyles;
+  icon?: (props: { className: string }) => ReactElement;
+} & JSX.IntrinsicElements['span'];
+
+export const Badge = ({
+  children,
+  className,
+  icon,
+  type = 'success',
+  ...props
+}: TProps) => {
+  const withChildrenStyle = children !== undefined ? style.withChildren : '';
+  const iconOnlyStyle = (children === undefined && icon) ? style.iconOnly : '';
+  return (
+    <span
+      className={`
+        ${style.badge || ''}
+        ${style[type] || ''}
+        ${withChildrenStyle || ''}
+        ${iconOnlyStyle || ''}
+        ${className || ''}
+      `}
+      {...props}>
+      {icon && style.badgeIcon && icon({
+        className: style.badgeIcon || ''
+      })}
+      {children}
+    </span>
+  );
+};

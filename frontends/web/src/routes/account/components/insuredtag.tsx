@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { useTranslation } from 'react-i18next';
+import { Link } from 'wouter';
+import { Shield } from '@/components/icon';
+import style from './insuredtag.module.css';
+
+type TInsuredProps = {
+  code: string;
+};
+
+export const Insured = ({ code }: TInsuredProps) => {
+  const { t } = useTranslation();
+  return (
+    <Link className={style.insured} to={`/market/bitsurance/dashboard/${code}`}>
+      <div>
+        <Shield/>
+        <span>{t('account.insured')}</span>
+      </div>
+    </Link>
+  );
+};
+
+export const InsuredShield = () => {
+  return (
+    <div className={`${style.insured || ''} ${style.insuredShield || ''}`}>
+      <Shield/>
+    </div>
+  );
+};

@@ -1,0 +1,192 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocation, useParams } from 'wouter';
+import { Message } from '@/components/message/message';
+import { BackButton } from '@/components/backbutton/backbutton';
+import { RequestAddressV0Message, MessageVersion, parseMessage, serializeMessage, V0MessageType } from 'request-address';
+import { useConfig } from '@/contexts/ConfigProvider';
+import { getInfo, signBTCMessageUnusedAddress, type ScriptType } from '@/api/account';
+import { Header, GuidedContent, GuideWrapper, Main } from '@/components/layout';
+import { Spinner } from '@/components/spinner/Spinner';
+import { BitsuranceTerms } from '@/components/terms/bitsurance-terms';
+import { useLoad } from '@/hooks/api';
+import { alertUser } from '@/components/alert/Alert';
+import { getBitsuranceURL } from '@/api/bitsurance';
+import { convertScriptType } from '@/utils/request-addess';
+import { useVendorIframeActive } from '@/hooks/vendor-iframe-active';
+import { useVendorIframeResizeHeight } from '@/hooks/vendor-iframe-resize-height';
+import {
+  getVendorIframeMessageTarget,
+  postMessageToVendorIframe,
+  type TVendorIframeMessageTarget,
+} from '@/hooks/vendor-iframe-message';
+import { BitsuranceGuide } from './guide';
+import style from './widget.module.css';
+
+type TRouteParams = {
+  code: string;
+};
+
+export const BitsuranceWidget = () => {
+  const { code = '' } = useParams<TRouteParams>();
+  const { t } = useTranslation();
+  const [, navigate] = useLocation();
+  const { config } = useConfig();
+
+  const iframeURL = useLoad(getBitsuranceURL);
+  const accountInfoResponse = useLoad(getInfo(code));
+  const accountInfo = accountInfoResponse?.success ? accountInfoResponse.info : undefined;
+
+  const { containerRef, height, iframeLoaded, iframeRef, onIframeLoad } = useVendorIframeResizeHeight();
+  const agreedTerms = config?.frontend.skipBitsuranceDisclaimer ?? false;
+  useVendorIframeActive(agreedTerms && !!iframeURL && accountInfoResponse?.success !== false);
+  const signingRef = useRef(false);
+  const onBack = () => {
+    if (!signingRef.current) {
+      navigate(`/market/bitsurance/${code}`, { replace: true });
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener('message', onMessage);
+    return () => {
+      window.removeEventListener('message', onMessage);
+    };
+  });
+
+  const sendAddressWithXPub = (
+    target: TVendorIframeMessageTarget,
+    address: string,
+    sig: string,
+    xpub: string,
+  ) => {
+    const message = serializeMessage({
+      version: MessageVersion.V0,
+      type: V0MessageType.Address,
+      bitcoinAddress: address,
+      extendedPublicKey: xpub,
+      signature: sig,
+    });
+
+    postMessageToVendorIframe(target, message);
+  };
+
+  const getXPub = (wantedScriptType: ScriptType) => {
+    let xpubConfig = accountInfo?.signingConfigurations.find(config =>
+      config.bitcoinSimple?.scriptType === wantedScriptType
+    );
+    return xpubConfig?.bitcoinSimple?.keyInfo.xpub;
+  };
+
+  const handleRequestAddress = (
+    target: TVendorIframeMessageTarget,
+    message: RequestAddressV0Message,
+  ) => {
+    signingRef.current = true;
+    const addressType = message.withScriptType ? convertScriptType(message.withScriptType) : '';
+    const withMessageSignature = message.withMessageSignature ? message.withMessageSignature : '';
+    const withExtendedPublicKey = !!message.withExtendedPublicKey;
+    signBTCMessageUnusedAddress(
+      code,
+      addressType,
+      withMessageSignature)
+      .then(response => {
+        if (response.success) {
+          if (withExtendedPublicKey) {
+            const xpub = getXPub(addressType as ScriptType);
+            if (xpub) {
+              sendAddressWithXPub(target, response.address, response.signature, xpub);
+            } else {
+              alertUser(t('bitsuranceAccount.errorNoXpub'));
+            }
+          } else {
+            sendAddressWithXPub(target, response.address, response.signature, '');
+          }
+        } else {
+          if (!['userAbort', 'wrongKeystore'].includes(response.errorCode || '')) {
+            alertUser(t('unknownError', { errorMessage: response.errorMessage }));
+            console.log('error: ' + response.errorMessage);
+          }
+        }
+      }).finally(() => {
+        signingRef.current = false;
+      });
+
+  };
+
+  const onMessage = (m: MessageEvent) => {
+    if (!iframeURL || !code) {
+      return;
+    }
+
+    const target = getVendorIframeMessageTarget(m, iframeRef.current);
+    // Verify that the message came from the current Bitsurance iframe and its expected origin.
+    if (!target || target.origin !== new URL(iframeURL).origin) {
+      return;
+    }
+
+    // handle requests from Bitsurance iframe
+    try {
+      let message = JSON.parse(m.data);
+      if (message?.type === 'showInsuranceDashboard') {
+        navigate(`/market/bitsurance/dashboard/${code}`);
+        return;
+      }
+
+      message = parseMessage(m.data);
+      switch (message.type) {
+      case V0MessageType.RequestAddress:
+        // we ignore further signing requests
+        // while there is an ongoing one
+        if (!signingRef.current) {
+          handleRequestAddress(target, message);
+        }
+        break;
+      }
+    } catch (e) {
+      console.log(e);
+      // ignore messages that could not be parsed
+      // probably not intended for us, anyway
+    }
+  };
+
+  return (
+    <GuideWrapper>
+      <GuidedContent>
+        <Main>
+          <Header title={t('generic.buySell')} variant="navigation" mobileBackButton onBack={onBack} />
+          <div ref={containerRef} className={style.container}>
+            { accountInfoResponse && !accountInfoResponse.success ? (
+              <div className="content">
+                <Message type="error">{accountInfoResponse.errorMessage || t('genericError')}</Message>
+                <BackButton enableEsc onClick={onBack}>{t('button.back')}</BackButton>
+              </div>
+            ) : !agreedTerms ? (
+              <BitsuranceTerms />
+            ) : (
+              <div style={{ height }}>
+                {!iframeLoaded && <Spinner text={t('loading')} /> }
+                <iframe
+                  onLoad={() => {
+                    onIframeLoad();
+                  }}
+                  ref={iframeRef}
+                  title="Bitsurance"
+                  width="100%"
+                  height={height}
+                  frameBorder="0"
+                  className={style.iframe}
+                  allow="camera; payment"
+                  src={iframeURL}>
+                </iframe>
+              </div>
+            )}
+          </div>
+        </Main>
+      </GuidedContent>
+      <BitsuranceGuide />
+    </GuideWrapper>
+  );
+};

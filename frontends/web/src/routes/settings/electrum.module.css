@@ -1,11 +1,3 @@
-.titleContainer {
-    margin-bottom: var(--space-half);
-}
-
-.titleContainer > span {
-    margin-bottom: 0 !important;
-}
-
 .title {
     margin: 0;
     font-size: var(--size-subheader);
@@ -21,7 +13,7 @@
 }
 
 .servers {
-    background-color: var(--color-white);
+    background-color: var(--background-secondary);
     list-style: none;
     padding: var(--space-quarter) var(--space-half);
     margin: 0;
@@ -49,7 +41,7 @@
 .servers li .server > div:last-child button {
     border: none;
     border-radius: 2px;
-    font-size: var(--size-small);
+    font-size: var(--size-smaller);
     padding: var(--space-quarter) var(--space-half);
     word-break: normal;
 }
@@ -89,7 +81,7 @@
 
 .primary {
     background-color: var(--color-blue);
-    color: var(--color-white);
+    color: var(--color-alt);
     transition: background-color 0.2s ease-in-out;
     will-change: background-color;
 }
@@ -100,7 +92,7 @@
 
 .warning {
     background-color: var(--color-softred);
-    color: var(--color-white);
+    color: var(--color-alt);
     transition: background-color 0.2s ease-in-out;
     will-change: background-color;
 }
@@ -110,11 +102,11 @@
 }
 
 .textarea {
-    width: 100%;
-    border-radius: 2px;
-    border-color: var(--color-mediumgray);
-    padding: var(--space-half) var(--space-half);
+    border-color: var(--background-quaternary);
+    border-radius: var(--radius-xl);
     margin-bottom: var(--space-quarter);
+    padding: var(--space-half);
+    width: 100%;
 }
 
 .block {
@@ -124,7 +116,7 @@
 .addServer {
     margin-top: var(--space-half);
     margin-bottom: var(--space-default);
-    background-color: var(--color-white);
+    background-color: var(--background-secondary);
     padding: var(--space-half);
 }
 
@@ -136,7 +128,7 @@
 }
 
 .addServer > div:first-child p {
-    margin-top: var(--spacing-default);
+    margin-top: var(--space-half);
 }
 
 @media (max-width: 768px) {
@@ -184,10 +176,4 @@
     70% { content: "⠧"; }
     80% { content: "⠇"; }
     90% { content: "⠏"; }
-}
-
-@media screen and (max-width: 640px) {
-    .title {
-        font-size: var(--size-subheader-mobile);
-    }
 }

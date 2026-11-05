@@ -1,16 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package accounts
 
@@ -20,10 +8,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/btcsuite/btcutil"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts/errors"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/errors"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/btcsuite/btcd/btcutil/v2"
 )
 
 // TxType is a type of transaction. See the TxType* constants.
@@ -38,7 +26,7 @@ const (
 	TxTypeSendSelf TxType = "sendSelf"
 )
 
-// TxStatus is the the status of the tx and helps the frontend show the appropriate information.
+// TxStatus is the status of the tx and helps the frontend show the appropriate information.
 type TxStatus string
 
 const (
@@ -47,7 +35,8 @@ const (
 	// TxStatusComplete means the tx is complete, depending on the number of confirmations needed
 	// for the respective coin.
 	TxStatusComplete TxStatus = "complete"
-	// TxStatusFailed means the tx is confirmed but considered failed, e.g. a ETH transaction which
+	// TxStatusFailed means the tx is confirmed but considered failed, e.g. a ETH transaction with a
+	// too low gas limit.
 	TxStatusFailed TxStatus = "failed"
 )
 
@@ -95,6 +84,10 @@ type TransactionData struct {
 	Type TxType
 	// Amount is always >0 and is the amount received or sent (not including the fee).
 	Amount coin.Amount
+	// DeductedAmount is the amount sent, including the fee.
+	// This field is only used if Type is equal to either Send or SendToSelf.
+	// Whem the type is SendToSelf, DeductedAmount is equal to only the fee.
+	DeductedAmount coin.Amount
 	// Balance is balance of the account at the time of this transaction. It is the sum of all
 	// transactions up to this point.
 	// This value is only valid as part of `OrderedTransactions`.
@@ -118,25 +111,29 @@ type TransactionData struct {
 
 	// --- Fields only used for ETH follow
 
-	Gas   uint64
-	Nonce *uint64
+	Gas     uint64
+	Nonce   *uint64
+	IsErc20 bool
 }
 
-// isConfirmed returns true if the transaction has has at least one confirmation.
+// isConfirmed returns true if the transaction has at least one confirmation.
 func (tx *TransactionData) isConfirmed() bool {
 	return tx.Height > 0
 }
 
 // byHeight defines the methods needed to satisify sort.Interface to sort transactions by their
 // height. Special case for unconfirmed transactions (height <=0), which come last. If the height
-// is the same for two txs, they are sorted by the created (first seen) time instead.
+// is the same for two txs, or both txs are unconfirmed they are sorted by the created (first seen)
+// time instead.
 type byHeight []*TransactionData
 
 func (s byHeight) Len() int { return len(s) }
 func (s byHeight) Less(i, j int) bool {
 	// Secondary sort by the time we've first seen the tx in the app.
-	if s[i].Height == s[j].Height && s[i].CreatedTimestamp != nil && s[j].CreatedTimestamp != nil {
-		return s[i].CreatedTimestamp.Before(*s[j].CreatedTimestamp)
+	if s[i].CreatedTimestamp != nil && s[j].CreatedTimestamp != nil {
+		if (s[i].Height == s[j].Height) || (s[i].Height <= 0 && s[j].Height <= 0) {
+			return s[i].CreatedTimestamp.Before(*s[j].CreatedTimestamp)
+		}
 	}
 	if s[j].Height <= 0 {
 		return true
@@ -158,25 +155,46 @@ func NewOrderedTransactions(txs []*TransactionData) OrderedTransactions {
 
 	balance := big.NewInt(0)
 	for i := len(txs) - 1; i >= 0; i-- {
+		deductedAmount := coin.NewAmountFromInt64(0)
 		tx := txs[i]
 		switch tx.Type {
 		case TxTypeReceive:
-			balance.Add(balance, tx.Amount.BigInt())
+			if tx.Status != TxStatusFailed {
+				balance.Add(balance, tx.Amount.BigInt())
+			}
 		case TxTypeSend:
-			balance.Sub(balance, tx.Amount.BigInt())
-			// Subtract fee as well.
+			if tx.Status != TxStatusFailed {
+				balance.Sub(balance, tx.Amount.BigInt())
+			}
+			deductedAmount = tx.Amount
+			// Subtract fee as well. Ethereum: it is deducted even if the tx failed, as the tx was
+			// mined.
 			if tx.Fee != nil && !tx.FeeIsDifferentUnit {
 				balance.Sub(balance, tx.Fee.BigInt())
+				deductedAmount = coin.SumAmounts(tx.Amount, *tx.Fee)
 			}
 		case TxTypeSendSelf:
-			// Subtract only fee.
+			// Subtract only fee. Ethereum: it is deducted even if the tx failed, as the tx was
+			// mined.
 			if tx.Fee != nil && !tx.FeeIsDifferentUnit {
 				balance.Sub(balance, tx.Fee.BigInt())
+				deductedAmount = *tx.Fee
 			}
 		}
 		tx.Balance = coin.NewAmount(balance)
+		tx.DeductedAmount = deductedAmount
 	}
 	return txs
+}
+
+// LatestConfirmedBalance returns the balance at the newest confirmed transaction.
+func (txs OrderedTransactions) LatestConfirmedBalance() coin.Amount {
+	for _, tx := range txs {
+		if tx.isConfirmed() {
+			return tx.Balance
+		}
+	}
+	return coin.NewAmountFromInt64(0)
 }
 
 // TimeseriesEntry contains the balance of the account at the given time.

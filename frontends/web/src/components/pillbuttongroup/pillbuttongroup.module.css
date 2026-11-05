@@ -1,0 +1,57 @@
+.pillbuttongroup {
+	align-items: baseline;
+	display: flex;
+	flex-wrap: wrap;
+	flex-grow: 1;
+	gap: var(--space-quarter);
+}
+
+.pillbuttongroup button {
+	appearance: none;
+	background: var(--background-secondary);
+	border: 2px solid var(--background-secondary);
+	border-radius: 36px;
+	color: var(--color-default);
+	font-size: min(var(--size-default), 18px);
+	line-height: 1.75;
+	margin-bottom: var(--space-quarter);
+}
+
+.pillbuttongroup.medium button {
+	padding: 0 12px;
+}
+
+.pillbuttongroup.large button {
+	padding: 2px 24px;
+}
+
+.pillbuttongroup button:hover:not([disabled]) {
+	cursor: pointer;
+}
+
+.pillbuttongroup button:hover:is([disabled]) {
+	cursor: not-allowed;
+}
+
+.pillbuttongroup button:focus {
+	border-color: var(--color-blue);
+	outline: none;
+}
+
+.pillbuttongroup button.active {
+	background: var(--color-blue);
+	border-color: var(--color-blue);
+	color: var(--color-alt);
+}
+
+.pillbuttongroup button[disabled] {
+	background: var(--background-quaternary);
+	border-color: var(--background-quaternary);
+	color: var(--color-alt);
+}
+
+:global(.dark-mode) .pillbuttongroup button[disabled] {
+	background: var(--background-secondary);
+	border-color: var(--background-secondary);
+	color: var(--color-disabled);
+}

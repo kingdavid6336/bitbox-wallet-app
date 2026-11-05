@@ -1,481 +1,1091 @@
-/**
- * Copyright 2020 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { createChart, IChartApi, BarsInfo, LineData, LineStyle, LogicalRange, ISeriesApi, UTCTimestamp, MouseEventHandler } from 'lightweight-charts';
-import { Component, createRef, h, RenderableProps } from 'preact';
-import { Fiat } from '../../../api/account';
-import { translate, TranslateProps } from '../../../decorators/translate';
-import { formatCurrency, formatNumber } from '../../../components/rates/rates';
-import * as styles from './chart.module.css';
+import { MutableRefObject, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { AutoscaleInfoProvider, createChart, IChartApi, LineStyle, ISeriesApi, UTCTimestamp, MouseEventParams, ColorType } from 'lightweight-charts';
+import type { TChartData, TChartTransactionMarkerAmount, FormattedLineData } from '@/api/account';
+import { Skeleton } from '@/components/skeleton/skeleton';
+import { Amount } from '@/components/amount/amount';
+import { useSearchParams } from '@/utils/router-compatability';
+import { PercentageDiff } from './percentage-diff';
+import { Filters } from './filters';
+import { useDarkmode } from '@/hooks/darkmode';
+import { RatesContext } from '@/contexts/RatesContext';
+import { AppContext, TChartDisplay, TPortfolioPercentageType } from '@/contexts/AppContext';
+import { AmountUnit } from '@/components/amount/amount-with-unit';
+import { triggerHapticFeedback, triggerStrongHapticFeedback } from '@/utils/transport-mobile';
+import { LinechartGray } from '@/components/icon';
+import { calculateChartValueDifference, getChartVisibleRange } from './chart-range';
+import { Arrow } from '@/components/transactions/components/arrows';
+import type { TChartMarkerData, TMarkerSource } from './chart-markers';
+import { buildChartMarkers } from './chart-markers';
+import styles from './chart.module.css';
 
-export type ChartData = LineData[];
+type TProps = {
+  className?: string;
+  data?: TChartData;
+  noDataPlaceholder?: JSX.Element;
+  hideAmounts?: boolean;
+};
 
-interface ChartProps {
-    // If undefined, data is missing.
-    dataDaily?: ChartData;
-    dataHourly?: ChartData;
-    fiatUnit: Fiat;
-    total: number | null;
-    isUpToDate: boolean;
-}
+const defaultData: Readonly<TChartData> = {
+  chartDataMissing: true,
+  chartDataDaily: [],
+  chartDataHourly: [],
+  chartTransactionMarkers: { daily: [], hourly: [] },
+  chartFiat: 'USD',
+  chartPerformance: {
+    week: { moneyWeightedReturn: null, startTimestamp: null },
+    month: { moneyWeightedReturn: null, startTimestamp: null },
+    year: { moneyWeightedReturn: null, startTimestamp: null },
+    all: { moneyWeightedReturn: null, startTimestamp: null },
+  },
+  chartTotal: null,
+  formattedChartTotal: null,
+  chartIsUpToDate: false,
+  lastTimestamp: 0,
+};
 
-interface State {
-    display: 'week' | 'month' | 'year' | 'all';
-    source: 'daily' | 'hourly';
-    difference?: number;
-    diffSince?: string;
-    toolTipVisible: boolean;
-    toolTipValue?: number;
-    toolTipTop: number;
-    toolTipLeft: number;
-    toolTipTime: number;
-}
+const switchedBadgeVisibleMs = 2000;
+const switchedBadgeFadeMs = 180;
 
-type Props = ChartProps & TranslateProps;
+const MARKER_HIT_RADIUS_PX = 16;
+const MARKER_MIN_SHAPE_SIZE_PX = 12;
+const MARKER_MAX_SHAPE_SIZE_PX = 30;
+const MARKER_SNAP_RADIUS_PX = 10;
+const TOOLTIP_EDGE_MARGIN_PX = 8;
+const TOOLTIP_MARKER_GAP_PX = 12;
 
-class Chart extends Component<Props, State> {
-    private ref = createRef();
-    private refToolTip = createRef();
-    private chart?: IChartApi;
-    private lineSeries?: ISeriesApi<'Area'>;
-    private resizeTimerID?: any;
-    private height: number = 300;
+type TTooltipData = {
+  markerID?: string;
+  toolTipAnchorX: number;
+  toolTipAnchorY: number;
+  toolTipTime: number;
+  toolTipValue?: string;
+  toolTipVisible: boolean;
+};
 
-    public readonly state: State = {
-        display: 'all',
-        source: 'daily',
-        toolTipVisible: false,
-        toolTipValue: undefined,
-        toolTipTop: 0,
-        toolTipLeft: 0,
-        toolTipTime: 0,
-    };
+const hiddenTooltipData: TTooltipData = {
+  toolTipAnchorX: 0,
+  toolTipAnchorY: 0,
+  toolTipTime: 0,
+  toolTipVisible: false,
+};
 
-    public componentDidMount() {
-        this.createChart();
+const updateRange = (
+  chart: MutableRefObject<IChartApi | undefined>,
+  chartDisplay: TChartDisplay,
+  startTimestamp: number | null,
+) => {
+  if (!chart.current) {
+    return;
+  }
+
+  const range = getChartVisibleRange(chartDisplay, startTimestamp);
+  if (range) {
+    chart.current.timeScale().setVisibleRange(range);
+  } else {
+    chart.current.timeScale().fitContent();
+  }
+};
+
+const renderDate = (
+  date: number,
+  lang: string,
+  src: string
+) => {
+  return new Date(date).toLocaleString(
+    lang,
+    {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      ...(src === 'hourly' ? {
+        hour: '2-digit',
+        minute: '2-digit',
+      } : null)
+    }
+  );
+};
+
+const autoScaleProvider: AutoscaleInfoProvider = (original) => {
+  const res = original();
+  if (!res) {
+    return null;
+  }
+
+  let { minValue, maxValue } = res.priceRange;
+  const diff = maxValue - minValue;
+
+  // if all values are equal or range is extremely small
+  if (diff === 0 || diff < Math.abs(maxValue) * 0.001) {
+    const center = maxValue;
+
+    let padding: number;
+
+    // define a natural padding strategy
+    if (center === 0) {
+      padding = 0.0001;
+    } else if (center < 0.001) {
+      padding = 0.0001; // for very small BTC-like values
+    } else if (center < 1) {
+      padding = 0.1;
+    } else if (center < 1000) {
+      padding = center * 0.1;
+    } else {
+      padding = center * 0.05;
     }
 
-    public componentWillUnmount() {
-        window.removeEventListener('resize', this.onResize);
-        if (this.chart) {
-            this.chart.timeScale().unsubscribeVisibleLogicalRangeChange(this.calculateChange);
-            this.chart.unsubscribeCrosshairMove(this.handleCrosshair as MouseEventHandler);
-        }
-    }
+    minValue = center - padding;
+    maxValue = center + padding;
+  }
 
-    public componentDidUpdate(prev) {
-        const { dataDaily, dataHourly } = this.props;
-        if (!this.chart) {
-            this.createChart();
-        }
-        if (
-            (this.lineSeries && prev.dataDaily && prev.dataHourly && dataDaily && dataHourly)
-            && (
-                prev.dataDaily.length !== dataDaily.length
-                || prev.dataHourly.length !== dataHourly.length
-            )
-        ) {
-            const data = this.state.source === 'hourly' ? dataHourly : dataDaily;
-            this.lineSeries.setData(data);
-        }
-    }
+  // clamp to zero (balances never negative)
+  if (minValue < 0) {
+    minValue = 0;
+  }
 
-    private hasData = () => {
-        return this.props.dataDaily && this.props.dataDaily.length;
-    }
+  return {
+    priceRange: {
+      minValue,
+      maxValue,
+    },
+  };
+};
 
-    private createChart = () => {
-        if (this.ref.current && this.hasData()) {
-            if (!this.chart) {
-                this.chart = createChart(this.ref.current, {
-                    width: this.ref.current.offsetWidth,
-                    height: this.height,
-                    handleScroll: false,
-                    handleScale: false,
-                    crosshair: {
-                        vertLine: {
-                            visible: false,
-                            labelVisible: false,
-                        },
-                        horzLine: {
-                            visible: false,
-                            labelVisible: false,
-                        },
-                        mode: 1,
-                    },
-                    grid: {
-                        vertLines: {
-                            visible: false,
-                        },
-                        horzLines: {
-                            color: '#dedede',
-                            style: LineStyle.Solid,
-                            visible: true,
-                        },
-                    },
-                    layout: {
-                        backgroundColor: '#F5F5F5',
-                        fontSize: 11,
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Ubuntu", "Roboto", "Oxygen", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
-                        textColor: '#1D1D1B',
-                    },
-                    leftPriceScale: {
-                        borderVisible: false,
-                        drawTicks: false,
-                        visible: true,
-                        entireTextOnly: true,
-                    },
-                    localization: {
-                        locale: this.props.i18n.language,
-                    },
-                    rightPriceScale: {
-                        visible: false,
-                        drawTicks: false,
-                    },
-                    timeScale: {
-                        borderVisible: false,
-                        timeVisible: false,
-                    }
-                });
-            }
-            this.lineSeries = this.chart.addAreaSeries({
-                priceLineVisible: false,
-                lastValueVisible: false,
-                priceFormat: {
-                    type: 'volume',
-                },
-                topColor: 'rgba(94, 148, 192, 0.5)',
-                bottomColor: 'rgba(94, 148, 192, 0.02)',
-                lineColor: 'rgba(94, 148, 192, 1)',
-                crosshairMarkerRadius: 6,
-            });
-            this.lineSeries.setData(this.props.dataDaily as ChartData);
-            this.chart.timeScale().subscribeVisibleLogicalRangeChange(this.calculateChange);
-            this.chart.subscribeCrosshairMove(this.handleCrosshair as MouseEventHandler);
-            this.chart.timeScale().fitContent();
-            window.addEventListener('resize', this.onResize);
-            setTimeout(() => this.ref.current?.classList.remove(styles.invisible), 200);
-        }
-    }
+export const Chart = ({
+  className = '',
+  data = defaultData,
+  noDataPlaceholder,
+  hideAmounts = false
+}: TProps) => {
+  const height: number = 300;
+  const mobileHeight: number = 150;
+  const hasData = data.chartDataDaily && data.chartDataDaily.length > 0;
+  const hasHourlyData = data.chartDataHourly && data.chartDataHourly.length > 0;
 
-    private onResize = () => {
-        if (this.resizeTimerID) {
-            clearTimeout(this.resizeTimerID);
-        }
-        this.resizeTimerID = setTimeout(() => {
-            if (!this.chart || !this.ref.current) {
-                return;
-            }
-            this.chart.resize(this.ref.current.offsetWidth, this.height);
-        }, 200);
-    }
+  const { t, i18n } = useTranslation();
+  const { isDarkMode } = useDarkmode();
+  const {
+    chartDisplay,
+    portfolioPercentageType,
+    setChartDisplay,
+    updatePortfolioPercentageType,
+  } = useContext(AppContext);
+  const { defaultCurrency, rotateDefaultCurrency } = useContext(RatesContext);
+  const [searchParams] = useSearchParams();
 
-    private getUTCRange = () => {
-        const now = new Date();
-        const utcYear = now.getUTCFullYear();
-        const utcMonth = now.getUTCMonth();
-        const utcDate = now.getUTCDate();
-        const utcHours = now.getUTCHours();
-        const to = new Date(Date.UTC(utcYear, utcMonth, utcDate, utcHours, 0, 0, 0));
-        const from = new Date(Date.UTC(utcYear, utcMonth, utcDate, utcHours, 0, 0, 0));
-        return {
-            utcYear,
-            utcMonth,
-            utcDate,
-            to,
-            from,
-        };
-    }
+  const ref = useRef<HTMLDivElement>(null);
+  const refToolTip = useRef<HTMLSpanElement>(null);
+  const chart = useRef<IChartApi>();
+  const lineSeries = useRef<ISeriesApi<'Area'>>();
+  const chartPointByTime = useRef<Record<number, {
+    formattedValue: string;
+    value: number;
+  }>>({});
+  const markerDataByID = useRef<Record<string, TChartMarkerData>>({});
+  const markerIDByTime = useRef<Record<number, string>>({});
+  const markerTimes = useRef<number[]>([]);
+  const lastHapticTime = useRef<number | null>(null);
+  const lastMarkerHapticID = useRef<string | null>(null);
+  const snappedMarkerID = useRef<string | null>(null);
+  const switchedBadgeHideTimeout = useRef<number>();
+  const switchedBadgeClearTimeout = useRef<number>();
 
-    private displayWeek = () => {
-        if (this.state.source !== 'hourly' && this.lineSeries && this.props.dataHourly && this.chart) {
-            this.lineSeries.setData(this.props.dataHourly);
-            this.chart.applyOptions({ timeScale: { timeVisible: true } });
-        }
-        this.setState(
-            { display: 'week', source: 'hourly' },
-            () => {
-                if (!this.chart) {
-                    return;
-                }
-                const { utcDate, from, to } = this.getUTCRange();
-                from.setUTCDate(utcDate - 7);
-                this.chart.timeScale().setVisibleRange({
-                    from: from.getTime() / 1000 as UTCTimestamp,
-                    to: to.getTime() / 1000 as UTCTimestamp,
-                });
-            }
-        );
-    }
+  const source = chartDisplay === 'week' ? 'hourly' : 'daily';
+  const rangeStartTimestamp = data.chartPerformance[chartDisplay].startTimestamp;
+  const [valueDifference, setValueDifference] = useState<number>();
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [isSwitchedBadgeVisible, setIsSwitchedBadgeVisible] = useState(false);
+  const [switchedToType, setSwitchedToType] = useState<TPortfolioPercentageType>();
+  const [tooltipData, setTooltipData] = useState<TTooltipData>(hiddenTooltipData);
+  const [showAnimationOverlay, setAnimationOverlay] = useState(true);
+  const hasChartAnimationParam = searchParams.get('with-chart-animation');
 
-    private displayMonth = () => {
-        if (this.state.source !== 'daily' && this.lineSeries && this.props.dataDaily && this.chart) {
-            this.lineSeries.setData(this.props.dataDaily);
-            this.chart.applyOptions({ timeScale: { timeVisible: false } });
-        }
-        this.setState(
-            { display: 'month', source: 'daily' },
-            () => {
-                if (!this.chart) {
-                    return;
-                }
-                const { utcMonth, from, to } = this.getUTCRange();
-                from.setUTCMonth(utcMonth - 1);
-                this.chart.timeScale().setVisibleRange({
-                    from: from.getTime() / 1000 as UTCTimestamp,
-                    to: to.getTime() / 1000 as UTCTimestamp,
-                });
-            }
-        );
+  const clearMarkerSnap = useCallback(() => {
+    if (snappedMarkerID.current !== null) {
+      chart.current?.clearCrosshairPosition();
+      snappedMarkerID.current = null;
     }
+  }, []);
 
-    private displayYear = () => {
-        if (this.state.source !== 'daily' && this.lineSeries && this.props.dataDaily && this.chart) {
-            this.lineSeries.setData(this.props.dataDaily);
-            this.chart.applyOptions({ timeScale: { timeVisible: false } });
-        }
-        this.setState(
-            { display: 'year', source: 'daily' },
-            () => {
-                if (!this.chart) {
-                    return;
-                }
-                const { utcYear, from, to } = this.getUTCRange();
-                from.setUTCFullYear(utcYear - 1);
-                this.chart && this.chart.timeScale().setVisibleRange({
-                    from: from.getTime() / 1000 as UTCTimestamp,
-                    to: to.getTime() / 1000 as UTCTimestamp,
-                });
-            }
-        );
+  const hideTooltip = useCallback(() => {
+    lastMarkerHapticID.current = null;
+    setTooltipData(hiddenTooltipData);
+  }, []);
+
+  useEffect(() => {
+    clearMarkerSnap();
+    hideTooltip();
+  }, [chartDisplay, clearMarkerSnap, defaultCurrency, hideTooltip]);
+
+  const getMarkerPosition = useCallback((markerID: string) => {
+    if (!chart.current || !lineSeries.current) {
+      return null;
     }
-
-    private displayAll = () => {
-        if (this.state.source !== 'daily' && this.lineSeries && this.props.dataDaily && this.chart) {
-            this.lineSeries.setData(this.props.dataDaily);
-            this.chart.applyOptions({ timeScale: { timeVisible: false } });
-        }
-        this.setState(
-            { display: 'all', source: 'daily' },
-            () => {
-                if (!this.chart) {
-                    return;
-                }
-                this.chart.timeScale().fitContent();
-            }
-        );
+    const markerData = markerDataByID.current[markerID];
+    const markerValue = (
+      markerData
+        ? chartPointByTime.current[markerData.markerTime]?.value
+        : undefined
+    );
+    if (!markerData || markerValue === undefined) {
+      return null;
     }
+    const x = chart.current.timeScale().timeToCoordinate(markerData.markerTime as UTCTimestamp);
+    const y = lineSeries.current.priceToCoordinate(markerValue);
+    return x === null || y === null ? null : { x, y };
+  }, []);
 
-    private calculateChange = () => {
-        const data = this.props[this.state.source === 'daily' ? 'dataDaily' : 'dataHourly'];
-        if (!data || !this.chart || !this.lineSeries) {
-            return;
-        }
-        const logicalrange = this.chart.timeScale().getVisibleLogicalRange() as LogicalRange;
-        const visiblerange = this.lineSeries.barsInLogicalRange(logicalrange) as BarsInfo;
-        if (!visiblerange) {
-            // if the chart is empty, during first load, barsInLogicalRange is null
-            return;
-        }
-        const rangeFrom = Math.max(Math.floor(visiblerange.barsBefore), 0);
-        if (!data[rangeFrom]){
-            // when data series have changed it triggers subscribeVisibleLogicalRangeChange
-            // but at this point the setVisibleRange has not executed what the new range
-            // should be and therefore barsBefore might still point to the old range
-            // so we have to ignore this call and expect setVisibleRange with correct range
-            this.setState({ difference: 0, diffSince: '' });
-            return;
-        }
-        const valueFrom = data[rangeFrom].value;
-        const valueTo = this.props.total;
-        const valueDiff = valueTo ? valueTo - valueFrom : 0;
-        this.setState({
-            difference: ((valueDiff / valueFrom) * 100),
-            diffSince: `${data[rangeFrom].value.toFixed(2)} (${this.renderDate(Number(data[rangeFrom].time) * 1000)})`
-        });
+  const setChartMarkers = useCallback((nextSource: TMarkerSource) => {
+    const currentChart = chart.current;
+    const currentSeries = lineSeries.current;
+    if (!currentChart || !currentSeries) {
+      return;
     }
-
-    private handleCrosshair = ({ point, time, seriesPrices }) => {
-        if (!this.refToolTip) {
-            return;
-        }
-        const tooltip = this.refToolTip.current;
-        const parent = tooltip.parentNode;
-        if (
-            !this.lineSeries || !point || !time
-            || point.x < 0 || point.x > parent.clientWidth
-            || point.y < 0 || point.y > parent.clientHeight
-        ) {
-            this.setState({
-                toolTipVisible: false
-            });
-            return;
-        }
-        const price = seriesPrices.get(this.lineSeries);
-        const coordinate = this.lineSeries.priceToCoordinate(price);
-        if (!coordinate) {
-            return;
-        }
-        const toolTipTop = Math.max(coordinate - 70, 0);
-        const toolTipLeft =  Math.max(40, Math.min(parent.clientWidth - 140, point.x + 40 - 70));
-        this.setState({
-            toolTipVisible: true,
-            toolTipValue: price,
-            toolTipTop,
-            toolTipLeft,
-            toolTipTime: time,
-        });
-    }
-
-    private renderDate = (date) => {
-        return new Date(date).toLocaleString(
-            this.props.i18n.language,
-            {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                ...(this.state.source === 'hourly' ? {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                } : null)
-            }
-        );
-    }
-
-    public render(
-        { t, dataDaily, fiatUnit, isUpToDate, total }: RenderableProps<Props>,
-        {
-            difference,
-            diffSince,
-            display,
-            toolTipVisible,
-            toolTipValue,
-            toolTipTop,
-            toolTipLeft,
-            toolTipTime,
-        }: State,
+    const rootStyle = getComputedStyle(document.documentElement);
+    const chartData = nextSource === 'hourly' ? data.chartDataHourly : data.chartDataDaily;
+    const transactionMarkers = data.chartTransactionMarkers?.[nextSource] || [];
+    const logicalRange = currentChart.timeScale().getVisibleLogicalRange();
+    const visibleBars = (
+      logicalRange
+        ? Math.max(logicalRange.to - logicalRange.from, 1)
+        : 1
+    );
+    const barSpacing = currentChart.timeScale().width() / visibleBars;
+    const markerBaseSize = Math.min(
+      Math.max(barSpacing, MARKER_MIN_SHAPE_SIZE_PX),
+      MARKER_MAX_SHAPE_SIZE_PX,
+    );
+    const nextMarkers = buildChartMarkers(transactionMarkers, nextSource, chartData, {
+      mixed: rootStyle.getPropertyValue('--color-gray-alt').trim(),
+      outline: isDarkMode ? '#1D1D1B' : '#F5F5F5',
+      receive: rootStyle.getPropertyValue('--color-lightblue').trim(),
+      send: rootStyle.getPropertyValue('--color-softred').trim(),
+    }, MARKER_MIN_SHAPE_SIZE_PX / markerBaseSize);
+    currentSeries.setMarkers(nextMarkers.markers);
+    markerDataByID.current = nextMarkers.markerDataByID;
+    markerIDByTime.current = nextMarkers.markerIDByTime;
+    markerTimes.current = nextMarkers.markerData.map(marker => marker.markerTime);
+    if (
+      snappedMarkerID.current !== null
+      && !nextMarkers.markerDataByID[snappedMarkerID.current]
     ) {
-        if (dataDaily === undefined) {
-            return (
-                <p className={styles.chartUpdatingMessage}>
-                    {t('chart.dataMissing')}
-                </p>
-            );
-        }
-        const diff = difference && Number.isFinite(difference) ? (
-            <span className={styles[difference < 0 ? 'down' : 'up']} title={diffSince}>
-                <span className={styles.arrow}>
-                    {difference < 0 ? (<ArrowUp />) : (<ArrowDown />)}
-                </span>
-                <span className={styles.diffValue}>
-                    {formatNumber(difference, 2)}
-                    <span className={styles.diffUnit}>%</span>
-                </span>
-            </span>
-        ) : null;
-
-        return (
-            <section className={styles.chart}>
-                <header>
-                    <div className={styles.summary}>
-                        {total ? (
-                            <div className={styles.totalValue}>
-                                {formatCurrency(total, fiatUnit)}
-                                <span className={styles.totalUnit}>{fiatUnit}</span>
-                            </div>
-                        ) : null}
-                        {diff}
-                    </div>
-                    { this.hasData() ? (
-                        <div className={styles.filters}>
-                            <button className={display === 'week' ? styles.filterActive : undefined} onClick={this.displayWeek}>
-                                {t('chart.filter.week')}
-                            </button>
-                            <button className={display === 'month' ? styles.filterActive : undefined} onClick={this.displayMonth}>
-                                {t('chart.filter.month')}
-                            </button>
-                            <button className={display === 'year' ? styles.filterActive : undefined} onClick={this.displayYear}>
-                                {t('chart.filter.year')}
-                            </button>
-                            <button className={display === 'all' ? styles.filterActive : undefined} onClick={this.displayAll}>
-                                {t('chart.filter.all')}
-                            </button>
-                        </div>
-                    ) : null }
-                </header>
-                <div className={styles.chartCanvas}>
-                    <div className={styles.chartUpdatingMessage}>
-                        {!isUpToDate ? t('chart.dataUpdating') : null}
-                    </div>
-                    <div ref={this.ref} className={styles.invisible}></div>
-                    <span
-                        ref={this.refToolTip}
-                        className={styles.tooltip}
-                        style={`left: ${toolTipLeft}px; top: ${toolTipTop}px;`}
-                        hidden={!toolTipVisible}>
-                        {toolTipValue !== undefined ? (
-                            <span>
-                                <h2 className={styles.toolTipValue}>
-                                    {formatCurrency(toolTipValue, fiatUnit)}
-                                    <span className={styles.toolTipUnit}>{fiatUnit}</span>
-                                </h2>
-                                <span className={styles.toolTipTime}>
-                                    {this.renderDate(toolTipTime * 1000)}
-                                </span>
-                            </span>
-                        ): null}
-                    </span>
-                </div>
-            </section>
-        );
+      clearMarkerSnap();
     }
-}
+    const priceScaleWidth = currentChart.priceScale('left').width();
+    setTooltipData(current => {
+      if (!current.markerID) {
+        return current;
+      }
+      const markerData = nextMarkers.markerDataByID[current.markerID];
+      const markerPosition = markerData ? getMarkerPosition(current.markerID) : null;
+      if (!markerData || !markerPosition) {
+        return hiddenTooltipData;
+      }
+      return {
+        ...current,
+        toolTipAnchorX: markerPosition.x + priceScaleWidth,
+        toolTipAnchorY: markerPosition.y,
+        toolTipTime: markerData.markerTime,
+        toolTipValue: chartPointByTime.current[markerData.markerTime]?.formattedValue || '',
+      };
+    });
+  }, [
+    data.chartDataDaily,
+    data.chartDataHourly,
+    data.chartTransactionMarkers,
+    clearMarkerSnap,
+    getMarkerPosition,
+    isDarkMode,
+  ]);
 
-const HOC = translate<ChartProps>()(Chart);
+  const findMarkerNearX = useCallback((time: number, pointX: number) => {
+    const markerIDAtTime = markerIDByTime.current[time];
+    if (markerIDAtTime) {
+      return markerIDAtTime;
+    }
 
-export { HOC as Chart };
+    const times = markerTimes.current;
+    let low = 0;
+    let high = times.length;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      const middleTime = times[middle];
+      if (middleTime === undefined) {
+        return undefined;
+      }
+      if (middleTime < time) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
 
-export const ArrowUp = () => (
-    <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round">
-        <line x1="12" y1="5" x2="12" y2="19"></line>
-        <polyline points="19 12 12 19 5 12"></polyline>
-    </svg>
-);
+    let nearestMarkerID: string | undefined;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const index of [low - 1, low]) {
+      const markerTime = times[index];
+      if (markerTime === undefined) {
+        continue;
+      }
+      const markerX = chart.current?.timeScale().timeToCoordinate(markerTime as UTCTimestamp);
+      const markerID = markerIDByTime.current[markerTime];
+      if (markerX === null || markerX === undefined || !markerID) {
+        continue;
+      }
+      const distance = Math.abs(pointX - markerX);
+      if (distance <= MARKER_SNAP_RADIUS_PX && distance < nearestDistance) {
+        nearestMarkerID = markerID;
+        nearestDistance = distance;
+      }
+    }
+    return nearestMarkerID;
+  }, []);
 
-export const ArrowDown = () => (
-    <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round">
-        <line x1="12" y1="19" x2="12" y2="5"></line>
-        <polyline points="5 12 12 5 19 12"></polyline>
-    </svg>
-);
+  const showChartTooltip = useCallback((
+    params: Pick<MouseEventParams, 'point' | 'time'>,
+    markerID?: string,
+  ): boolean => {
+    const currentChart = chart.current;
+    const currentSeries = lineSeries.current;
+    if (!currentChart || !currentSeries || !params.point) {
+      return false;
+    }
+    const markerData = markerID ? markerDataByID.current[markerID] : undefined;
+    const tooltipTime = (
+      markerData?.markerTime
+      ?? (typeof params.time === 'number' ? params.time : undefined)
+    );
+    if (tooltipTime === undefined) {
+      return false;
+    }
+    const chartPoint = chartPointByTime.current[tooltipTime];
+    const markerPosition = markerID ? getMarkerPosition(markerID) : null;
+    if (markerID && (!markerData || !markerPosition || !chartPoint)) {
+      return false;
+    }
+    if (markerData && markerPosition && chartPoint) {
+      currentChart.setCrosshairPosition(
+        chartPoint.value,
+        markerData.markerTime as UTCTimestamp,
+        currentSeries,
+      );
+      snappedMarkerID.current = markerData.id;
+    } else {
+      snappedMarkerID.current = null;
+    }
+    const anchorX = markerPosition?.x ?? params.point.x;
+    const anchorY = (
+      markerPosition?.y ?? (
+        chartPoint?.value === undefined
+          ? params.point.y
+          : currentSeries.priceToCoordinate(chartPoint.value)
+      )
+    );
+    if (anchorY === null) {
+      return false;
+    }
+
+    setTooltipData({
+      markerID,
+      toolTipAnchorX: anchorX + currentChart.priceScale('left').width(),
+      toolTipAnchorY: anchorY,
+      toolTipVisible: true,
+      toolTipValue: chartPoint?.formattedValue || '',
+      toolTipTime: tooltipTime,
+    });
+    return true;
+  }, [getMarkerPosition]);
+
+  useLayoutEffect(() => {
+    const tooltip = refToolTip.current;
+    const parent = tooltip?.parentNode as HTMLDivElement | null;
+    if (!tooltipData.toolTipVisible || !tooltip || !parent) {
+      return;
+    }
+    const tooltipWidth = tooltip.offsetWidth;
+    const tooltipHeight = tooltip.offsetHeight;
+    if (tooltipWidth === 0 || tooltipHeight === 0) {
+      return;
+    }
+    const maxLeft = Math.max(
+      TOOLTIP_EDGE_MARGIN_PX,
+      parent.clientWidth - tooltipWidth - TOOLTIP_EDGE_MARGIN_PX,
+    );
+    const maxTop = Math.max(
+      TOOLTIP_EDGE_MARGIN_PX,
+      parent.clientHeight - tooltipHeight - TOOLTIP_EDGE_MARGIN_PX,
+    );
+    let left = Math.max(
+      TOOLTIP_EDGE_MARGIN_PX,
+      Math.min(maxLeft, tooltipData.toolTipAnchorX - tooltipWidth / 2),
+    );
+    const above = tooltipData.toolTipAnchorY - tooltipHeight - TOOLTIP_MARKER_GAP_PX;
+    const below = tooltipData.toolTipAnchorY + TOOLTIP_MARKER_GAP_PX;
+    let top = (
+      above >= TOOLTIP_EDGE_MARGIN_PX
+        ? above
+        : Math.min(maxTop, below)
+    );
+
+    if (isMobile && tooltipData.markerID) {
+      const right = tooltipData.toolTipAnchorX + TOOLTIP_MARKER_GAP_PX;
+      const leftOfMarker = tooltipData.toolTipAnchorX - TOOLTIP_MARKER_GAP_PX - tooltipWidth;
+      const fitsRight = right >= TOOLTIP_EDGE_MARGIN_PX && right <= maxLeft;
+      const fitsLeft = leftOfMarker >= TOOLTIP_EDGE_MARGIN_PX && leftOfMarker <= maxLeft;
+
+      if (fitsRight || fitsLeft) {
+        const placeRight = (
+          fitsRight && (
+            !fitsLeft || tooltipData.toolTipAnchorX <= parent.clientWidth / 2
+          )
+        );
+        left = placeRight ? right : leftOfMarker;
+        top = Math.max(
+          TOOLTIP_EDGE_MARGIN_PX,
+          Math.min(maxTop, tooltipData.toolTipAnchorY - tooltipHeight / 2),
+        );
+      } else if (above >= TOOLTIP_EDGE_MARGIN_PX) {
+        top = above;
+      } else if (below <= maxTop) {
+        top = below;
+      } else {
+        top = (
+          tooltipData.toolTipAnchorY < parent.clientHeight / 2
+            ? maxTop
+            : TOOLTIP_EDGE_MARGIN_PX
+        );
+      }
+    }
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  }, [
+    data.chartTransactionMarkers,
+    isMobile,
+    tooltipData.markerID,
+    tooltipData.toolTipAnchorX,
+    tooltipData.toolTipAnchorY,
+    tooltipData.toolTipTime,
+    tooltipData.toolTipValue,
+    tooltipData.toolTipVisible,
+  ]);
+
+  const handleChartClick = useCallback((params: MouseEventParams) => {
+    if (!isMobile) {
+      return;
+    }
+    if (params.point) {
+      let closestMarkerID: string | undefined;
+      let closestDistance = MARKER_HIT_RADIUS_PX;
+      for (const markerID of Object.keys(markerDataByID.current)) {
+        const markerPosition = getMarkerPosition(markerID);
+        if (!markerPosition) {
+          continue;
+        }
+        const distance = Math.hypot(
+          params.point.x - markerPosition.x,
+          params.point.y - markerPosition.y,
+        );
+        if (distance <= closestDistance) {
+          closestMarkerID = markerID;
+          closestDistance = distance;
+        }
+      }
+      if (closestMarkerID && showChartTooltip(params, closestMarkerID)) {
+        return;
+      }
+    }
+    clearMarkerSnap();
+    hideTooltip();
+  }, [clearMarkerSnap, getMarkerPosition, hideTooltip, isMobile, showChartTooltip]);
+
+  const displayWeek = () => {
+    triggerHapticFeedback();
+    setChartDisplay('week');
+  };
+
+  const displayMonth = () => {
+    triggerHapticFeedback();
+    setChartDisplay('month');
+  };
+
+  const displayYear = () => {
+    triggerHapticFeedback();
+    setChartDisplay('year');
+  };
+
+  const displayAll = () => {
+    triggerHapticFeedback();
+    setChartDisplay('all');
+  };
+
+  const onResize = useCallback(() => {
+    const isMobile = window.innerWidth <= 768;
+    setIsMobile(isMobile);
+    clearMarkerSnap();
+    hideTooltip();
+    if (!chart.current || !ref.current) {
+      return;
+    }
+    const chartWidth = !isMobile ? ref.current.offsetWidth : document.body.clientWidth;
+    const chartHeight = !isMobile ? height : mobileHeight;
+    chart.current.resize(chartWidth, chartHeight);
+    chart.current.applyOptions({
+      grid: {
+        horzLines: {
+          visible: !isMobile
+        }
+      },
+      timeScale: {
+        visible: !isMobile
+      },
+      leftPriceScale: {
+        visible: hideAmounts ? false : !isMobile,
+      },
+    });
+    updateRange(chart, chartDisplay, rangeStartTimestamp);
+    requestAnimationFrame(() => setChartMarkers(source));
+  }, [chartDisplay, clearMarkerSnap, hideAmounts, hideTooltip, rangeStartTimestamp, setChartMarkers, source]);
+
+  useEffect(() => {
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [onResize]);
+
+  useEffect(() => {
+    return () => {
+      if (switchedBadgeHideTimeout.current) {
+        window.clearTimeout(switchedBadgeHideTimeout.current);
+      }
+      if (switchedBadgeClearTimeout.current) {
+        window.clearTimeout(switchedBadgeClearTimeout.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!switchedToType) {
+      return;
+    }
+
+    setIsSwitchedBadgeVisible(false);
+    const animationFrame = window.requestAnimationFrame(() => {
+      setIsSwitchedBadgeVisible(true);
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [switchedToType]);
+
+  const calculateChange = useCallback(() => {
+    const chartData = data[source === 'daily' ? 'chartDataDaily' : 'chartDataHourly'];
+    if (!chartData || !chart.current || !lineSeries.current) {
+      return;
+    }
+    const logicalrange = chart.current.timeScale().getVisibleLogicalRange();
+    if (!logicalrange) {
+      return;
+    }
+    const visiblerange = lineSeries.current.barsInLogicalRange(logicalrange);
+    if (!visiblerange) {
+      // if the chart is empty, during first load, barsInLogicalRange is null
+      return;
+    }
+    const rangeFrom = Math.max(Math.floor(visiblerange.barsBefore), 0);
+    if (!chartData[rangeFrom]) {
+      // when data series have changed it triggers subscribeVisibleLogicalRangeChange
+      // but at this point the setVisibleRange has not executed what the new range
+      // should be and therefore barsBefore might still point to the old range
+      // so we have to ignore this call and expect setVisibleRange with correct range
+      setValueDifference(undefined);
+      return;
+    }
+    const nextValue = chartData[rangeFrom + 1] as FormattedLineData | undefined;
+    const valueFrom = chartData[rangeFrom].value === 0 ? nextValue?.value : chartData[rangeFrom].value;
+    const nextValueDifference = calculateChartValueDifference(valueFrom, data.chartTotal);
+    if (nextValueDifference === undefined) {
+      setValueDifference(undefined);
+      return;
+    }
+    setValueDifference(nextValueDifference);
+  }, [data, source]);
+
+  const handleCrosshair = useCallback((params: MouseEventParams) => {
+    const { point, time } = params;
+    if (!refToolTip.current) {
+      return;
+    }
+    const tooltip = refToolTip.current;
+    const parent = tooltip.parentNode as HTMLDivElement;
+    if (
+      !lineSeries.current || !point || typeof time !== 'number'
+      || point.x < 0 || point.x > parent.clientWidth
+      || point.y < 0 || point.y > parent.clientHeight
+    ) {
+      snappedMarkerID.current = null;
+      hideTooltip();
+      lastHapticTime.current = null;
+      return;
+    }
+    const crosshairX = chart.current?.timeScale().timeToCoordinate(time as UTCTimestamp);
+    const markerID = (
+      crosshairX === null || crosshairX === undefined
+        ? markerIDByTime.current[time]
+        : findMarkerNearX(time, crosshairX)
+    );
+    if (!showChartTooltip(params, markerID)) {
+      snappedMarkerID.current = null;
+      hideTooltip();
+      return;
+    }
+
+    let triggeredMarkerHaptic = false;
+    if (markerID) {
+      if (isMobile && lastMarkerHapticID.current !== markerID) {
+        triggerStrongHapticFeedback();
+        lastMarkerHapticID.current = markerID;
+        triggeredMarkerHaptic = true;
+      }
+    } else {
+      lastMarkerHapticID.current = null;
+    }
+
+    const currentTime = time;
+    if (triggeredMarkerHaptic) {
+      lastHapticTime.current = currentTime;
+      return;
+    }
+    if (lastHapticTime.current !== currentTime) {
+      triggerHapticFeedback();
+      lastHapticTime.current = currentTime;
+    }
+  }, [findMarkerNearX, hideTooltip, isMobile, showChartTooltip]);
+
+  const activeChartData = source === 'hourly' ? data.chartDataHourly : data.chartDataDaily;
+
+  useEffect(() => {
+    if (ref.current && hasData && !data.chartDataMissing) {
+      const chartWidth = !isMobile ? ref.current.offsetWidth : document.body.clientWidth;
+      const chartHeight = !isMobile ? height : mobileHeight;
+      const nextChart = createChart(ref.current, {
+        width: chartWidth,
+        height: chartHeight,
+        handleScroll: false,
+        handleScale: false,
+        crosshair: {
+          vertLine: {
+            visible: false,
+            labelVisible: false,
+          },
+          horzLine: {
+            visible: false,
+            labelVisible: false,
+          },
+          mode: 1,
+        },
+        grid: {
+          vertLines: {
+            visible: false,
+          },
+          horzLines: {
+            color: isDarkMode ? '#333333' : '#dedede',
+            style: LineStyle.Solid,
+            visible: !isMobile,
+          },
+        },
+        layout: {
+          background: {
+            type: ColorType.Solid,
+            color: isDarkMode ? '#1D1D1B' : '#F5F5F5',
+          },
+          fontSize: 11,
+          fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Ubuntu", "Roboto", "Oxygen", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+          textColor: isDarkMode ? '#F5F5F5' : '#1D1D1B',
+        },
+        leftPriceScale: {
+          borderVisible: false,
+          ticksVisible: false,
+          visible: hideAmounts ? false : !isMobile,
+          entireTextOnly: true,
+        },
+        localization: {
+          locale: i18n.language,
+        },
+        rightPriceScale: {
+          visible: false,
+          ticksVisible: false,
+        },
+        timeScale: {
+          borderVisible: false,
+          timeVisible: false,
+          visible: !isMobile,
+        },
+        trackingMode: {
+          exitMode: 0
+        }
+      });
+      const nextSeries = nextChart.addAreaSeries({
+        priceLineVisible: false,
+        lastValueVisible: false,
+        autoscaleInfoProvider: autoScaleProvider,
+        priceFormat: (
+          data.chartFiat === 'BTC' ? {
+            minMove: 0.000001,
+            type: 'custom',
+            formatter: (price: number) => {
+              if (price <= 0) {
+                return '0';
+              }
+              return price.toLocaleString(i18n.language, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 8,
+              });
+            }
+          } : {
+            type: 'volume',
+          }),
+        topColor: isDarkMode ? '#5E94BF' : '#DFF1FF',
+        bottomColor: isDarkMode ? '#1D1D1B' : '#F5F5F5',
+        lineColor: 'rgba(94, 148, 192, 1)',
+        crosshairMarkerRadius: 6,
+      });
+      chart.current = nextChart;
+      lineSeries.current = nextSeries;
+      if (styles.invisible) {
+        ref.current?.classList.remove(styles.invisible);
+      }
+      return () => {
+        nextChart.remove();
+        if (chart.current === nextChart) {
+          chart.current = undefined;
+          lineSeries.current = undefined;
+          markerDataByID.current = {};
+          markerIDByTime.current = {};
+          markerTimes.current = [];
+          snappedMarkerID.current = null;
+        }
+      };
+    }
+  }, [
+    data.chartDataMissing,
+    data.chartFiat,
+    hasData,
+    hideAmounts,
+    i18n.language,
+    isDarkMode,
+    isMobile,
+  ]);
+
+  const togglePortfolioPercentageType = () => {
+    const nextType = (
+      portfolioPercentageType === 'moneyWeightedReturn'
+        ? 'value'
+        : 'moneyWeightedReturn'
+    );
+
+    updatePortfolioPercentageType(nextType);
+    setSwitchedToType(nextType);
+    setIsSwitchedBadgeVisible(false);
+
+    if (switchedBadgeHideTimeout.current) {
+      window.clearTimeout(switchedBadgeHideTimeout.current);
+    }
+    if (switchedBadgeClearTimeout.current) {
+      window.clearTimeout(switchedBadgeClearTimeout.current);
+    }
+    switchedBadgeHideTimeout.current = window.setTimeout(() => {
+      setIsSwitchedBadgeVisible(false);
+      switchedBadgeHideTimeout.current = undefined;
+    }, switchedBadgeVisibleMs);
+    switchedBadgeClearTimeout.current = window.setTimeout(() => {
+      setSwitchedToType(undefined);
+      switchedBadgeClearTimeout.current = undefined;
+    }, switchedBadgeVisibleMs + switchedBadgeFadeMs);
+  };
+
+  useEffect(() => {
+    if (!chart.current || !lineSeries.current) {
+      return;
+    }
+    lineSeries.current.setData(activeChartData);
+    chartPointByTime.current = {};
+    for (const entry of activeChartData) {
+      chartPointByTime.current[entry.time as number] = {
+        formattedValue: entry.formattedValue,
+        value: entry.value,
+      };
+    }
+    chart.current.applyOptions({ timeScale: { timeVisible: source === 'hourly' } });
+    updateRange(chart, chartDisplay, rangeStartTimestamp);
+    const animationFrame = requestAnimationFrame(() => {
+      setChartMarkers(source);
+      calculateChange();
+    });
+    return () => cancelAnimationFrame(animationFrame);
+  }, [
+    activeChartData,
+    calculateChange,
+    chartDisplay,
+    data.chartDataMissing,
+    data.chartFiat,
+    hasData,
+    hideAmounts,
+    i18n.language,
+    isDarkMode,
+    isMobile,
+    rangeStartTimestamp,
+    setChartMarkers,
+    source,
+  ]);
+
+  useEffect(() => {
+    const currentChart = chart.current;
+    if (!currentChart) {
+      return;
+    }
+    currentChart.timeScale().subscribeVisibleLogicalRangeChange(calculateChange);
+    return () => {
+      currentChart.timeScale().unsubscribeVisibleLogicalRangeChange(calculateChange);
+    };
+  }, [
+    calculateChange,
+    data.chartDataMissing,
+    data.chartFiat,
+    hasData,
+    hideAmounts,
+    i18n.language,
+    isDarkMode,
+    isMobile,
+  ]);
+
+  useEffect(() => {
+    const currentChart = chart.current;
+    if (!currentChart) {
+      return;
+    }
+    currentChart.subscribeCrosshairMove(handleCrosshair);
+    currentChart.subscribeClick(handleChartClick);
+    return () => {
+      currentChart.unsubscribeCrosshairMove(handleCrosshair);
+      currentChart.unsubscribeClick(handleChartClick);
+    };
+  }, [
+    data.chartDataMissing,
+    data.chartFiat,
+    handleChartClick,
+    handleCrosshair,
+    hasData,
+    hideAmounts,
+    i18n.language,
+    isDarkMode,
+    isMobile,
+  ]);
+
+  useEffect(() => {
+    if (data.chartDataMissing || !hasChartAnimationParam) {
+      return;
+    }
+    setAnimationOverlay(false);
+  }, [data.chartDataMissing, hasChartAnimationParam]);
+
+  const {
+    lastTimestamp,
+    chartDataMissing,
+    chartFiat,
+    chartIsUpToDate,
+    chartTotal,
+    formattedChartTotal,
+  } = data;
+
+  const moneyWeightedReturn = (
+    chartTotal === null
+      ? undefined
+      : data.chartPerformance[chartDisplay].moneyWeightedReturn
+  );
+  const difference = (
+    portfolioPercentageType === 'moneyWeightedReturn'
+      ? moneyWeightedReturn
+      : valueDifference
+  );
+  const switchedLabel = (
+    switchedToType
+      ? t(`chart.displayMode.${switchedToType === 'value' ? 'totalValue' : 'performance'}`)
+      : undefined
+  );
+  const differenceAvailable = (
+    difference !== undefined
+    && difference !== null
+    && Number.isFinite(difference)
+  );
+  const currentDisplayModeLabel = t(`chart.displayMode.${portfolioPercentageType === 'value' ? 'totalValue' : 'performance'}`);
+  const nextDisplayModeLabel = t(`chart.displayMode.${portfolioPercentageType === 'value' ? 'performance' : 'totalValue'}`);
+  const percentageToggleLabel = (
+    differenceAvailable
+      ? t('chart.displayMode.switchTo', { displayMode: nextDisplayModeLabel })
+      : t('chart.displayMode.unavailableSwitchTo', {
+        displayMode: currentDisplayModeLabel,
+        nextDisplayMode: nextDisplayModeLabel,
+      })
+  );
+
+  if (!hasData && chartIsUpToDate && valueDifference !== undefined) {
+    setValueDifference(undefined);
+  }
+
+  const {
+    toolTipVisible,
+    toolTipValue,
+    toolTipTime,
+  } = tooltipData;
+  const markerTooltipData = (
+    tooltipData.markerID
+      ? markerDataByID.current[tooltipData.markerID]
+      : undefined
+  );
+  const showTooltipPriceDate = toolTipValue !== undefined && (!isMobile || !markerTooltipData);
+
+  const disableFilters = !hasData || chartDataMissing;
+  const disableWeeklyFilters = !hasHourlyData || chartDataMissing;
+  const showMobileTotalValue = toolTipVisible && !!toolTipValue && isMobile && !markerTooltipData;
+  const chartFiltersProps = {
+    display: chartDisplay,
+    disableFilters,
+    disableWeeklyFilters,
+    onDisplayWeek: displayWeek,
+    onDisplayMonth: displayMonth,
+    onDisplayYear: displayYear,
+    onDisplayAll: displayAll,
+  };
+
+  const chartHeight = `${!isMobile ? height : mobileHeight}px`;
+
+  const renderMarkerTooltipRow = (
+    type: 'receive' | 'send',
+    markerAmount: TChartTransactionMarkerAmount,
+  ) => {
+    if (markerAmount.count === 0) {
+      return null;
+    }
+    const sign = type === 'receive' ? '+' : '-';
+    return (
+      <span key={type} className={styles.markerTooltipRow}>
+        <span className={styles.markerTooltipIcon}>
+          <Arrow type={type} />
+        </span>
+        <span className={styles.markerTooltipAmount}>
+          {markerAmount.estimated ? '\u2248 ' : ''}
+          {markerAmount.amount !== '' ? sign : ''}
+          <Amount amount={markerAmount.amount} unit={chartFiat} />
+          <AmountUnit unit={chartFiat} className={styles.markerTooltipAmountUnit} />
+        </span>
+      </span>
+    );
+  };
+
+  return (
+    <section className={`${styles.chart || ''} ${className}`}>
+      <header>
+        <div className={styles.summary}>
+          <div className={styles.totalValue}>
+            {chartTotal !== null && formattedChartTotal !== null ? (
+              // remove trailing zeroes for BTC fiat total
+              <Amount
+                amount={!showMobileTotalValue ? formattedChartTotal : toolTipValue}
+                unit={chartFiat}
+                onMobileClick={rotateDefaultCurrency}
+              />
+            ) : (
+              <Skeleton minWidth="220px" />
+            )}
+            <span className={styles.totalUnit}>
+              {chartTotal !== null && <AmountUnit unit={chartFiat} rotateUnit={rotateDefaultCurrency}/>}
+            </span>
+          </div>
+          {!showMobileTotalValue ? (
+            <PercentageDiff
+              ariaLabel={percentageToggleLabel}
+              badgeVisible={isSwitchedBadgeVisible}
+              difference={difference}
+              onClick={togglePortfolioPercentageType}
+              switchedLabel={switchedLabel}
+              switchedType={switchedToType}
+            />
+          ) : (
+            <span className={styles.diffValue}>
+              {renderDate(toolTipTime * 1000, i18n.language, source)}
+            </span>
+          )}
+        </div>
+        {!isMobile && <Filters {...chartFiltersProps} />}
+      </header>
+      {!chartDataMissing && hasChartAnimationParam && (
+        <div
+          style={{ minHeight: chartHeight }}
+          className={`
+          ${styles.transitionDiv || ''}
+          ${showAnimationOverlay ? '' : styles.overlayRemove || ''}`}
+        />
+      )}
+      <div className={styles.chartCanvas} style={{ minHeight: chartHeight }}>
+        {chartDataMissing ? (
+          <div className={styles.chartUnavailableMessageContainer} style={{ height: chartHeight }}>
+            <div className={styles.chartUnavailableMessage}>
+              <LinechartGray />
+              <p>
+                {t('chart.dataMissing')}
+              </p>
+            </div>
+          </div>
+        ) : hasData ? !chartIsUpToDate && (
+          <div className={styles.chartUpdatingMessage}>
+            {t('chart.dataOldTimestamp', {
+              time: new Date(lastTimestamp).toLocaleString(i18n.language)
+            })}
+          </div>
+        ) : (
+          <div className={styles.placeholderContainer}>
+            {noDataPlaceholder}
+          </div>
+        )}
+        <div ref={ref} className={styles.invisible}></div>
+        <span
+          ref={refToolTip}
+          className={styles.tooltip}
+          hidden={!toolTipVisible || (isMobile && !markerTooltipData)}>
+          {showTooltipPriceDate || markerTooltipData ? (
+            <span>
+              {showTooltipPriceDate && (
+                <>
+                  <h2 className={styles.toolTipValue}>
+                    <Amount amount={toolTipValue} unit={chartFiat} />
+                    <span className={styles.toolTipUnit}>{chartFiat}</span>
+                  </h2>
+                  <span className={styles.toolTipTime}>
+                    {renderDate(toolTipTime * 1000, i18n.language, source)}
+                  </span>
+                </>
+              )}
+              {markerTooltipData && (
+                <span
+                  className={showTooltipPriceDate
+                    ? styles.markerTooltipInner
+                    : [styles.markerTooltipInner, styles.markerTooltipOnly].join(' ')}>
+                  {markerTooltipData.transactionCount > 1 && (
+                    <span className={styles.markerTooltipTitle}>
+                      {t('chart.transactions', { count: markerTooltipData.transactionCount })}
+                    </span>
+                  )}
+                  <span className={styles.markerTooltipRows}>
+                    {renderMarkerTooltipRow('receive', markerTooltipData.receive)}
+                    {renderMarkerTooltipRow('send', markerTooltipData.send)}
+                  </span>
+                </span>
+              )}
+            </span>
+          ) : null}
+        </span>
+      </div>
+      {isMobile && <Filters {...chartFiltersProps} />}
+    </section>
+  );
+};

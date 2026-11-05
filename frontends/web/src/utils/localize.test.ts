@@ -1,0 +1,115 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { describe, expect, it } from 'vitest';
+import { localizePercentage } from './localize';
+
+describe('rates utils', () => {
+  describe('localizePercentage', () => {
+
+    it('formats positive number without thousand separator', () => {
+      expect(localizePercentage(5.3212, 'es-419')).toBe('532.12');
+    });
+
+    it('falls back to default locale when locale is invalid', () => {
+      expect(localizePercentage(105.3212, 'c')).toMatch(/^10['’]532\.12$/);
+    });
+
+    it('formats positive number with thousand separator', () => {
+      expect(localizePercentage(15.3212, 'de-CH')).toMatch(/^1['’]532\.12$/); // node v24 changed from ’ to '
+    });
+
+    it('formats negative number without thousand separator', () => {
+      expect(localizePercentage(-5.3212, 'en')).toBe('-532.12');
+    });
+
+    it('formats negative number with thousand separator', () => {
+      expect(localizePercentage(-15.3212, 'de-CH')).toMatch(/^-1['’]532\.12$/); // node v24 changed from ’ to '
+    });
+
+    it('handles zero correctly', () => {
+      expect(localizePercentage(0, 'en-CA')).toBe('0.00');
+    });
+
+    it('formats number with multiple thousand separators', () => {
+      expect(localizePercentage(12345.6789, 'de-CH')).toMatch(/^1['’]234['’]567\.89$/); // node v24 changed from ’ to '
+    });
+
+    it('rounds decimal places correctly', () => {
+      expect(localizePercentage(12.345678, 'de-CH')).toMatch(/^1['’]234\.57$/); // node v24 changed from ’ to '
+    });
+
+    it('formats negative number close to zero without separator', () => {
+      expect(localizePercentage(-1, 'de-CH')).toBe('-100.00');
+    });
+
+    it('formats large negative number with separators', () => {
+      expect(localizePercentage(-12345.6789, 'en-US')).toBe('-1,234,567.89');
+    });
+
+    it('formats large negative number with separators, rounds to 2 digits', () => {
+      expect(localizePercentage(-1234.56789, 'en-US')).toBe('-123,456.79');
+    });
+
+    it('overrides decimal and group separators when both are provided', () => {
+      expect(
+        localizePercentage(
+          12345.6789,
+          'en-US',
+          {
+            decimal: ',',
+            group: '.',
+          },
+        ),
+      ).toBe('1.234.567,89');
+    });
+
+    it('preserves locale grouping rules while overriding separators', () => {
+      expect(
+        localizePercentage(
+          15.3212,
+          'de-CH',
+          {
+            decimal: ',',
+            group: '.',
+          },
+        ),
+      ).toBe('1.532,12');
+    });
+
+    it('ignores custom format when only decimal or group separator is provided', () => {
+      expect(
+        localizePercentage(
+          12345.6789,
+          'en-US',
+          {
+            decimal: ',',
+          } as any,
+        ),
+      ).toBe('1,234,567.89');
+
+      expect(
+        localizePercentage(
+          12345.6789,
+          'en-US',
+          {
+            group: '.',
+          } as any,
+        ),
+      ).toBe('1,234,567.89');
+    });
+
+    it('applies custom separators when locale falls back', () => {
+      expect(
+        localizePercentage(
+          12345.6789,
+          'c',
+          {
+            decimal: ',',
+            group: '.',
+          },
+        ),
+      ).toBe('1.234.567,89');
+    });
+
+  });
+});

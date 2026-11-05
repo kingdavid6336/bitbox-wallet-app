@@ -1,17 +1,4 @@
-// Copyright 2018 Shift Devices AG
-// Copyright 2020 Shift Crypto AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package eth
 
@@ -19,12 +6,13 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/eth/erc20"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/eth/rpcclient"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/observable"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts"
+	coinpkg "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth/erc20"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth/rpcclient"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/logging"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/sirupsen/logrus"
@@ -42,14 +30,14 @@ type TransactionsSource interface {
 // Coin models an Ethereum coin.
 type Coin struct {
 	observable.Implementation
-	client                rpcclient.Interface
-	code                  coin.Code
-	name                  string
-	unit                  string
-	feeUnit               string
-	net                   *params.ChainConfig
-	blockExplorerTxPrefix string
-	erc20Token            *erc20.Token
+	client                 rpcclient.Interface
+	code                   coinpkg.Code
+	name                   string
+	unit                   string
+	feeUnit                string
+	net                    *params.ChainConfig
+	blockExplorerURLPrefix string
+	erc20Token             *erc20.Token
 
 	transactionsSource TransactionsSource
 
@@ -57,29 +45,29 @@ type Coin struct {
 }
 
 // NewCoin creates a new coin with the given parameters.
-// transactionsSource: can be nil, in which case transactions will not be be processed (in other
+// transactionsSource: can be nil, in which case transactions will not be processed (in other
 // words, account.Transactions() will always be empty apart from the outgoing transactions which //
 // are stored in the local database).
 // For erc20 tokens, provide erc20Token using NewERC20Token() (otherwise keep nil).
 func NewCoin(
 	client rpcclient.Interface,
-	code coin.Code,
+	code coinpkg.Code,
 	name string,
 	unit string,
 	feeUnit string,
 	net *params.ChainConfig,
-	blockExplorerTxPrefix string,
+	blockExplorerURLPrefix string,
 	transactionsSource TransactionsSource,
 	erc20Token *erc20.Token,
 ) *Coin {
 	return &Coin{
-		client:                client,
-		code:                  code,
-		name:                  name,
-		unit:                  unit,
-		feeUnit:               feeUnit,
-		net:                   net,
-		blockExplorerTxPrefix: blockExplorerTxPrefix,
+		client:                 client,
+		code:                   code,
+		name:                   name,
+		unit:                   unit,
+		feeUnit:                feeUnit,
+		net:                    net,
+		blockExplorerURLPrefix: blockExplorerURLPrefix,
 
 		transactionsSource: transactionsSource,
 
@@ -89,11 +77,37 @@ func NewCoin(
 	}
 }
 
+// Client returns the RPC client for this coin's chain.
+func (coin *Coin) Client() rpcclient.Interface {
+	return coin.client
+}
+
+// TstSetClient must only be used in unit tests to mock the RPC client.
+func (coin *Coin) TstSetClient(client rpcclient.Interface) {
+	coin.client = client
+}
+
+// TstSetTransactionsSource must only be used in unit tests to mock the transactions source.
+func (coin *Coin) TstSetTransactionsSource(ts TransactionsSource) {
+	coin.transactionsSource = ts
+}
+
 // Net returns the network (mainnet, testnet, etc.).
 func (coin *Coin) Net() *params.ChainConfig { return coin.net }
 
+// ChainID returns the chain ID of the network.
+// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-155.md#list-of-chain-ids
+func (coin *Coin) ChainID() uint64 { return coin.net.ChainID.Uint64() }
+
+// ChainIDstr returns the chain ID of the network as a string.
+func (coin *Coin) ChainIDstr() string {
+	return coin.net.ChainID.String()
+}
+
 // Initialize implements coin.Coin.
-func (coin *Coin) Initialize() {}
+func (coin *Coin) Initialize() error {
+	return nil
+}
 
 // Name implements coin.Coin.
 func (coin *Coin) Name() string {
@@ -101,7 +115,7 @@ func (coin *Coin) Name() string {
 }
 
 // Code implements coin.Coin.
-func (coin *Coin) Code() coin.Code {
+func (coin *Coin) Code() coinpkg.Code {
 	return coin.code
 }
 
@@ -111,6 +125,11 @@ func (coin *Coin) Unit(isFee bool) string {
 		return coin.feeUnit
 	}
 	return coin.unit
+}
+
+// GetFormatUnit implements coin.Coin.
+func (coin *Coin) GetFormatUnit(isFee bool) string {
+	return coin.Unit(isFee)
 }
 
 // Decimals implements coin.Coin.
@@ -130,22 +149,57 @@ func (coin *Coin) unitFactor(isFee bool) *big.Int {
 }
 
 // FormatAmount implements coin.Coin.
-func (coin *Coin) FormatAmount(amount coin.Amount, isFee bool) string {
+func (coin *Coin) FormatAmount(amount coinpkg.Amount, isFee bool) string {
 	factor := coin.unitFactor(isFee)
-	s := new(big.Rat).SetFrac(amount.BigInt(), factor).FloatString(18)
-	return strings.TrimRight(strings.TrimRight(s, "0"), ".")
+	s := new(big.Rat).SetFrac(amount.BigInt(), factor).FloatString(int(coin.Decimals(isFee)))
+	if strings.ContainsRune(s, '.') {
+		s = strings.TrimRight(strings.TrimRight(s, "0"), ".")
+	}
+	// For USDC/USDT, display 2 decimals when there's only 1
+	if coin.unit == "USDC" || coin.unit == "USDT" {
+		parts := strings.Split(s, ".")
+		if len(parts) == 2 && len(parts[1]) == 1 {
+			s += "0"
+		}
+	}
+	return s
 }
 
 // ToUnit implements coin.Coin.
-func (coin *Coin) ToUnit(amount coin.Amount, isFee bool) float64 {
-	factor := coin.unitFactor(isFee)
-	result, _ := new(big.Rat).SetFrac(amount.BigInt(), factor).Float64()
+func (coin *Coin) ToUnit(amount coinpkg.Amount, isFee bool) float64 {
+	result, _ := coinpkg.ToUnitRat(amount, coin, isFee).Float64()
 	return result
+}
+
+// SetAmount implements coin.Coin.
+func (coin *Coin) SetAmount(amount *big.Rat, isFee bool) coinpkg.Amount {
+	factor := coin.unitFactor(isFee)
+	weiAmount := new(big.Rat).Mul(amount, new(big.Rat).SetInt(factor))
+	intWeiAmount, _ := new(big.Int).SetString(weiAmount.FloatString(0), 0)
+	return coinpkg.NewAmount(intWeiAmount)
+}
+
+// ParseAmount implements coinpkg.Coin.
+func (coin *Coin) ParseAmount(amount string) (coinpkg.Amount, error) {
+	amountRat, valid := new(big.Rat).SetString(amount)
+	if !valid {
+		return coinpkg.Amount{}, errp.New("Invalid amount")
+	}
+
+	return coin.SetAmount(amountRat, false), nil
+}
+
+// BlockExplorerURLPrefix returns the shared base URL prefix of the block explorer.
+func (coin *Coin) BlockExplorerURLPrefix() string {
+	return coin.blockExplorerURLPrefix
 }
 
 // BlockExplorerTransactionURLPrefix implements coin.Coin.
 func (coin *Coin) BlockExplorerTransactionURLPrefix() string {
-	return coin.blockExplorerTxPrefix
+	if coin.blockExplorerURLPrefix == "" {
+		return ""
+	}
+	return coin.blockExplorerURLPrefix + "tx/"
 }
 
 // TransactionsSource returns an instance of TransactionsSource.

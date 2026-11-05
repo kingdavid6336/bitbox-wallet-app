@@ -1,27 +1,26 @@
-import { Component, h, RenderableProps } from 'preact';
-import * as style from './toggle.module.css';
+// SPDX-License-Identifier: Apache-2.0
 
-interface ToggleProps {
-    checked: boolean;
-    disabled?: boolean;
-    onChange: (event: Event) => void;
-    id?: string;
-    value?: string;
-    name?: string;
-    [key: string]: any;
-}
+import { triggerHapticFeedback } from '@/utils/transport-mobile';
+import style from './toggle.module.css';
 
-class Toggle extends Component<ToggleProps> {
-    public render(props: RenderableProps<ToggleProps>) {
-        return (
-            <label className={style.container}>
-                <input
-                    type="checkbox"
-                    {...props} />
-                <span className={style.slider}></span>
-            </label>
-        );
-    }
-}
+export type TToggleProps = JSX.IntrinsicElements['input'];
 
-export { Toggle };
+export const Toggle = ({
+  className = '',
+  onChange,
+  ...props
+}: TToggleProps) => {
+  const handleChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    triggerHapticFeedback();
+    onChange?.(e);
+  };
+  return (
+    <label className={`${style.container || ''} ${className}`}>
+      <input
+        type="checkbox"
+        onChange={handleChange}
+        {...props} />
+      <span className={style.slider}></span>
+    </label>
+  );
+};

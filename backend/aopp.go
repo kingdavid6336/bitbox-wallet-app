@@ -1,16 +1,4 @@
-// Copyright 2021 Shift Crypto AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package backend
 
@@ -20,19 +8,49 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts"
-	coinpkg "github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/signing"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/observable"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/observable/action"
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts"
+	accountsTypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/types"
+	coinpkg "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	ethcoin "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/keystore"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/signing"
+	backendutil "github.com/BitBoxSwiss/bitbox-wallet-app/backend/util"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable/action"
+)
+
+const (
+	// errAOPPUnsupportedAsset is returned when an AOPP request is for an asset we don't support
+	// AOPP for.
+	errAOPPUnsupportedAsset errp.ErrorCode = "aoppUnsupportedAsset"
+	// errAOPPUnsupportedFormat is returned when the requested format (script type) is not supported
+	// by the keystore.
+	errAOPPUnsupportedFormat errp.ErrorCode = "aoppUnsupportedFormat"
+	// errAOPPVersion is returned when we cannot handle an AOPP request because we don't support the
+	// request version.
+	errAOPPVersion errp.ErrorCode = "aoppVersion"
+	// ErrAOPPInvalidRequest is returned when the request is not valid.
+	errAOPPInvalidRequest errp.ErrorCode = "aoppInvalidRequest"
+	// errAOPPNoAccounts is returned when there are no available accounts to choose from.
+	errAOPPNoAccounts errp.ErrorCode = "aoppNoAccounts"
+	// errAOPPUnsupportedKeystore is returned when the connected keystore does not support signing messages.
+	errAOPPUnsupportedKeystore errp.ErrorCode = "aoppUnsupportedKeystore"
+	// errAOPPUnknown is returned on unexpected errors that in theory should never happen.
+	errAOPPUnknown errp.ErrorCode = "aoppUnknown"
+	// errAOPPSigningAborted is returned when the user cancels the message signing on the device.
+	errAOPPSigningAborted errp.ErrorCode = "aoppSigningAborted"
+	// errAOPPCallback is returned when there was an error calling the callback in the AOPP request.
+	errAOPPCallback errp.ErrorCode = "aoppCallback"
 )
 
 // aoppCoinMap maps from the asset codes specified by AOPP to our own coin codes.
 var aoppCoinMap = map[string]coinpkg.Code{
-	"btc": coinpkg.CodeBTC,
-	"eth": coinpkg.CodeETH,
+	"btc":  coinpkg.CodeBTC,
+	"eth":  coinpkg.CodeETH,
+	"rbtc": coinpkg.CodeRBTC,
 }
 
 // aoppBTCScriptTypeMap maps from format codes specified by AOPP to our own script type codes. See
@@ -44,8 +62,8 @@ var aoppBTCScriptTypeMap = map[string]signing.ScriptType{
 }
 
 type account struct {
-	Name string        `json:"name"`
-	Code accounts.Code `json:"code"`
+	Name string             `json:"name"`
+	Code accountsTypes.Code `json:"code"`
 }
 
 // aoppState is the current state of an AOPP request. See The values below.
@@ -61,7 +79,7 @@ const (
 	// Nothing is happening, we are waiting for an AOPP request.
 	aoppStateInactive aoppState = "inactive"
 	// The user is prompted to continue or cancel a new AOPP request. This is always the first state
-	// when a new AOPP request is is handled.
+	// when a new AOPP request is handled.
 	aoppStateUserApproval aoppState = "user-approval"
 	// No keystore is connected, so we are waiting for the user to insert and unlock their
 	// device. This state is skipped if a keystore already exists.
@@ -82,16 +100,19 @@ const (
 type AOPP struct {
 	// State is the current state the request is in. See `aoppState*` for the possible values.
 	State aoppState `json:"state"`
-	// ErrorCode is an "aopp*" error code, see errors.go. Only applies if State == aoppStateError.
-	ErrorCode ErrorCode `json:"errorCode"`
+	// ErrorCode describes the AOPP failure. It is usually an "aopp*" error code, but can also be a
+	// shared error code such as "firmwareUpgradeRequired". Only applies if State == aoppStateError.
+	ErrorCode errp.ErrorCode `json:"errorCode"`
 	// Accounts is the list of accounts the user can choose from. Only applies if State == aoppStateChoosingAccount.
 	Accounts []account `json:"accounts"`
 	// AccountCode is the code of the chosen account from which an address will be taken. Only
 	// applies for states after (and excluding) `aoppStateChoosingAccount`.
-	AccountCode accounts.Code `json:"accountCode"`
+	AccountCode accountsTypes.Code `json:"accountCode"`
 	// Address that will be delivered to the requesting party via the callback. Only applies if
 	// State == aoppStateSigning or aoppStateSuccess.
 	Address string `json:"address"`
+	// DisplayAddress is a grouped representation of Address for UI display.
+	DisplayAddress string `json:"displayAddress"`
 	// AddressID is the ID of the address, used to display the address on the device. Only applies
 	// if State == aoppStateSigning or aoppStateSuccess
 	AddressID string `json:"addressID"`
@@ -104,6 +125,8 @@ type AOPP struct {
 	coinCode coinpkg.Code
 	// format is the requested format. Available for all states except aoppStateInactive.
 	format string
+	// XpubRequired is true if we need to include the extended public key in the callback.
+	XpubRequired bool `json:"xpubRequired"`
 }
 
 // AOPP returns the current AOPP state.
@@ -131,7 +154,7 @@ func (backend *Backend) AOPPCancel() {
 
 // aoppSetError pushes an error to the frontend to display. `accountsAndKeystoreLock` must be held
 // when calling this function.
-func (backend *Backend) aoppSetError(err ErrorCode) {
+func (backend *Backend) aoppSetError(err errp.ErrorCode) {
 	backend.aopp.State = aoppStateError
 	backend.aopp.ErrorCode = err
 	backend.notifyAOPP()
@@ -145,30 +168,52 @@ func (backend *Backend) aoppKeystoreRegistered() {
 	if backend.aopp.State != aoppStateAwaitingKeystore {
 		return
 	}
+	if err := backend.keystore.SupportsFeature(keystore.FeatureMessageSigning); err != nil {
+		if errp.Cause(err) == keystore.ErrFirmwareUpgradeRequired {
+			backend.aoppSetError(errp.ErrorCode(keystore.ErrFirmwareUpgradeRequired.Error()))
+		} else {
+			backend.aoppSetError(errAOPPUnsupportedKeystore)
+		}
+		return
+	}
 	if !backend.keystore.CanSignMessage(backend.aopp.coinCode) {
 		backend.aoppSetError(errAOPPUnsupportedKeystore)
 		return
 	}
 	var accounts []account
 	var filteredDueToScriptType bool
-	for _, acct := range backend.accounts {
-		if !acct.Config().Active {
+	accountViews := backend.accountViewsLocked()
+	for index := range accountViews {
+		accountView := &accountViews[index]
+		accountFingerprint, err := accountView.Record.SigningConfigurations.RootFingerprint()
+		if err != nil {
+			backend.log.WithError(err).Error("Account rootfingerprint not available")
+			backend.aoppSetError(errAOPPUnknown)
+			return
+		}
+
+		if err := compareRootFingerprint(backend.keystore, accountFingerprint); err != nil {
 			continue
 		}
+		if accountView.Record.Inactive || accountView.Record.HiddenBecauseUnused {
+			continue
+		}
+		acct := accountView.Account
 		if acct.Coin().Code() != backend.aopp.coinCode {
 			continue
 		}
 		// Filter for the requested script type.
 		if acct.Coin().Code() == coinpkg.CodeBTC && backend.aopp.format != "any" {
 			expectedScriptType, ok := aoppBTCScriptTypeMap[backend.aopp.format]
-			if !ok || acct.Config().SigningConfigurations.FindScriptType(expectedScriptType) == -1 {
+			if !ok ||
+				accountView.Record.SigningConfigurations.FindScriptType(expectedScriptType) == -1 {
 				filteredDueToScriptType = true
 				continue
 			}
 		}
 		accounts = append(accounts, account{
-			Name: acct.Config().Name,
-			Code: acct.Config().Code,
+			Name: accountView.Record.Name,
+			Code: accountView.Record.Code,
 		})
 	}
 
@@ -194,6 +239,13 @@ func (backend *Backend) aoppKeystoreRegistered() {
 	backend.notifyAOPP()
 }
 
+// aoppValidCallbackURL allows HTTP callbacks only when using development servers.
+func (backend *Backend) aoppValidCallbackURL(callbackURL *url.URL) bool {
+	return callbackURL.Host != "" &&
+		(strings.EqualFold(callbackURL.Scheme, "https") ||
+			(backend.DevServers() && strings.EqualFold(callbackURL.Scheme, "http")))
+}
+
 // handleAOPP handles an AOPP (Address Ownership Proof Protocol) request. See https://aopp.group/.
 func (backend *Backend) handleAOPP(uri url.URL) {
 	defer backend.accountsAndKeystoreLock.Lock()()
@@ -216,9 +268,14 @@ func (backend *Backend) handleAOPP(uri url.URL) {
 		backend.aoppSetError(errAOPPInvalidRequest)
 		return
 	}
-	_, err := url.Parse(callback)
+	callbackURL, err := url.Parse(callback)
 	if err != nil {
 		log.WithError(err).Error("Invalid callback")
+		backend.aoppSetError(errAOPPInvalidRequest)
+		return
+	}
+	if !backend.aoppValidCallbackURL(callbackURL) {
+		log.Error("Invalid callback")
 		backend.aoppSetError(errAOPPInvalidRequest)
 		return
 	}
@@ -242,6 +299,10 @@ func (backend *Backend) handleAOPP(uri url.URL) {
 
 	backend.aopp.format = q.Get("format")
 
+	if q.Has("xpub_required") {
+		backend.aopp.XpubRequired = true
+	}
+
 	backend.aopp.State = aoppStateUserApproval
 	backend.notifyAOPP()
 }
@@ -264,7 +325,7 @@ func (backend *Backend) AOPPApprove() {
 
 // aoppChooseAccount is called when an AOPP request is being processed and an account should be
 // selected. `accountsAndKeystoreLock` must be held when calling this function.
-func (backend *Backend) aoppChooseAccount(code accounts.Code) {
+func (backend *Backend) aoppChooseAccount(code accountsTypes.Code) {
 	if backend.aopp.State != aoppStateChoosingAccount {
 		return
 	}
@@ -274,18 +335,14 @@ func (backend *Backend) aoppChooseAccount(code accounts.Code) {
 	backend.notifyAOPP()
 
 	log := backend.log.WithField("accountCode", code)
-	var account accounts.Interface
-	for _, acct := range backend.accounts {
-		if acct.Config().Code == code {
-			account = acct
-			break
-		}
-	}
-	if account == nil {
+	accountView := backend.accountViewsLocked().lookup(code)
+	if accountView == nil {
 		log.Error("aopp: could not find account")
 		backend.aoppSetError(errAOPPUnknown)
 		return
 	}
+	account := accountView.Account
+	signingConfigurations := accountView.Record.SigningConfigurations
 	if err := account.Initialize(); err != nil {
 		log.
 			WithError(err).
@@ -295,87 +352,159 @@ func (backend *Backend) aoppChooseAccount(code accounts.Code) {
 		return
 	}
 
-	unused := account.GetUnusedReceiveAddresses()
-
-	signingConfigIdx := 0
-	// Use the format hint to get a compatible address.
-	if account.Coin().Code() == coinpkg.CodeBTC && backend.aopp.format != "any" {
-		expectedScriptType, ok := aoppBTCScriptTypeMap[backend.aopp.format]
-		if !ok {
-			log.Errorf("Unknown aopp format param %s", backend.aopp.format)
-			backend.aoppSetError(errAOPPUnknown)
-			return
+	syncedCh := make(chan struct{})
+	unobserve := account.Observe(func(event observable.Event) {
+		if event.Subject == string(accountsTypes.EventSyncDone) {
+			select {
+			case <-syncedCh:
+				// already closed, no-op
+			default:
+				close(syncedCh)
+			}
 		}
-		signingConfigIdx = account.Config().SigningConfigurations.FindScriptType(expectedScriptType)
-		if signingConfigIdx == -1 {
-			log.Errorf("Unknown aopp format param %s", backend.aopp.format)
-			backend.aoppSetError(errAOPPUnknown)
-			return
+	})
+	defer unobserve()
+loop:
+	for {
+		select {
+		case <-syncedCh:
+			break loop
+
+		case <-time.After(time.Second):
+			// Fallback in case the SyncDone event is never received.
+			if account.Synced() {
+				break loop
+			}
 		}
 	}
-	addr := unused[signingConfigIdx][0]
+
+	unused, err := account.GetUnusedReceiveAddresses()
+	if err != nil {
+		log.
+			WithError(err).
+			WithField("code", account.Config().Code).
+			Error("get unused receive addresses")
+		backend.aoppSetError(errAOPPUnknown)
+		return
+	}
+
+	signingConfigIdx := 0
+	addressList := &unused[0]
+	addr := addressList.Addresses[0]
+	if account.Coin().Code() == coinpkg.CodeBTC {
+		if backend.aopp.format == "any" {
+			signingConfigIdx = signingConfigurations.FindScriptType(*addressList.ScriptType)
+			if signingConfigIdx == -1 {
+				log.Errorf("Unknown script type %s in receive addresses", *addressList.ScriptType)
+				backend.aoppSetError(errAOPPUnknown)
+				return
+			}
+		} else {
+			expectedScriptType, ok := aoppBTCScriptTypeMap[backend.aopp.format]
+			if !ok {
+				log.Errorf("Unknown aopp format param %s", backend.aopp.format)
+				backend.aoppSetError(errAOPPUnknown)
+				return
+			}
+			signingConfigIdx = signingConfigurations.FindScriptType(expectedScriptType)
+			if signingConfigIdx == -1 {
+				log.Errorf("Unknown aopp format param %s", backend.aopp.format)
+				backend.aoppSetError(errAOPPUnknown)
+				return
+			}
+			addressList = accounts.FindAddressListByScriptType(unused, expectedScriptType)
+			if addressList == nil || len(addressList.Addresses) == 0 {
+				log.WithField("code", account.Config().Code).
+					Errorf("AOPP script type not found: %s", expectedScriptType)
+				backend.aoppSetError(errAOPPUnsupportedFormat)
+				return
+			}
+			addr = addressList.Addresses[0]
+		}
+	}
 
 	backend.aopp.Address = addr.EncodeForHumans()
+	backend.aopp.DisplayAddress = backendutil.FormatAddress(account.Coin().Code(), backend.aopp.Address)
 	backend.aopp.AddressID = addr.ID()
 	backend.aopp.State = aoppStateSigning
 	backend.notifyAOPP()
-
 	var signature []byte
+	var xpub string
+	if backend.aopp.XpubRequired {
+		xpub = signingConfigurations[signingConfigIdx].ExtendedPublicKey().String()
+	}
+	var sig []byte
 	switch account.Coin().Code() {
-	case coinpkg.CodeBTC:
-		sig, err := backend.keystore.SignBTCMessage(
+	case coinpkg.CodeBTC, coinpkg.CodeRBTC:
+		sig, err = backend.keystore.SignBTCMessage(
 			[]byte(backend.aopp.Message),
 			addr.AbsoluteKeypath(),
-			account.Config().SigningConfigurations[signingConfigIdx].ScriptType(),
+			signingConfigurations[signingConfigIdx].ScriptType(),
+			account.Coin().Code(),
 		)
-		if err != nil {
-			if firmware.IsErrorAbort(err) {
-				log.WithError(err).Error("user aborted msg signing")
-				backend.aoppSetError(errAOPPSigningAborted)
-				return
-			}
-			log.WithError(err).Error("signing error")
-			backend.aoppSetError(errAOPPUnknown)
-			return
-		}
-		signature = sig
 	case coinpkg.CodeETH:
-		sig, err := backend.keystore.SignETHMessage(
-			[]byte(backend.aopp.Message),
-			addr.AbsoluteKeypath(),
-		)
-		if err != nil {
-			if firmware.IsErrorAbort(err) {
-				log.WithError(err).Error("user aborted msg signing")
-				backend.aoppSetError(errAOPPSigningAborted)
-				return
-			}
-			log.WithError(err).Error("signing error")
+		ethCoin, ok := account.Coin().(*ethcoin.Coin)
+		if !ok {
+			log.Error("coin type mismatch for eth aopp signing")
 			backend.aoppSetError(errAOPPUnknown)
 			return
 		}
-		signature = sig
+		sig, err = backend.keystore.SignETHMessage(
+			ethCoin.ChainID(),
+			[]byte(backend.aopp.Message),
+			addr.AbsoluteKeypath(),
+		)
 	default:
 		log.Errorf("unsupported coin: %s", account.Coin().Code())
 		backend.aoppSetError(errAOPPUnknown)
 		return
 	}
 
+	if err != nil {
+		if errp.Cause(err) == keystore.ErrSigningAborted {
+			log.WithError(err).Error("user aborted msg signing")
+			backend.aoppSetError(errAOPPSigningAborted)
+			return
+		}
+		log.WithError(err).Error("signing error")
+		backend.aoppSetError(errAOPPUnknown)
+		return
+	}
+	signature = sig
+
 	jsonBody, err := json.Marshal(struct {
 		Version   int    `json:"version"`
 		Address   string `json:"address"`
 		Signature []byte `json:"signature"` // is base64 encoded
+		Xpub      string `json:"xpub,omitempty"`
 	}{
 		Version:   0,
 		Address:   addr.EncodeForHumans(),
 		Signature: signature,
+		Xpub:      xpub,
 	})
 	if err != nil {
 		log.WithError(err).Error("JSON error")
 		backend.aoppSetError(errAOPPUnknown)
 		return
 	}
-	resp, err := backend.httpClient.Post(backend.aopp.Callback, "application/json", bytes.NewBuffer(jsonBody))
+	// Apply the same callback URL policy to redirects, so signed data is never resent over a
+	// cleartext connection unless using development servers.
+	httpClient := *backend.httpClient
+	checkRedirect := httpClient.CheckRedirect
+	httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if !backend.aoppValidCallbackURL(req.URL) {
+			return http.ErrUseLastResponse
+		}
+		if checkRedirect != nil {
+			return checkRedirect(req, via)
+		}
+		if len(via) >= 10 {
+			return http.ErrUseLastResponse
+		}
+		return nil
+	}
+	resp, err := httpClient.Post(backend.aopp.Callback, "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		log.WithError(err).Error("Error calling callback")
 		backend.aoppSetError(errAOPPCallback)
@@ -394,7 +523,7 @@ func (backend *Backend) aoppChooseAccount(code accounts.Code) {
 
 // AOPPChooseAccount is called when an AOPP request is being processed and the user has chosen an
 // account.
-func (backend *Backend) AOPPChooseAccount(code accounts.Code) {
+func (backend *Backend) AOPPChooseAccount(code accountsTypes.Code) {
 	defer backend.accountsAndKeystoreLock.Lock()()
 	backend.aoppChooseAccount(code)
 }

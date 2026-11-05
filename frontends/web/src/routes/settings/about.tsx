@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { useTranslation } from 'react-i18next';
+import { Main, Header, GuideWrapper, GuidedContent } from '@/components/layout';
+import { View, ViewContent } from '@/components/view/view';
+import { WithSettingsTabs } from './components/tabs';
+import { AppVersion } from './components/about/app-version-setting';
+import { Guide } from '@/components/guide/guide';
+import { Entry } from '@/components/guide/entry';
+import { FeedbackLink } from './components/about/feedback-link-setting';
+import { SupportLink } from './components/about/support-link-setting';
+import { Licenses } from './components/about/licenses';
+import { SettingsContent, type TSettingsContentSection } from './components/settings-content';
+
+export const About = () => {
+  const { t } = useTranslation();
+  return (
+    <GuideWrapper>
+      <GuidedContent>
+        <Main>
+          <Header
+            variant="navigation"
+            desktopTitle={t('sidebar.settings')}
+            hideSidebarToggler
+            mobileBackButton
+            title={t('settings.about')}
+          />
+          <View fullscreen={false}>
+            <ViewContent>
+              <WithSettingsTabs hideMobileMenu>
+                <AboutSettingsContent />
+              </WithSettingsTabs>
+            </ViewContent>
+          </View>
+        </Main>
+      </GuidedContent>
+      <AboutGuide />
+    </GuideWrapper>
+  );
+};
+
+const AboutSettingsContent = () => {
+  const sections: TSettingsContentSection[] = [
+    {
+      id: 'about',
+      items: [
+        { id: 'app-version', content: <AppVersion /> },
+        { id: 'feedback', content: <FeedbackLink /> },
+        { id: 'support', content: <SupportLink /> },
+        { id: 'licenses', content: <Licenses /> },
+      ],
+    },
+  ];
+
+  return <SettingsContent sections={sections} />;
+};
+
+const AboutGuide = () => {
+  const { t } = useTranslation();
+  return (
+    <Guide>
+      <Entry key="guide.settings.servers" entry={{
+        text: t('guide.settings.servers.text'),
+        title: t('guide.settings.servers.title'),
+      }} />
+    </Guide>
+  );
+};

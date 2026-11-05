@@ -1,0 +1,8 @@
+.container {
+    display: flex;
+}
+
+.container img {
+    width: var(--size-default);
+    margin-right: var(--space-quarter);
+}

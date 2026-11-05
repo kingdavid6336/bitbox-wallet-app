@@ -6,6 +6,12 @@
 
 QT       += core gui
 QT       += webenginewidgets
+QT       += network
+win32 {
+    # For setting 'AlwaysActivate', see.
+    # See https://forum.qt.io/topic/133694/using-alwaysactivatewindow-to-gain-foreground-in-win10-using-qt6-2/2
+    QT += gui-private
+}
 
 TARGET = BitBox
 TEMPLATE = app
@@ -13,7 +19,6 @@ TEMPLATE = app
 CFORTIFY = -O2 -D_FORTIFY_SOURCE=2
 CSTACK = -fstack-protector-all -fstack-check
 CMISC = -fwrapv
-CASLR = -fPIE -fPIC
 
 # The following define makes your compiler emit warnings if you use
 # any feature of Qt which has been marked as deprecated (the exact warnings
@@ -26,7 +31,6 @@ include(external/singleapplication/singleapplication.pri)
 DEFINES += QAPPLICATION_CLASS=QApplication
 
 win32 {
-    # -llibssp would be nice to have on Windows
     LIBS += -L$$PWD/server/ -llibserver
     DESTDIR = $$PWD/build/windows
     RC_ICONS += $$PWD/resources/win/icon.ico
@@ -37,17 +41,14 @@ win32 {
     #QMAKE_LFLAGS += -Wl,--nxcompat
     #QMAKE_LFLAGS += -Wl,--dynamicbase
 } else {
-    QMAKE_CXXFLAGS += -std=c++11
+    QMAKE_CXXFLAGS += -std=c++17
     LIBS += -L$$PWD/server -lserver
     QMAKE_CXXFLAGS += $$CFORTIFY
     QMAKE_CXXFLAGS += $$CSTACK
     QMAKE_CXXFLAGS += $$CMISC
-}
-
-# Pass on env var as a define.
-QT_BITBOX_ALLOW_EXTERNAL_URLS = $$(QT_BITBOX_ALLOW_EXTERNAL_URLS)
-equals(QT_BITBOX_ALLOW_EXTERNAL_URLS, 1) {
-    DEFINES += QT_BITBOX_ALLOW_EXTERNAL_URLS
+    # On Debian/Ubuntu (docker) GCC adds -fPIE by default, but other
+    # toolchains (e.g. Fedora/GCC) do not.
+    QMAKE_CXXFLAGS += -fPIE
 }
 
 # https://stackoverflow.com/questions/18462420/how-to-specify-mac-platform-in-qmake-qtcreator
@@ -59,15 +60,22 @@ unix:!macx {
 }
 
 SOURCES += \
-        main.cpp
+        main.cpp \
+        filedialog.cpp \
+        urlhandler.cpp \
+        network.cpp
 
-HEADERS += libserver.h webclass.h
+HEADERS += libserver.h webclass.h filedialog.h urlhandler.h network.h
 
 unix:macx {
+    OBJECTIVE_SOURCES += macoswindow.mm
+    HEADERS += macoswindow.h
+    LIBS += -framework AppKit
+    CONFIG += sdk_no_version_check
+    QMAKE_APPLE_DEVICE_ARCHS = x86_64 arm64
     # Those frameworks are needed for Go's http/net packages.
     # Waiting for https://github.com/golang/go/issues/11258 to be able to automatically capture link flags.
     LIBS += -framework CoreFoundation -framework Security
-    # QMAKE_RPATHDIR = @executable_path/../Frameworks
     QMAKE_LFLAGS += "-pie -s -w"
     QMAKE_MACOSX_DEPLOYMENT_TARGET = $$[MACOS_MIN_VERSION]
 }

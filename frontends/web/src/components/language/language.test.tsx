@@ -1,0 +1,84 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { describe, expect, it, Mock, vi } from 'vitest';
+import { LanguageSwitch } from './language';
+import { render, fireEvent } from '@testing-library/react';
+import { BackButtonProvider } from '@/contexts/BackButtonContext';
+
+import { useTranslation } from 'react-i18next';
+import { TLanguagesList } from './types';
+
+vi.mock('react-i18next', () => ({
+  useTranslation: vi.fn()
+}));
+
+vi.mock('@/hooks/mediaquery', () => ({
+  useMediaQuery: vi.fn().mockReturnValue(true)
+}));
+
+describe('components/language/language', () => {
+  const supportedLangs = [
+    { code: 'ar', display: 'Arabic' },
+    { code: 'de', display: 'Deutsch' },
+    { code: 'en', display: 'English' },
+    { code: 'ms', display: 'Bahasa Melayu' },
+    { code: 'pt', display: 'Portugues' },
+  ] as TLanguagesList;
+
+  /**
+   * renderSwitchAndOpenDialog is a util function used to render
+   * the language switch and open the language dialog. This returns
+   * `RenderResult` from the render function of `@testing-library/react`.
+   */
+  function renderSwitchAndOpenDialog() {
+    const rendered = render(
+      <BackButtonProvider>
+        <LanguageSwitch languages={supportedLangs} />
+      </BackButtonProvider>
+    );
+    const btn = rendered.getByTitle('Select Language');
+    fireEvent.click(btn);
+    return rendered;
+  }
+
+  describe('selectedIndex', () => {
+    supportedLangs.forEach((lang) => {
+      it(`returns exact match (${lang.code})`, () => {
+        (useTranslation as Mock).mockReturnValue({
+          t: vi.fn(),
+          i18n: {
+            language: lang.code
+          },
+        });
+
+        const { getByTestId } = renderSwitchAndOpenDialog();
+        const selectedLang = getByTestId(`language-selection-${lang.code}`);
+        expect(selectedLang.getAttribute('class')).toContain('selected');
+      });
+    });
+
+    it('matches main language tag', () => {
+      (useTranslation as Mock).mockReturnValue({
+        t: vi.fn(),
+        i18n: {
+          language: 'de'
+        },
+      });
+      const { getByTestId } = renderSwitchAndOpenDialog();
+      const selectedLang = getByTestId('language-selection-de');
+      expect(selectedLang.getAttribute('class')).toContain('selected');
+    });
+
+    it('returns default if none matched', () => {
+      (useTranslation as Mock).mockReturnValue({
+        t: vi.fn(),
+        i18n: {
+          language: 'it'
+        },
+      });
+      const { getByTestId } = renderSwitchAndOpenDialog();
+      const defaultLang = getByTestId('language-selection-en');
+      expect(defaultLang.getAttribute('class')).toContain('selected');
+    });
+  });
+});

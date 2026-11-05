@@ -1,0 +1,41 @@
+.skeletonContainer {
+  max-width: 64px;
+  width: 100%;
+}
+
+.txConversionAmount {
+  align-items: baseline;
+  display: flex;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+.txPrefix {
+  margin-right: .4ch;
+}
+
+.txUnit {
+  margin-left: .4ch;
+}
+
+.txPrefix,
+.txUnit {
+  color: var(--color-secondary);
+  font-size: var(--size-small);
+  white-space: nowrap;
+}
+
+.txConversionAmount .txUnit {
+  font-size: var(--size-smaller);
+  flex-shrink: 0;
+  max-width: 100%;
+}
+
+.txSmallInlineIcon img {
+  max-height: 1.5rem;
+  max-width: 1.5rem;
+  vertical-align: text-bottom;
+}
+.txConversionAmount .txSmallInlineIcon {
+  padding-right: var(--space-eight);
+}

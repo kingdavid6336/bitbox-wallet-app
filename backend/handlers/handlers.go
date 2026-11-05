@@ -1,59 +1,58 @@
-// Copyright 2018 Shift Devices AG
-// Copyright 2020 Shift Crypto AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package handlers
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
-	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"os"
-	"path/filepath"
 	"runtime/debug"
-	"strconv"
-	"strings"
+	"slices"
 	"time"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/banners"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc"
-	accountHandlers "github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/handlers"
-	coinpkg "github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/eth"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/config"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/bitbox"
-	bitboxHandlers "github.com/digitalbitbox/bitbox-wallet-app/backend/devices/bitbox/handlers"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/bitbox02"
-	bitbox02Handlers "github.com/digitalbitbox/bitbox-wallet-app/backend/devices/bitbox02/handlers"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/bitbox02bootloader"
-	bitbox02bootloaderHandlers "github.com/digitalbitbox/bitbox-wallet-app/backend/devices/bitbox02bootloader/handlers"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/device"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/exchanges"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/keystore"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/rates"
-	utilConfig "github.com/digitalbitbox/bitbox-wallet-app/util/config"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/jsonp"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/locker"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/observable"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/socksproxy"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts"
+	accountsTypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/banners"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/bitsurance"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc"
+	accountHandlers "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/handlers"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/headers"
+	coinpkg "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/config"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox"
+	bitboxHandlers "github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox/handlers"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox02"
+	bitbox02Handlers "github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox02/handlers"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox02bootloader"
+	bitbox02bootloaderHandlers "github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox02bootloader/handlers"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bluetooth"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/device"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/keystore"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/keystore/software"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/lightning"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/market"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/market/swapkit"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/rates"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/signing"
+	backendutil "github.com/BitBoxSwiss/bitbox-wallet-app/backend/util"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/versioninfo"
+	utilConfig "github.com/BitBoxSwiss/bitbox-wallet-app/util/config"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/jsonp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/locker"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/logging"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/socksproxy"
+	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
@@ -65,11 +64,21 @@ type Backend interface {
 	observable.Interface
 
 	Config() *config.Config
+	DevServers() bool
 	DefaultAppConfig() config.AppConfig
 	Coin(coinpkg.Code) (coinpkg.Coin, error)
 	Testing() bool
-	Accounts() []accounts.Interface
+	Accounts() backend.AccountViews
+	SwapQuote(sellAccountCode accountsTypes.Code, buyCoinCode, sellAmount string) (backend.SwapQuoteResult, *swapkit.APIError)
+	PrepareSwap(buyAccountCode, sellAccountCode accountsTypes.Code, routeID, sellAmount string) (*backend.SwapPreparation, error)
+	SwapAccounts() (backend.SwapAccounts, error)
+	SwapStatus() backend.SwapStatus
+	MarketDeals(accountsTypes.Code, string, market.Action) ([]*market.DealsList, error)
+	MarketBitrefillInfo(accountsTypes.Code) (market.BitrefillInfoResult, error)
+	AccountsByKeystore() (backend.KeystoresAccountViewsMap, error)
+	AccountsFiatAndCoinBalance(backend.AccountViews, string) (*big.Rat, map[coinpkg.Code]*big.Int, error)
 	Keystore() keystore.Keystore
+	AccountsBalanceSummary() (*backend.AccountsBalanceSummary, error)
 	OnAccountInit(f func(accounts.Interface))
 	OnAccountUninit(f func(accounts.Interface))
 	OnDeviceInit(f func(device.Interface))
@@ -80,26 +89,53 @@ type Backend interface {
 	Register(device device.Interface) error
 	Deregister(deviceID string)
 	RatesUpdater() *rates.RateUpdater
+	CoinFiatPrices(coinpkg.Coin) *coinpkg.FormattedAmountWithConversions
+	BTCSatAmount(source string, amount string) (*coinpkg.FormattedAmountWithConversions, error)
 	DownloadCert(string) (string, error)
 	CheckElectrumServer(*config.ServerInfo) error
-	RegisterTestKeystore(string)
+	RegisterTestKeystore(string, software.Edition) error
 	NotifyUser(string)
 	SystemOpen(string) error
-	ReinitializeAccounts()
-	CheckForUpdateIgnoringErrors() *backend.UpdateFile
+	ReconfigureHistoryExchangeRates()
+	GetUpdate() backend.UpdateState
+	CheckUpdate(context.Context) backend.UpdateState
 	Banners() *banners.Banners
+	Lightning() *lightning.Lightning
 	Environment() backend.Environment
-	ChartData() (*backend.Chart, error)
+	ClearCache() error
+	ExportLogs() error
+	ExportNotes() error
+	ExportBalanceStatement(accountCodes []accountsTypes.Code, snapshotDate time.Time, numberFormat *backend.NumberFormat) error
+	ImportNotes(jsonLines []byte) (*backend.ImportNotesResult, error)
+	ChartData(bool) (*backend.Chart, error)
 	SupportedCoins(keystore.Keystore) []coinpkg.Code
 	CanAddAccount(coinpkg.Code, keystore.Keystore) (string, bool)
-	CreateAndPersistAccountConfig(coinCode coinpkg.Code, name string, keystore keystore.Keystore) (accounts.Code, error)
-	SetAccountActive(accountCode accounts.Code, active bool) error
-	SetTokenActive(accountCode accounts.Code, tokenCode string, active bool) error
-	RenameAccount(accountCode accounts.Code, name string) error
+	CreateAndPersistAccountConfig(coinCode coinpkg.Code, name string, keystore keystore.Keystore) (accountsTypes.Code, error)
+	SetAccountActive(accountCode accountsTypes.Code, active bool) error
+	SetAccountActivity(accountCode accountsTypes.Code, active bool) error
+	SetTokenActive(accountCode accountsTypes.Code, tokenCode string, active bool) error
+	SetAccountReceiveScriptType(accountCode accountsTypes.Code, scriptType signing.ScriptType) error
+	RenameAccount(accountCode accountsTypes.Code, name string) error
 	AOPP() backend.AOPP
 	AOPPCancel()
 	AOPPApprove()
-	AOPPChooseAccount(code accounts.Code)
+	AOPPChooseAccount(code accountsTypes.Code)
+	GetAccountFromCode(code accountsTypes.Code) (accounts.Interface, error)
+	SignWalletConnectTransaction(accountsTypes.Code, eth.SignTransactionArgs) (*gethtypes.Transaction, error)
+	HTTPClient() *http.Client
+	LookupInsuredAccounts(accountCode accountsTypes.Code) ([]bitsurance.AccountDetails, error)
+	Authenticate(force bool)
+	ForceAuth()
+	CancelConnectKeystore()
+	SetWatchonly(rootFingerprint []byte, watchonly bool) error
+	KeystoreName(rootFingerprint []byte) (string, error)
+	KeystoreBackupReminderAllowed(rootFingerprint []byte) (*bool, error)
+	SetKeystoreBackupReminderAllowed(rootFingerprint []byte, allowed bool) error
+	LookupEthAccountCode(address string) (accountsTypes.Code, string, error)
+	Bluetooth() *bluetooth.Bluetooth
+	IsOnline() bool
+	ConnectKeystore([]byte) (keystore.Keystore, error)
+	CheckKeystoreFeature(keystore.Keystore, keystore.Feature, accountsTypes.Code) error
 }
 
 // Handlers provides a web api to the backend.
@@ -143,8 +179,16 @@ func NewHandlers(
 ) *Handlers {
 	log := logging.Get().WithGroup("handlers")
 	router := mux.NewRouter()
+	handlersMapLock := locker.Locker{}
+	requestRouter := mux.NewRouter()
+	requestRouter.MatcherFunc(func(r *http.Request, match *mux.RouteMatch) bool {
+		// Route registration and matching share this lock. Release it before executing
+		// the handler, which may register accounts or devices and need the write lock.
+		defer handlersMapLock.RLock()()
+		return router.Match(r, match)
+	})
 	handlers := &Handlers{
-		Router:        router,
+		Router:        requestRouter,
 		backend:       backend,
 		apiData:       connData,
 		backendEvents: make(chan interface{}, 1000),
@@ -153,7 +197,7 @@ func NewHandlers(
 			WriteBufferSize: 1024,
 			CheckOrigin:     func(r *http.Request) bool { return true },
 		},
-		log: logging.Get().WithGroup("handlers"),
+		log: log,
 	}
 
 	getAPIRouter := func(subrouter *mux.Router) func(string, func(*http.Request) (interface{}, error)) *mux.Route {
@@ -163,60 +207,117 @@ func NewHandlers(
 		}
 	}
 
+	// Prefer this over `getAPIRouter` and return errors using the `{ success: false, ...}` pattern.
+	getAPIRouterNoError := func(subrouter *mux.Router) func(string, func(*http.Request) interface{}) *mux.Route {
+		return func(path string, f func(*http.Request) interface{}) *mux.Route {
+			return subrouter.Handle(
+				path,
+				ensureAPITokenValid(
+					handlers.apiMiddleware(
+						connData.isDev(),
+						func(r *http.Request) (interface{}, error) {
+							return f(r), nil
+						}),
+					connData, log))
+		}
+	}
+
 	apiRouter := router.PathPrefix("/api").Subrouter()
-	getAPIRouter(apiRouter)("/qr", handlers.getQRCodeHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/config", handlers.getAppConfigHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/config/default", handlers.getDefaultConfigHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/config", handlers.postAppConfigHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/native-locale", handlers.getNativeLocaleHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/notify-user", handlers.postNotifyHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/open", handlers.postOpenHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/update", handlers.getUpdateHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/banners/{key}", handlers.getBannersHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/using-mobile-data", handlers.getUsingMobileDataHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/version", handlers.getVersionHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/testing", handlers.getTestingHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/account-add", handlers.postAddAccountHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/keystores", handlers.getKeystoresHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/accounts", handlers.getAccountsHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/set-account-active", handlers.postSetAccountActiveHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/set-token-active", handlers.postSetTokenActiveHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/rename-account", handlers.postRenameAccountHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/accounts/reinitialize", handlers.postAccountsReinitializeHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/export-account-summary", handlers.postExportAccountSummary).Methods("POST")
-	getAPIRouter(apiRouter)("/account-summary", handlers.getAccountSummary).Methods("GET")
-	getAPIRouter(apiRouter)("/supported-coins", handlers.getSupportedCoinsHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/test/register", handlers.postRegisterTestKeystoreHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/test/deregister", handlers.postDeregisterTestKeystoreHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/rates", handlers.getRatesHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/coins/convertToFiat", handlers.getConvertToFiatHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/coins/convertFromFiat", handlers.getConvertFromFiatHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/coins/tltc/headers/status", handlers.getHeadersStatus(coinpkg.CodeTLTC)).Methods("GET")
-	getAPIRouter(apiRouter)("/coins/tbtc/headers/status", handlers.getHeadersStatus(coinpkg.CodeTBTC)).Methods("GET")
-	getAPIRouter(apiRouter)("/coins/ltc/headers/status", handlers.getHeadersStatus(coinpkg.CodeLTC)).Methods("GET")
-	getAPIRouter(apiRouter)("/coins/btc/headers/status", handlers.getHeadersStatus(coinpkg.CodeBTC)).Methods("GET")
-	getAPIRouter(apiRouter)("/certs/download", handlers.postCertsDownloadHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/electrum/check", handlers.postElectrumCheckHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/socksproxy/check", handlers.postSocksProxyCheck).Methods("POST")
-	getAPIRouter(apiRouter)("/exchange/moonpay/buy-supported/{code}", handlers.getExchangeMoonpayBuySupported).Methods("GET")
-	getAPIRouter(apiRouter)("/exchange/moonpay/buy/{code}", handlers.getExchangeMoonpayBuy).Methods("GET")
-	getAPIRouter(apiRouter)("/aopp", handlers.getAOPPHandler).Methods("GET")
-	getAPIRouter(apiRouter)("/aopp/cancel", handlers.postAOPPCancelHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/aopp/approve", handlers.postAOPPApproveHandler).Methods("POST")
-	getAPIRouter(apiRouter)("/aopp/choose-account", handlers.postAOPPChooseAccountHandler).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/qr", handlers.getQRCode).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/config", handlers.getAppConfig).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/config/default", handlers.getDefaultConfig).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/config", handlers.postAppConfig).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/native-locale", handlers.getNativeLocale).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/number-format", handlers.getNumberFormat).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/notify-user", handlers.postNotify).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/open", handlers.postOpen).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/update", handlers.getUpdate).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/banners/{key}", handlers.getBanners).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/using-mobile-data", handlers.getUsingMobileData).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/authenticate", handlers.postAuthenticate).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/force-auth", handlers.postForceAuth).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/set-dark-theme", handlers.postDarkTheme).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/detect-dark-theme", handlers.getDetectDarkTheme).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/version", handlers.getVersion).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/testing", handlers.getTesting).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/dev-servers", handlers.getDevServers).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/account-add", handlers.postAddAccount).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/keystores", handlers.getKeystores).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/keystore/{rootFingerprint}/features", handlers.getKeystoreFeatures).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/keystore-name", handlers.getKeystoreName).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/accounts", handlers.getAccounts).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/account/{code}/parse-ethereum-payment-request", handlers.postParseEthereumPaymentRequest).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/swap/accounts", handlers.getSwapAccounts).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/swap/status", handlers.getSwapStatus).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/accounts/balance-summary", handlers.getAccountsBalanceSummary).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/account/{accountCode}/activity", handlers.postAccountActivity).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/set-account-active", handlers.postSetAccountActive).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/set-token-active", handlers.postSetTokenActive).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/set-account-receive-script-type", handlers.postSetAccountReceiveScriptType).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/rename-account", handlers.postRenameAccount).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/rates/reconfigure-history", handlers.postReconfigureHistoryExchangeRates).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/chart-data", handlers.getChartData).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/supported-coins", handlers.getSupportedCoins).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/test/register", handlers.postRegisterTestKeystore).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/test/deregister", handlers.postDeregisterTestKeystore).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/coins/convert-to-plain-fiat", handlers.getConvertToPlainFiat).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/coins/convert-from-fiat", handlers.getConvertFromFiat).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/coins/{coinCode}/fiat-prices", handlers.getCoinFiatPrices).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/coins/{coinCode}/headers/status", handlers.getHeadersStatus).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/coins/btc/set-unit", handlers.postBtcFormatUnit).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/coins/btc/parse-external-amount", handlers.getBTCParseExternalAmount).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/coins/btc/sat-amount", handlers.getBTCSatAmount).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/certs/download", handlers.postCertsDownload).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/electrum/check", handlers.postElectrumCheck).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/socksproxy/check", handlers.postSocksProxyCheck).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/market/region-codes", handlers.getMarketRegionCodes).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/market/deals/{action}/{code}", handlers.getMarketDeals).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/market/vendors/{code}", handlers.getMarketVendors).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/market/btcdirect/info/{action}/{code}", handlers.getMarketBtcDirectInfo).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/swap/quote", handlers.postSwapkitQuote).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/swap/sign", handlers.postSwapSign).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/market/moonpay/buy-info/{code}", handlers.getMarketMoonpayBuyInfo).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/market/pocket/api-url/{action}", handlers.getMarketPocketURL).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/market/pocket/verify-address", handlers.postPocketWidgetVerifyAddress).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/market/bitrefill/info/{action}/{code}", handlers.getMarketBitrefillInfo).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/bitsurance/lookup", handlers.postBitsuranceLookup).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/bitsurance/url", handlers.getBitsuranceURL).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/aopp", handlers.getAOPP).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/aopp/cancel", handlers.postAOPPCancel).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/aopp/approve", handlers.postAOPPApprove).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/aopp/choose-account", handlers.postAOPPChooseAccount).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/connect-keystore", handlers.postConnectKeystore).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/cancel-connect-keystore", handlers.postCancelConnectKeystore).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/set-watchonly", handlers.postSetWatchonly).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/on-auth-setting-changed", handlers.postOnAuthSettingChanged).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/clear-cache", handlers.postClearCache).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/export-log", handlers.postExportLog).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/accounts/eth-account-code", handlers.lookupEthAccountCode).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/notes/export", handlers.postExportNotes).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/notes/import", handlers.postImportNotes).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/accounts/balance-statement/export", handlers.postExportBalanceStatement).Methods("POST")
 
-	devicesRouter := getAPIRouter(apiRouter.PathPrefix("/devices").Subrouter())
-	devicesRouter("/registered", handlers.getDevicesRegisteredHandler).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/bluetooth/state", handlers.getBluetoothState).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/bluetooth/connect", handlers.postBluetoothConnect).Methods("POST")
 
-	handlersMapLock := locker.Locker{}
+	getAPIRouterNoError(apiRouter)("/online", handlers.getOnline).Methods("GET")
+	getAPIRouterNoError(apiRouter)("/keystore/show-backup-banner/{rootFingerprint}", handlers.getKeystoreShowBackupBanner).Methods("GET")
 
-	accountHandlersMap := map[accounts.Code]*accountHandlers.Handlers{}
-	getAccountHandlers := func(accountCode accounts.Code) *accountHandlers.Handlers {
+	lightning.NewHandlers(
+		getAPIRouterNoError(apiRouter.PathPrefix("/lightning").Subrouter()),
+		backend.Lightning(),
+	)
+
+	devicesRouter := getAPIRouterNoError(apiRouter.PathPrefix("/devices").Subrouter())
+	devicesRouter("/registered", handlers.getDevicesRegistered).Methods("GET")
+
+	accountHandlersMap := map[accountsTypes.Code]*accountHandlers.Handlers{}
+	getAccountHandlers := func(accountCode accountsTypes.Code) *accountHandlers.Handlers {
 		defer handlersMapLock.Lock()()
 		if _, ok := accountHandlersMap[accountCode]; !ok {
 			accountHandlersMap[accountCode] = accountHandlers.NewHandlers(getAPIRouter(
 				apiRouter.PathPrefix(fmt.Sprintf("/account/%s", accountCode)).Subrouter(),
-			), log)
+			), log, backend.SignWalletConnectTransaction)
 		}
 		accHandlers := accountHandlersMap[accountCode]
 		log.WithField("account-handlers", accHandlers).Debug("Account handlers")
@@ -246,7 +347,7 @@ func NewHandlers(
 	getBitBox02Handlers := func(deviceID string) *bitbox02Handlers.Handlers {
 		defer handlersMapLock.Lock()()
 		if _, ok := bitbox02HandlersMap[deviceID]; !ok {
-			bitbox02HandlersMap[deviceID] = bitbox02Handlers.NewHandlers(getAPIRouter(
+			bitbox02HandlersMap[deviceID] = bitbox02Handlers.NewHandlers(getAPIRouterNoError(
 				apiRouter.PathPrefix(fmt.Sprintf("/devices/bitbox02/%s", deviceID)).Subrouter(),
 			), log)
 		}
@@ -257,7 +358,7 @@ func NewHandlers(
 	getBitBox02BootloaderHandlers := func(deviceID string) *bitbox02bootloaderHandlers.Handlers {
 		defer handlersMapLock.Lock()()
 		if _, ok := bitbox02BootloaderHandlersMap[deviceID]; !ok {
-			bitbox02BootloaderHandlersMap[deviceID] = bitbox02bootloaderHandlers.NewHandlers(getAPIRouter(
+			bitbox02BootloaderHandlersMap[deviceID] = bitbox02bootloaderHandlers.NewHandlers(getAPIRouterNoError(
 				apiRouter.PathPrefix(fmt.Sprintf("/devices/bitbox02-bootloader/%s", deviceID)).Subrouter(),
 			), log)
 		}
@@ -306,151 +407,338 @@ func writeJSON(w io.Writer, value interface{}) {
 	}
 }
 
+type apiErrorResponse struct {
+	Error string `json:"error"`
+}
+
 type activeToken struct {
 	// TokenCode is the token code as defined in erc20.go, e.g. "eth-erc20-usdt".
 	TokenCode string `json:"tokenCode"`
 	// AccountCode is the code of the account, which is not the same as the TokenCode, as there can
 	// be many accounts for the same token.
-	AccountCode accounts.Code `json:"accountCode"`
+	AccountCode accountsTypes.Code `json:"accountCode"`
+}
+
+type keystoreJSON struct {
+	config.Keystore
+	Connected bool `json:"connected"`
+}
+
+type accountBaseJSON struct {
+	// Multiple accounts can belong to the same keystore. For now we replicate the keystore info in
+	// the accounts. In the future the getAccountsHandler() could return the accounts grouped
+	// keystore.
+	Keystore          keystoreJSON        `json:"keystore"`
+	Active            bool                `json:"active"`
+	CoinCode          coinpkg.Code        `json:"coinCode"`
+	CoinUnit          string              `json:"coinUnit"`
+	Code              accountsTypes.Code  `json:"code"`
+	Name              string              `json:"name"`
+	ReceiveScriptType *signing.ScriptType `json:"receiveScriptType,omitempty"`
+	IsToken           bool                `json:"isToken"`
 }
 
 type accountJSON struct {
-	Active                bool          `json:"active"`
-	CoinCode              coinpkg.Code  `json:"coinCode"`
-	CoinUnit              string        `json:"coinUnit"`
-	CoinName              string        `json:"coinName"`
-	Code                  accounts.Code `json:"code"`
-	Name                  string        `json:"name"`
-	IsToken               bool          `json:"isToken"`
-	ActiveTokens          []activeToken `json:"activeTokens,omitempty"`
-	BlockExplorerTxPrefix string        `json:"blockExplorerTxPrefix"`
+	accountBaseJSON
+	BitsuranceStatus           string        `json:"bitsuranceStatus"`
+	CoinName                   string        `json:"coinName"`
+	ContractAddress            string        `json:"contractAddress,omitempty"`
+	ActiveTokens               []activeToken `json:"activeTokens,omitempty"`
+	BlockExplorerTxPrefix      string        `json:"blockExplorerTxPrefix"`
+	BlockExplorerAddressPrefix string        `json:"blockExplorerAddressPrefix,omitempty"`
+	// Number of the account per coin per keystore, starting at 0. Nil if unknown.
+	AccountNumber *uint16 `json:"accountNumber"`
 }
 
-func newAccountJSON(account accounts.Interface, activeTokens []activeToken) *accountJSON {
-	eth, ok := account.Coin().(*eth.Coin)
-	isToken := ok && eth.ERC20Token() != nil
-	return &accountJSON{
-		Active:                account.Config().Active,
-		CoinCode:              account.Coin().Code(),
-		CoinUnit:              account.Coin().Unit(false),
-		CoinName:              account.Coin().Name(),
-		Code:                  account.Config().Code,
-		Name:                  account.Config().Name,
-		IsToken:               isToken,
-		ActiveTokens:          activeTokens,
-		BlockExplorerTxPrefix: account.Coin().BlockExplorerTransactionURLPrefix(),
+type swapAccountJSON struct {
+	accountBaseJSON
+	ParentAccountCode *accountsTypes.Code `json:"parentAccountCode,omitempty"`
+}
+
+func activeTokensJSON(account *config.Account, tokenCodes []string) []activeToken {
+	if account.CoinCode != coinpkg.CodeETH {
+		return nil
+	}
+	activeTokens := make([]activeToken, 0, len(tokenCodes))
+	for _, tokenCode := range tokenCodes {
+		activeTokens = append(activeTokens, activeToken{
+			TokenCode:   tokenCode,
+			AccountCode: backend.Erc20AccountCode(account.Code, tokenCode),
+		})
+	}
+	return activeTokens
+}
+
+func isTokenAccount(accountCoin coinpkg.Coin) bool {
+	ethCoin, ok := accountCoin.(*eth.Coin)
+	return ok && ethCoin.ERC20Token() != nil
+}
+
+func newAccountBaseJSON(
+	keystore config.Keystore,
+	accountConfig *config.Account,
+	accountCoin coinpkg.Coin,
+	keystoreConnected bool,
+) accountBaseJSON {
+	return accountBaseJSON{
+		Keystore: keystoreJSON{
+			Keystore:  keystore,
+			Connected: keystoreConnected,
+		},
+		Active:            !accountConfig.Inactive,
+		CoinCode:          accountCoin.Code(),
+		CoinUnit:          accountCoin.Unit(false),
+		Code:              accountConfig.Code,
+		Name:              accountConfig.Name,
+		ReceiveScriptType: accountConfig.ReceiveScriptType,
+		IsToken:           isTokenAccount(accountCoin),
 	}
 }
 
-func (handlers *Handlers) getQRCodeHandler(r *http.Request) (interface{}, error) {
+// newAccountJSON builds the generic account response.
+func newAccountJSON(
+	keystore config.Keystore,
+	accountConfig *config.Account,
+	accountCoin coinpkg.Coin,
+	activeTokens []activeToken,
+	keystoreConnected bool,
+) *accountJSON {
+	var accountNumberPtr *uint16
+	accountNumber, err := accountConfig.SigningConfigurations.AccountNumber()
+	if err == nil {
+		accountNumberPtr = &accountNumber
+	}
+
+	contractAddress := ""
+	blockExplorerAddressPrefix := ""
+	if btcCoin, ok := accountCoin.(*btc.Coin); ok {
+		blockExplorerAddressPrefix = btcCoin.BlockExplorerAddressURLPrefix()
+	}
+	if ethCoin, ok := accountCoin.(*eth.Coin); ok && ethCoin.ERC20Token() != nil {
+		contractAddress = ethCoin.ERC20Token().ContractAddress().Hex()
+		blockExplorerURLPrefix := ethCoin.BlockExplorerURLPrefix()
+		if blockExplorerURLPrefix != "" {
+			blockExplorerAddressPrefix = blockExplorerURLPrefix + "address/"
+		}
+	}
+
+	return &accountJSON{
+		accountBaseJSON:            newAccountBaseJSON(keystore, accountConfig, accountCoin, keystoreConnected),
+		BitsuranceStatus:           accountConfig.InsuranceStatus,
+		CoinName:                   accountCoin.Name(),
+		ContractAddress:            contractAddress,
+		ActiveTokens:               activeTokens,
+		BlockExplorerTxPrefix:      accountCoin.BlockExplorerTransactionURLPrefix(),
+		BlockExplorerAddressPrefix: blockExplorerAddressPrefix,
+		AccountNumber:              accountNumberPtr,
+	}
+}
+
+func newSwapAccountJSON(account backend.SwapAccount) swapAccountJSON {
+	return swapAccountJSON{
+		accountBaseJSON: newAccountBaseJSON(
+			account.Keystore,
+			account.AccountConfig,
+			account.AccountCoin,
+			account.KeystoreConnected,
+		),
+		ParentAccountCode: account.ParentAccountCode,
+	}
+}
+
+func (handlers *Handlers) getQRCode(r *http.Request) interface{} {
+	type result struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+		Data    string `json:"data"`
+	}
 	data := r.URL.Query().Get("data")
 	qr, err := qrcode.New(data, qrcode.Medium)
 	if err != nil {
-		return nil, errp.WithStack(err)
+		handlers.log.WithError(err).Error("getQRCodeHandler")
+		return result{Success: false, Message: err.Error()}
 	}
 	bytes, err := qr.PNG(256)
 	if err != nil {
-		return nil, errp.WithStack(err)
+		handlers.log.WithError(err).Error("getQRCodeHandler")
+		return result{Success: false, Message: err.Error()}
 	}
-	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(bytes), nil
+	return result{
+		Success: true,
+		Data:    "data:image/png;base64," + base64.StdEncoding.EncodeToString(bytes),
+	}
 }
 
-func (handlers *Handlers) getAppConfigHandler(_ *http.Request) (interface{}, error) {
-	return handlers.backend.Config().AppConfig(), nil
+func (handlers *Handlers) getAppConfig(*http.Request) interface{} {
+	return handlers.backend.Config().AppConfig()
 }
 
-func (handlers *Handlers) getDefaultConfigHandler(_ *http.Request) (interface{}, error) {
-	return handlers.backend.DefaultAppConfig(), nil
+func (handlers *Handlers) getDefaultConfig(*http.Request) interface{} {
+	return handlers.backend.DefaultAppConfig()
 }
 
-func (handlers *Handlers) postAppConfigHandler(r *http.Request) (interface{}, error) {
+func (handlers *Handlers) postAppConfig(r *http.Request) interface{} {
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+
 	appConfig := config.AppConfig{}
 	if err := json.NewDecoder(r.Body).Decode(&appConfig); err != nil {
-		return nil, errp.WithStack(err)
+		handlers.log.WithField("handler", "postAppConfig").WithError(err).Error("handler failed")
+		return response{Success: false, ErrorMessage: err.Error()}
 	}
-	return nil, handlers.backend.Config().SetAppConfig(appConfig)
+	if err := handlers.backend.Config().SetAppConfig(appConfig); err != nil {
+		handlers.log.WithField("handler", "postAppConfig").WithError(err).Error("handler failed")
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	return response{Success: true}
 }
 
-// getNativeLocaleHandler returns user preferred UI language as reported
+// getNativeLocale returns user preferred UI language as reported
 // by the native app layer.
 // The response value may be invalid or unsupported by the app.
-func (handlers *Handlers) getNativeLocaleHandler(*http.Request) (interface{}, error) {
-	return handlers.backend.Environment().NativeLocale(), nil
+func (handlers *Handlers) getNativeLocale(*http.Request) interface{} {
+	return handlers.backend.Environment().NativeLocale()
 }
 
-func (handlers *Handlers) postNotifyHandler(r *http.Request) (interface{}, error) {
+func (handlers *Handlers) getNumberFormat(*http.Request) interface{} {
+	return handlers.backend.Environment().NumberFormat()
+}
+
+func (handlers *Handlers) postNotify(r *http.Request) interface{} {
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+
 	payload := struct {
 		Text string `json:"text"`
 	}{}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		return nil, errp.WithStack(err)
+		return response{Success: false, ErrorMessage: err.Error()}
 	}
 	handlers.backend.NotifyUser(payload.Text)
-	return nil, nil
+	return response{Success: true}
 }
 
-func (handlers *Handlers) postOpenHandler(r *http.Request) (interface{}, error) {
+func (handlers *Handlers) postOpen(r *http.Request) interface{} {
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+
 	var url string
 	if err := json.NewDecoder(r.Body).Decode(&url); err != nil {
-		return nil, errp.WithStack(err)
+		handlers.log.WithField("handler", "postOpen").WithError(err).Error("handler failed")
+		return response{Success: false, ErrorMessage: err.Error()}
 	}
-	return nil, handlers.backend.SystemOpen(url)
+	if err := handlers.backend.SystemOpen(url); err != nil {
+		handlers.log.WithField("handler", "postOpen").WithError(err).Error("handler failed")
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	return response{Success: true}
 }
 
-func (handlers *Handlers) getUpdateHandler(_ *http.Request) (interface{}, error) {
-	return handlers.backend.CheckForUpdateIgnoringErrors(), nil
+func (handlers *Handlers) getUpdate(r *http.Request) interface{} {
+	if r.URL.Query().Get("about") == "1" {
+		return handlers.backend.CheckUpdate(r.Context())
+	}
+	return handlers.backend.GetUpdate()
 }
 
-func (handlers *Handlers) getBannersHandler(r *http.Request) (interface{}, error) {
-	return handlers.backend.Banners().GetMessage(banners.MessageKey(mux.Vars(r)["key"])), nil
+func (handlers *Handlers) getBanners(r *http.Request) interface{} {
+	return handlers.backend.Banners().GetMessage(banners.MessageKey(mux.Vars(r)["key"]))
 }
 
-func (handlers *Handlers) getUsingMobileDataHandler(r *http.Request) (interface{}, error) {
-	return handlers.backend.Environment().UsingMobileData(), nil
+func (handlers *Handlers) getUsingMobileData(r *http.Request) interface{} {
+	return handlers.backend.Environment().UsingMobileData()
 }
 
-func (handlers *Handlers) getVersionHandler(_ *http.Request) (interface{}, error) {
-	return backend.Version.String(), nil
+func (handlers *Handlers) postAuthenticate(r *http.Request) interface{} {
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+
+	var force bool
+	if err := json.NewDecoder(r.Body).Decode(&force); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+
+	handlers.backend.Authenticate(force)
+	return nil
 }
 
-func (handlers *Handlers) getTestingHandler(_ *http.Request) (interface{}, error) {
-	return handlers.backend.Testing(), nil
+func (handlers *Handlers) postForceAuth(r *http.Request) interface{} {
+	handlers.backend.ForceAuth()
+	return nil
 }
 
-func (handlers *Handlers) postAddAccountHandler(r *http.Request) (interface{}, error) {
+func (handlers *Handlers) postDarkTheme(r *http.Request) interface{} {
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+
+	var isDark bool
+	if err := json.NewDecoder(r.Body).Decode(&isDark); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	handlers.backend.Environment().SetDarkTheme(isDark)
+	return response{Success: true}
+}
+
+func (handlers *Handlers) getDetectDarkTheme(r *http.Request) interface{} {
+	return handlers.backend.Environment().DetectDarkTheme()
+}
+
+func (handlers *Handlers) getVersion(*http.Request) interface{} {
+	return versioninfo.Version.String()
+}
+
+func (handlers *Handlers) getTesting(*http.Request) interface{} {
+	return handlers.backend.Testing()
+}
+
+func (handlers *Handlers) getDevServers(*http.Request) interface{} {
+	return handlers.backend.DevServers()
+}
+
+func (handlers *Handlers) postAddAccount(r *http.Request) interface{} {
 	var jsonBody struct {
 		CoinCode coinpkg.Code `json:"coinCode"`
 		Name     string       `json:"name"`
 	}
 
 	type response struct {
-		Success      bool          `json:"success"`
-		AccountCode  accounts.Code `json:"accountCode,omitempty"`
-		ErrorMessage string        `json:"errorMessage,omitempty"`
-		ErrorCode    string        `json:"errorCode,omitempty"`
+		Success      bool               `json:"success"`
+		AccountCode  accountsTypes.Code `json:"accountCode,omitempty"`
+		ErrorMessage string             `json:"errorMessage,omitempty"`
+		ErrorCode    string             `json:"errorCode,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
-		return response{Success: false, ErrorMessage: err.Error()}, nil
+		return response{Success: false, ErrorMessage: err.Error()}
 	}
 
 	keystore := handlers.backend.Keystore()
 	if keystore == nil {
-		return response{Success: false, ErrorMessage: "Keystore not found"}, nil
+		return response{Success: false, ErrorMessage: "Keystore not found"}
 	}
 
 	accountCode, err := handlers.backend.CreateAndPersistAccountConfig(jsonBody.CoinCode, jsonBody.Name, keystore)
 	if err != nil {
 		handlers.log.WithError(err).Error("Could not add account")
-		if errCode, ok := errp.Cause(err).(backend.ErrorCode); ok {
-			return response{Success: false, ErrorCode: string(errCode)}, nil
+		if errCode, ok := errp.Cause(err).(errp.ErrorCode); ok {
+			return response{Success: false, ErrorCode: string(errCode)}
 		}
-		return response{Success: false, ErrorMessage: err.Error()}, nil
+		return response{Success: false, ErrorMessage: err.Error()}
 	}
-	return response{Success: true, AccountCode: accountCode}, nil
+	return response{Success: true, AccountCode: accountCode}
 }
 
-func (handlers *Handlers) getKeystoresHandler(_ *http.Request) (interface{}, error) {
+func (handlers *Handlers) getKeystores(*http.Request) interface{} {
 	type json struct {
 		Type keystore.Type `json:"type"`
 	}
@@ -462,36 +750,270 @@ func (handlers *Handlers) getKeystoresHandler(_ *http.Request) (interface{}, err
 			Type: keystore.Type(),
 		})
 	}
-	return keystores, nil
+	return keystores
 }
 
-func (handlers *Handlers) getAccountsHandler(_ *http.Request) (interface{}, error) {
+func (handlers *Handlers) getKeystoreFeatures(r *http.Request) interface{} {
+	type response struct {
+		Success      bool               `json:"success"`
+		ErrorMessage string             `json:"errorMessage,omitempty"`
+		Features     *keystore.Features `json:"features,omitempty"`
+	}
+
+	rootFingerprintHex := mux.Vars(r)["rootFingerprint"]
+	rootFingerprint, err := hex.DecodeString(rootFingerprintHex)
+	if err != nil {
+		handlers.log.WithError(err).Error("invalid root fingerprint for features request")
+		return response{
+			Success:      false,
+			ErrorMessage: err.Error(),
+		}
+	}
+
+	connectedKeystore := handlers.backend.Keystore()
+	if connectedKeystore == nil {
+		handlers.log.Warn("features requested but no keystore connected")
+		return response{
+			Success:      false,
+			ErrorMessage: "keystore not connected",
+		}
+	}
+
+	connectedRootFingerprint, err := connectedKeystore.RootFingerprint()
+	if err != nil {
+		handlers.log.WithError(err).Error("could not determine connected keystore root fingerprint")
+		return response{
+			Success:      false,
+			ErrorMessage: err.Error(),
+		}
+	}
+
+	if !bytes.Equal(rootFingerprint, connectedRootFingerprint) {
+		handlers.log.WithField("requested", rootFingerprintHex).Warn("features requested for non-connected keystore")
+		return response{
+			Success:      false,
+			ErrorMessage: "wrong keystore connected",
+		}
+	}
+
+	return response{
+		Success:  true,
+		Features: connectedKeystore.Features(),
+	}
+}
+
+func (handlers *Handlers) getKeystoreName(r *http.Request) interface{} {
+	type response struct {
+		Success      bool   `json:"success"`
+		KeystoreName string `json:"keystoreName,omitempty"`
+	}
+
+	rootFingerprint := r.URL.Query().Get("rootFingerprint")
+	hexFingerprint, err := hex.DecodeString(rootFingerprint)
+	if err != nil {
+		return response{Success: false}
+	}
+	keystoreName, err := handlers.backend.KeystoreName(hexFingerprint)
+	if err != nil {
+		return response{Success: false}
+	}
+	return response{
+		Success:      true,
+		KeystoreName: keystoreName,
+	}
+}
+
+func (handlers *Handlers) getAccounts(*http.Request) interface{} {
 	accounts := []*accountJSON{}
-	persistedAccounts := handlers.backend.Config().AccountsConfig()
-	for _, account := range handlers.backend.Accounts() {
-		var activeTokens []activeToken
-		if account.Coin().Code() == coinpkg.CodeETH {
-			persistedAccount := persistedAccounts.Lookup(account.Config().Code)
-			if persistedAccount == nil {
-				handlers.log.WithField("code", account.Config().Code).Error("account not found in accounts database")
-				continue
-			}
-			for _, tokenCode := range persistedAccount.ActiveTokens {
-				activeTokens = append(activeTokens, activeToken{
-					TokenCode:   tokenCode,
-					AccountCode: backend.Erc20AccountCode(account.Config().Code, tokenCode),
-				})
+	accountViews := handlers.backend.Accounts()
+	for index := range accountViews {
+		accountView := &accountViews[index]
+		if accountView.Record.HiddenBecauseUnused {
+			continue
+		}
+		rootFingerprint, err := accountView.Record.SigningConfigurations.RootFingerprint()
+		if err != nil {
+			handlers.log.WithField("code", accountView.Record.Code).Error("could not identify root fingerprint")
+			continue
+		}
+		if accountView.Keystore == nil {
+			handlers.log.WithField("code", accountView.Record.Code).Error("could not find keystore of account")
+			continue
+		}
+
+		keystoreConnected := false
+		if connectedKeystore := handlers.backend.Keystore(); connectedKeystore != nil {
+			connectedKeystoreRootFingerprint, err := connectedKeystore.RootFingerprint()
+			if err != nil {
+				handlers.log.WithError(err).Error("Could not retrieve rootFingerprint")
+			} else {
+				keystoreConnected = bytes.Equal(rootFingerprint, connectedKeystoreRootFingerprint)
 			}
 		}
-		accounts = append(accounts, newAccountJSON(account, activeTokens))
+
+		accounts = append(accounts, newAccountJSON(
+			*accountView.Keystore,
+			&accountView.Record,
+			accountView.Account.Coin(),
+			activeTokensJSON(&accountView.Record, accountView.Record.ActiveTokens),
+			keystoreConnected,
+		))
 	}
-	return accounts, nil
+	return accounts
 }
 
-func (handlers *Handlers) postSetAccountActiveHandler(r *http.Request) (interface{}, error) {
+func (handlers *Handlers) getSwapAccounts(*http.Request) interface{} {
+	type response struct {
+		Success                bool                `json:"success"`
+		ErrorMessage           string              `json:"errorMessage,omitempty"`
+		SellAccounts           []swapAccountJSON   `json:"sellAccounts"`
+		BuyAccounts            []swapAccountJSON   `json:"buyAccounts"`
+		DefaultSellAccountCode *accountsTypes.Code `json:"defaultSellAccountCode,omitempty"`
+		DefaultBuyAccountCode  *accountsTypes.Code `json:"defaultBuyAccountCode,omitempty"`
+	}
+
+	swapAccounts, err := handlers.backend.SwapAccounts()
+	if err != nil {
+		return response{
+			Success:      false,
+			ErrorMessage: err.Error(),
+		}
+	}
+	result := response{
+		Success:                true,
+		SellAccounts:           make([]swapAccountJSON, len(swapAccounts.SellAccounts)),
+		BuyAccounts:            make([]swapAccountJSON, len(swapAccounts.BuyAccounts)),
+		DefaultSellAccountCode: swapAccounts.DefaultSellAccountCode,
+		DefaultBuyAccountCode:  swapAccounts.DefaultBuyAccountCode,
+	}
+	for i, account := range swapAccounts.SellAccounts {
+		result.SellAccounts[i] = newSwapAccountJSON(account)
+	}
+	for i, account := range swapAccounts.BuyAccounts {
+		result.BuyAccounts[i] = newSwapAccountJSON(account)
+	}
+	return result
+}
+
+func (handlers *Handlers) getSwapStatus(*http.Request) interface{} {
+	return handlers.backend.SwapStatus()
+}
+
+func (handlers *Handlers) lookupEthAccountCode(r *http.Request) interface{} {
+	var args struct {
+		Address string `json:"address"`
+	}
+	type response struct {
+		Success        bool               `json:"success"`
+		Code           accountsTypes.Code `json:"code"`
+		Name           string             `json:"name"`
+		DisplayAddress string             `json:"displayAddress,omitempty"`
+		ErrorMessage   string             `json:"errorMessage"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	code, name, err := handlers.backend.LookupEthAccountCode(args.Address)
+	if err != nil {
+		return response{
+			Success:      false,
+			ErrorMessage: err.Error(),
+		}
+	}
+	return response{
+		Success:        true,
+		Code:           code,
+		Name:           name,
+		DisplayAddress: backendutil.FormatAddress(coinpkg.CodeETH, args.Address),
+	}
+}
+
+func (handlers *Handlers) postParseEthereumPaymentRequest(r *http.Request) interface{} {
+	var request struct {
+		URI string `json:"uri"`
+	}
+	type response struct {
+		Success   bool   `json:"success"`
+		Recipient string `json:"recipient,omitempty"`
+		Amount    string `json:"amount,omitempty"`
+		ErrorCode string `json:"errorCode,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return response{Success: false}
+	}
+	account, err := handlers.backend.GetAccountFromCode(accountsTypes.Code(mux.Vars(r)["code"]))
+	if err != nil {
+		return response{Success: false}
+	}
+	accountCoin, ok := account.Coin().(*eth.Coin)
+	if !ok {
+		return response{Success: false}
+	}
+	paymentRequest, err := accountCoin.ParsePaymentRequest(request.URI)
+	if err != nil {
+		if errCode, ok := errp.Cause(err).(errp.ErrorCode); ok {
+			return response{Success: false, ErrorCode: string(errCode)}
+		}
+		return response{Success: false}
+	}
+	return response{
+		Success:   true,
+		Recipient: paymentRequest.Recipient,
+		Amount:    paymentRequest.Amount,
+	}
+}
+
+func (handlers *Handlers) postBtcFormatUnit(r *http.Request) interface{} {
+	type response struct {
+		Success bool `json:"success"`
+	}
+
+	var request struct {
+		Unit coinpkg.BtcUnit `json:"unit"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return response{Success: false}
+	}
+
+	unit := request.Unit
+
+	// update BTC format unit for Coins
+	btcCoin, err := handlers.backend.Coin(coinpkg.CodeBTC)
+	if err != nil {
+		return response{Success: false}
+	}
+	btcCoin.(*btc.Coin).SetFormatUnit(unit)
+
+	btcCoin, err = handlers.backend.Coin(coinpkg.CodeTBTC)
+	if err != nil {
+		return response{Success: false}
+	}
+	btcCoin.(*btc.Coin).SetFormatUnit(unit)
+
+	handlers.backend.Lightning().NotifyBalanceReload()
+
+	return response{Success: true}
+}
+
+// getAccountsBalanceSummary returns the total balance summary of all coins and accounts.
+func (handlers *Handlers) getAccountsBalanceSummary(*http.Request) interface{} {
+	type response struct {
+		Success      bool                            `json:"success"`
+		TotalBalance *backend.AccountsBalanceSummary `json:"accountsBalanceSummary"`
+	}
+	totalBalance, err := handlers.backend.AccountsBalanceSummary()
+	if err != nil {
+		handlers.log.WithField("handler", "getAccountsBalanceSummary").WithError(err).Error("handler failed")
+		return response{Success: false}
+	}
+	return response{Success: true, TotalBalance: totalBalance}
+}
+
+func (handlers *Handlers) postAccountActivity(r *http.Request) interface{} {
 	var jsonBody struct {
-		AccountCode accounts.Code `json:"accountCode"`
-		Active      bool          `json:"active"`
+		Active bool `json:"active"`
 	}
 
 	type response struct {
@@ -500,19 +1022,40 @@ func (handlers *Handlers) postSetAccountActiveHandler(r *http.Request) (interfac
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
-		return response{Success: false, ErrorMessage: err.Error()}, nil
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	accountCode := accountsTypes.Code(mux.Vars(r)["accountCode"])
+	if err := handlers.backend.SetAccountActivity(accountCode, jsonBody.Active); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	return response{Success: true}
+}
+
+func (handlers *Handlers) postSetAccountActive(r *http.Request) interface{} {
+	var jsonBody struct {
+		AccountCode accountsTypes.Code `json:"accountCode"`
+		Active      bool               `json:"active"`
+	}
+
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
 	}
 	if err := handlers.backend.SetAccountActive(jsonBody.AccountCode, jsonBody.Active); err != nil {
-		return response{Success: false, ErrorMessage: err.Error()}, nil
+		return response{Success: false, ErrorMessage: err.Error()}
 	}
-	return response{Success: true}, nil
+	return response{Success: true}
 }
 
-func (handlers *Handlers) postSetTokenActiveHandler(r *http.Request) (interface{}, error) {
+func (handlers *Handlers) postSetTokenActive(r *http.Request) interface{} {
 	var jsonBody struct {
-		AccountCode accounts.Code `json:"accountCode"`
-		TokenCode   string        `json:"tokenCode"`
-		Active      bool          `json:"active"`
+		AccountCode accountsTypes.Code `json:"accountCode"`
+		TokenCode   string             `json:"tokenCode"`
+		Active      bool               `json:"active"`
 	}
 
 	type response struct {
@@ -521,18 +1064,18 @@ func (handlers *Handlers) postSetTokenActiveHandler(r *http.Request) (interface{
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
-		return response{Success: false, ErrorMessage: err.Error()}, nil
+		return response{Success: false, ErrorMessage: err.Error()}
 	}
 	if err := handlers.backend.SetTokenActive(jsonBody.AccountCode, jsonBody.TokenCode, jsonBody.Active); err != nil {
-		return response{Success: false, ErrorMessage: err.Error()}, nil
+		return response{Success: false, ErrorMessage: err.Error()}
 	}
-	return response{Success: true}, nil
+	return response{Success: true}
 }
 
-func (handlers *Handlers) postRenameAccountHandler(r *http.Request) (interface{}, error) {
+func (handlers *Handlers) postRenameAccount(r *http.Request) interface{} {
 	var jsonBody struct {
-		AccountCode accounts.Code `json:"accountCode"`
-		Name        string        `json:"name"`
+		AccountCode accountsTypes.Code `json:"accountCode"`
+		Name        string             `json:"name"`
 	}
 
 	type response struct {
@@ -542,155 +1085,21 @@ func (handlers *Handlers) postRenameAccountHandler(r *http.Request) (interface{}
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
-		return response{Success: false, ErrorMessage: err.Error()}, nil
+		return response{Success: false, ErrorMessage: err.Error()}
 	}
 	if err := handlers.backend.RenameAccount(jsonBody.AccountCode, jsonBody.Name); err != nil {
-		if errCode, ok := errp.Cause(err).(backend.ErrorCode); ok {
-			return response{Success: false, ErrorCode: string(errCode)}, nil
+		if errCode, ok := errp.Cause(err).(errp.ErrorCode); ok {
+			return response{Success: false, ErrorCode: string(errCode)}
 		}
-		return response{Success: false, ErrorMessage: err.Error()}, nil
+		return response{Success: false, ErrorMessage: err.Error()}
 	}
-	return response{Success: true}, nil
+	return response{Success: true}
 }
 
-func (handlers *Handlers) postAccountsReinitializeHandler(_ *http.Request) (interface{}, error) {
-	handlers.backend.ReinitializeAccounts()
-	return nil, nil
-}
-
-func (handlers *Handlers) getDevicesRegisteredHandler(_ *http.Request) (interface{}, error) {
-	jsonDevices := map[string]string{}
-	for deviceID, device := range handlers.backend.DevicesRegistered() {
-		jsonDevices[deviceID] = device.ProductName()
-	}
-	return jsonDevices, nil
-}
-
-func (handlers *Handlers) postRegisterTestKeystoreHandler(r *http.Request) (interface{}, error) {
-	if !handlers.backend.Testing() {
-		return nil, errp.New("Test keystore not available")
-	}
-	jsonBody := map[string]string{}
-	if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
-		return nil, errp.WithStack(err)
-	}
-	pin := jsonBody["pin"]
-	handlers.backend.RegisterTestKeystore(pin)
-	return nil, nil
-}
-
-func (handlers *Handlers) postDeregisterTestKeystoreHandler(_ *http.Request) (interface{}, error) {
-	handlers.backend.DeregisterKeystore()
-	return nil, nil
-}
-
-func (handlers *Handlers) getRatesHandler(_ *http.Request) (interface{}, error) {
-	return handlers.backend.RatesUpdater().LatestPrice(), nil
-}
-
-func (handlers *Handlers) getConvertToFiatHandler(r *http.Request) (interface{}, error) {
-	from := r.URL.Query().Get("from")
-	to := r.URL.Query().Get("to")
-	amount := r.URL.Query().Get("amount")
-	amountAsFloat, err := strconv.ParseFloat(amount, 64)
-	if err != nil {
-		return map[string]interface{}{
-			"success": false,
-			"errMsg":  "invalid amount",
-		}, nil
-	}
-	rate := handlers.backend.RatesUpdater().LatestPrice()[from][to]
-	return map[string]interface{}{
-		"success":    true,
-		"fiatAmount": strconv.FormatFloat(amountAsFloat*rate, 'f', 2, 64),
-	}, nil
-}
-
-func (handlers *Handlers) getConvertFromFiatHandler(r *http.Request) (interface{}, error) {
-	isFee := false
-	from := r.URL.Query().Get("from")
-	to := r.URL.Query().Get("to")
-	coin, err := handlers.backend.Coin(coinpkg.Code(to))
-	if err != nil {
-		return map[string]interface{}{
-			"success": false,
-			"errMsg":  "internal error",
-		}, nil
-	}
-
-	amount := r.URL.Query().Get("amount")
-	amountAsFloat, err := strconv.ParseFloat(amount, 64)
-	if err != nil {
-		return map[string]interface{}{
-			"success": false,
-			"errMsg":  "invalid amount",
-		}, nil
-	}
-	unit := coin.Unit(isFee)
-	switch unit { // HACK: fake rates for testnet coins
-	case "TBTC", "TLTC", "TETH", "RETH":
-		unit = unit[1:]
-	}
-	rate := handlers.backend.RatesUpdater().LatestPrice()[unit][from]
-	result := 0.0
-	if rate != 0.0 {
-		result = amountAsFloat / rate
-	}
-	return map[string]interface{}{
-		"success": true,
-		"amount":  strconv.FormatFloat(result, 'f', int(coin.Decimals(isFee)), 64),
-	}, nil
-}
-
-func (handlers *Handlers) getHeadersStatus(coinCode coinpkg.Code) func(*http.Request) (interface{}, error) {
-	return func(_ *http.Request) (interface{}, error) {
-		coin, err := handlers.backend.Coin(coinCode)
-		if err != nil {
-			return nil, err
-		}
-		return coin.(*btc.Coin).Headers().Status()
-	}
-}
-
-func (handlers *Handlers) postCertsDownloadHandler(r *http.Request) (interface{}, error) {
-	var server string
-	if err := json.NewDecoder(r.Body).Decode(&server); err != nil {
-		return nil, errp.WithStack(err)
-	}
-	pemCert, err := handlers.backend.DownloadCert(server)
-	if err != nil {
-		return map[string]interface{}{
-			"success":      false,
-			"errorMessage": err.Error(),
-		}, nil
-	}
-	return map[string]interface{}{
-		"success": true,
-		"pemCert": pemCert,
-	}, nil
-}
-
-func (handlers *Handlers) postElectrumCheckHandler(r *http.Request) (interface{}, error) {
-	var serverInfo config.ServerInfo
-	if err := json.NewDecoder(r.Body).Decode(&serverInfo); err != nil {
-		return nil, errp.WithStack(err)
-	}
-
-	if err := handlers.backend.CheckElectrumServer(&serverInfo); err != nil {
-		return map[string]interface{}{
-			"success":      false,
-			"errorMessage": err.Error(),
-		}, nil
-	}
-	return map[string]interface{}{
-		"success": true,
-	}, nil
-}
-
-func (handlers *Handlers) postSocksProxyCheck(r *http.Request) (interface{}, error) {
-	var endpoint string
-	if err := json.NewDecoder(r.Body).Decode(&endpoint); err != nil {
-		return nil, errp.WithStack(err)
+func (handlers *Handlers) postSetAccountReceiveScriptType(r *http.Request) interface{} {
+	var jsonBody struct {
+		AccountCode accountsTypes.Code `json:"accountCode"`
+		ScriptType  signing.ScriptType `json:"scriptType"`
 	}
 
 	type response struct {
@@ -698,16 +1107,290 @@ func (handlers *Handlers) postSocksProxyCheck(r *http.Request) (interface{}, err
 		ErrorMessage string `json:"errorMessage,omitempty"`
 	}
 
+	if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	if err := handlers.backend.SetAccountReceiveScriptType(
+		jsonBody.AccountCode,
+		jsonBody.ScriptType,
+	); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	return response{Success: true}
+}
+
+func (handlers *Handlers) postReconfigureHistoryExchangeRates(*http.Request) interface{} {
+	handlers.backend.ReconfigureHistoryExchangeRates()
+	return nil
+}
+
+func (handlers *Handlers) getDevicesRegistered(*http.Request) interface{} {
+	jsonDevices := map[string]string{}
+	for deviceID, device := range handlers.backend.DevicesRegistered() {
+		jsonDevices[deviceID] = device.PlatformName()
+	}
+	return jsonDevices
+}
+
+func (handlers *Handlers) postRegisterTestKeystore(r *http.Request) interface{} {
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+
+	if !handlers.backend.Testing() {
+		return response{Success: false, ErrorMessage: "Test keystore not available"}
+	}
+	var jsonBody struct {
+		PIN     string           `json:"pin"`
+		Edition software.Edition `json:"edition"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	if err := handlers.backend.RegisterTestKeystore(jsonBody.PIN, jsonBody.Edition); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	return response{Success: true}
+}
+
+func (handlers *Handlers) postDeregisterTestKeystore(*http.Request) interface{} {
+	handlers.backend.DeregisterKeystore()
+	return nil
+}
+
+// getBTCSatAmount takes an amount in sats or the default fiat currency and
+// returns a BTC amount in sats with fiat conversions.
+func (handlers *Handlers) getBTCSatAmount(r *http.Request) interface{} {
+	type response struct {
+		Success      bool                                   `json:"success"`
+		Amount       coinpkg.FormattedAmountWithConversions `json:"amount,omitempty"`
+		ErrorMessage string                                 `json:"errorMessage,omitempty"`
+	}
+
+	amount, err := handlers.backend.BTCSatAmount(
+		r.URL.Query().Get("source"),
+		r.URL.Query().Get("amount"),
+	)
+	if err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+
+	return response{
+		Success: true,
+		Amount:  *amount,
+	}
+}
+
+func (handlers *Handlers) getBTCParseExternalAmount(r *http.Request) interface{} {
+	type response struct {
+		Success bool   `json:"success"`
+		Amount  string `json:"amount"`
+	}
+
+	amount := r.URL.Query().Get("amount")
+	amountRat, valid := new(big.Rat).SetString(amount)
+	if !valid {
+		return response{
+			Success: false,
+		}
+	}
+
+	btcCoin, err := handlers.backend.Coin(coinpkg.CodeBTC)
+	if err != nil {
+		handlers.log.WithError(err).Error("Could not get coin " + coinpkg.CodeBTC)
+		return response{
+			Success: false,
+		}
+	}
+
+	coinAmount := btcCoin.SetAmount(amountRat, false)
+	return response{
+		Success: true,
+		Amount:  btcCoin.FormatAmount(coinAmount, false),
+	}
+}
+
+func (handlers *Handlers) getConvertToPlainFiat(r *http.Request) interface{} {
+	type response struct {
+		Success    bool   `json:"success"`
+		FiatAmount string `json:"fiatAmount,omitempty"`
+	}
+
+	coinCode := r.URL.Query().Get("from")
+	currency := r.URL.Query().Get("to")
+	amount := r.URL.Query().Get("amount")
+	currentCoin, err := handlers.backend.Coin(coinpkg.Code(coinCode))
+	if err != nil {
+		handlers.log.WithError(err).Error("Could not get coin " + coinCode)
+		return response{Success: false}
+	}
+
+	coinAmount, err := currentCoin.ParseAmount(amount)
+	if err != nil {
+		handlers.log.WithError(err).Error("Error parsing amount " + amount)
+		return response{Success: false}
+	}
+
+	coinUnitAmount := coinpkg.ToUnitRat(coinAmount, currentCoin, false)
+
+	coinUnit := currentCoin.Unit(false)
+	rate := handlers.backend.RatesUpdater().LatestPrice()[coinUnit][currency]
+
+	convertedAmount := new(big.Rat).Mul(coinUnitAmount, new(big.Rat).SetFloat64(rate))
+
+	return response{
+		Success:    true,
+		FiatAmount: coinpkg.FormatAsPlainCurrency(convertedAmount, currency),
+	}
+}
+
+func (handlers *Handlers) getCoinFiatPrices(r *http.Request) interface{} {
+	coin, err := handlers.backend.Coin(coinpkg.Code(mux.Vars(r)["coinCode"]))
+	if err != nil {
+		return nil
+	}
+	return handlers.backend.CoinFiatPrices(coin)
+}
+
+func (handlers *Handlers) getConvertFromFiat(r *http.Request) interface{} {
+	type response struct {
+		Success bool   `json:"success"`
+		ErrMsg  string `json:"errMsg,omitempty"`
+		Amount  string `json:"amount,omitempty"`
+	}
+
+	isFee := false
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
+	currentCoin, err := handlers.backend.Coin(coinpkg.Code(to))
+	if err != nil {
+		return response{Success: false, ErrMsg: "internal error"}
+	}
+
+	fiatStr := r.URL.Query().Get("amount")
+	fiatRat, valid := new(big.Rat).SetString(fiatStr)
+	if !valid {
+		return response{Success: false, ErrMsg: "invalid amount"}
+	}
+
+	unit := currentCoin.Unit(isFee)
+	switch unit { // HACK: fake rates for testnet coins
+	case "TBTC", "TLTC":
+		unit = unit[1:]
+	case "SEPETH":
+		unit = unit[3:]
+	}
+
+	rate := handlers.backend.RatesUpdater().LatestPrice()[unit][from]
+	result := coinpkg.NewAmountFromInt64(0)
+	if rate != 0.0 {
+		amountRat := new(big.Rat).Quo(fiatRat, new(big.Rat).SetFloat64(rate))
+		result = currentCoin.SetAmount(amountRat, false)
+	}
+	return response{
+		Success: true,
+		Amount:  currentCoin.FormatAmount(result, false),
+	}
+}
+
+func (handlers *Handlers) getHeadersStatus(r *http.Request) interface{} {
+	type response struct {
+		Success      bool            `json:"success"`
+		ErrorMessage string          `json:"errorMessage,omitempty"`
+		Status       *headers.Status `json:"status,omitempty"`
+	}
+
+	coinCode := coinpkg.Code(mux.Vars(r)["coinCode"])
+	switch coinCode {
+	case coinpkg.CodeBTC, coinpkg.CodeTBTC, coinpkg.CodeLTC, coinpkg.CodeTLTC:
+	default:
+		return response{Success: false, ErrorMessage: "coin does not have headers"}
+	}
+
+	coin, err := handlers.backend.Coin(coinCode)
+	if err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	status, err := coin.(*btc.Coin).Headers().Status()
+	if err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	return response{
+		Success: true,
+		Status:  status,
+	}
+}
+
+func (handlers *Handlers) postCertsDownload(r *http.Request) interface{} {
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+		PemCert      string `json:"pemCert,omitempty"`
+	}
+
+	var server string
+	if err := json.NewDecoder(r.Body).Decode(&server); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	pemCert, err := handlers.backend.DownloadCert(server)
+	if err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	return response{
+		Success: true,
+		PemCert: pemCert,
+	}
+}
+
+func (handlers *Handlers) postElectrumCheck(r *http.Request) interface{} {
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+
+	var serverInfo config.ServerInfo
+	if err := json.NewDecoder(r.Body).Decode(&serverInfo); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+
+	if err := handlers.backend.CheckElectrumServer(&serverInfo); err != nil {
+		handlers.log.
+			WithError(err).
+			WithField("server-info", serverInfo.String()).
+			Info("checking electrum connection failed")
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	handlers.log.
+		WithField("server-info", serverInfo.String()).
+		Info("checking electrum connection succeeded")
+	return response{Success: true}
+}
+
+func (handlers *Handlers) postSocksProxyCheck(r *http.Request) interface{} {
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+
+	var endpoint string
+	if err := json.NewDecoder(r.Body).Decode(&endpoint); err != nil {
+		return response{
+			Success:      false,
+			ErrorMessage: err.Error(),
+		}
+	}
+
 	err := socksproxy.NewSocksProxy(true, endpoint).Validate()
 	if err != nil {
 		return response{
 			Success:      false,
 			ErrorMessage: err.Error(),
-		}, nil
+		}
 	}
 	return response{
 		Success: true,
-	}, nil
+	}
 }
 
 func (handlers *Handlers) eventsHandler(w http.ResponseWriter, r *http.Request) {
@@ -773,7 +1456,7 @@ func (handlers *Handlers) apiMiddleware(devMode bool, h func(*http.Request) (int
 			// recover from all panics and log error before panicking again
 			if r := recover(); r != nil {
 				handlers.log.WithField("panic", true).Errorf("%v\n%s", r, string(debug.Stack()))
-				writeJSON(w, map[string]string{"error": fmt.Sprintf("%v", r)})
+				writeJSON(w, apiErrorResponse{Error: fmt.Sprintf("%v", r)})
 			}
 		}()
 
@@ -781,24 +1464,49 @@ func (handlers *Handlers) apiMiddleware(devMode bool, h func(*http.Request) (int
 		if devMode {
 			// This enables us to run a server on a different port serving just the UI, while still
 			// allowing it to access the API.
-			w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8080")
+			vitePort, ok := os.LookupEnv("VITE_PORT")
+			if !ok {
+				vitePort = "8080"
+			}
+			origin := r.Header.Get("Origin")
+			allowedOrigins := []string{
+				fmt.Sprintf("http://localhost:%s", vitePort),
+				fmt.Sprintf("http://127.0.0.1:%s", vitePort),
+			}
+			for _, allowed := range allowedOrigins {
+				if origin == allowed {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					break
+				}
+			}
 		}
 		value, err := h(r)
 		if err != nil {
 			handlers.log.WithError(err).Error("endpoint failed")
-			writeJSON(w, map[string]string{"error": err.Error()})
+			writeJSON(w, apiErrorResponse{Error: err.Error()})
 			return
 		}
 		writeJSON(w, value)
 	})
 }
-func (handlers *Handlers) getAccountSummary(_ *http.Request) (interface{}, error) {
-	return handlers.backend.ChartData()
+
+func (handlers *Handlers) getChartData(r *http.Request) interface{} {
+	type Result struct {
+		Data    *backend.Chart `json:"data,omitempty"`
+		Success bool           `json:"success"`
+	}
+
+	includeTransactionMarkers := r.URL.Query().Get("includeTransactionMarkers") == "true"
+	data, err := handlers.backend.ChartData(includeTransactionMarkers)
+	if err != nil {
+		return Result{Success: false}
+	}
+	return Result{Success: true, Data: data}
 }
 
-// getSupportedCoinsHandler returns an array of coin codes for which you can add an account.
+// getSupportedCoins returns an array of coin codes for which you can add an account.
 // Exactly one keystore must be connected, otherwise an empty array is returned.
-func (handlers *Handlers) getSupportedCoinsHandler(_ *http.Request) (interface{}, error) {
+func (handlers *Handlers) getSupportedCoins(*http.Request) interface{} {
 	type element struct {
 		CoinCode             coinpkg.Code `json:"coinCode"`
 		Name                 string       `json:"name"`
@@ -807,7 +1515,7 @@ func (handlers *Handlers) getSupportedCoinsHandler(_ *http.Request) (interface{}
 	}
 	keystore := handlers.backend.Keystore()
 	if keystore == nil {
-		return []string{}, nil
+		return []string{}
 	}
 	var result []element
 	for _, coinCode := range handlers.backend.SupportedCoins(keystore) {
@@ -823,164 +1531,645 @@ func (handlers *Handlers) getSupportedCoinsHandler(_ *http.Request) (interface{}
 			SuggestedAccountName: suggestedAccountName,
 		})
 	}
-	return result, nil
+	return result
 }
 
-func (handlers *Handlers) postExportAccountSummary(_ *http.Request) (interface{}, error) {
-	name := time.Now().Format("2006-01-02-at-15-04-05-") + "Accounts-Summary.csv"
-	downloadsDir, err := utilConfig.DownloadsDir()
+func (handlers *Handlers) getMarketRegionCodes(r *http.Request) interface{} {
+	return market.RegionCodes
+}
+
+func (handlers *Handlers) postBitsuranceLookup(r *http.Request) interface{} {
+	type response struct {
+		Success            bool                        `json:"success"`
+		ErrorMessage       string                      `json:"errorMessage"`
+		BitsuranceAccounts []bitsurance.AccountDetails `json:"bitsuranceAccounts"`
+	}
+
+	var request struct {
+		AccountCode accountsTypes.Code `json:"code"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		handlers.log.Error(err)
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	insuredAccounts, err := handlers.backend.LookupInsuredAccounts(request.AccountCode)
 	if err != nil {
-		return nil, err
+		handlers.log.Error(err)
+		return response{Success: false, ErrorMessage: err.Error()}
 	}
-	path := filepath.Join(downloadsDir, name)
-	handlers.log.Infof("Export account summary %s.", path)
 
-	file, err := os.Create(path)
+	return response{Success: true, BitsuranceAccounts: insuredAccounts}
+}
+
+func (handlers *Handlers) getBitsuranceURL(r *http.Request) interface{} {
+	lang := handlers.backend.Config().AppConfig().Backend.UserLanguage
+	if len(lang) == 0 {
+		// userLanguage config is empty if the set locale matches the system locale, so we have
+		// to retrieve that.
+		lang = utilConfig.MainLocaleFromNative(handlers.backend.Environment().NativeLocale())
+	}
+
+	return bitsurance.WidgetURL(handlers.backend.DevServers(), lang)
+}
+func (handlers *Handlers) getMarketDeals(r *http.Request) interface{} {
+	type marketDealsList struct {
+		Deals   []*market.DealsList `json:"deals"`
+		Success bool                `json:"success"`
+	}
+	type errorResult struct {
+		ErrorCode    string `json:"errorCode,omitempty"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+		Success      bool   `json:"success"`
+	}
+
+	action, err := market.ParseAction(mux.Vars(r)["action"])
 	if err != nil {
-		return nil, errp.WithStack(err)
+		handlers.log.Error(err)
+		return errorResult{Success: false, ErrorMessage: err.Error()}
 	}
-	defer func() {
-		err := file.Close()
-		if err != nil {
-			handlers.log.WithError(err).Error("Could not close the account summary file.")
-		}
-	}()
 
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	err = writer.Write([]string{
-		"Coin",
-		"Name",
-		"Balance",
-		"Unit",
-		"Type",
-		"Xpubs",
-	})
+	regionCode := r.URL.Query().Get("region")
+	code := accountsTypes.Code(mux.Vars(r)["code"])
+	marketDealsLists, err := handlers.backend.MarketDeals(code, regionCode, action)
 	if err != nil {
-		return nil, errp.WithStack(err)
+		if code, ok := err.(market.Error); ok {
+			return errorResult{Success: false, ErrorCode: string(code)}
+		}
+		handlers.log.Error(err)
+		return errorResult{Success: false, ErrorMessage: err.Error()}
 	}
 
-	for _, account := range handlers.backend.Accounts() {
-		if !account.Config().Active {
-			continue
-		}
-		if account.FatalError() {
-			continue
-		}
-		err := account.Initialize()
-		if err != nil {
-			return nil, err
-		}
-		coin := account.Coin().Code()
-		accountName := account.Config().Name
-		balance, err := account.Balance()
-		if err != nil {
-			return nil, err
-		}
-		unit := account.Coin().SmallestUnit()
-		var accountType string
-		var xpubs []string
-		signingConfigurations := account.Info().SigningConfigurations
-		accountType = "xpubs"
-		for _, signingConfiguration := range signingConfigurations {
-			xpubs = append(xpubs, signingConfiguration.ExtendedPublicKey().String())
-		}
-
-		err = writer.Write([]string{
-			string(coin),
-			accountName,
-			balance.Available().BigInt().String(),
-			unit,
-			accountType,
-			strings.Join(xpubs, "; "),
-		})
-		if err != nil {
-			return nil, errp.WithStack(err)
-		}
+	return marketDealsList{
+		Success: true,
+		Deals:   marketDealsLists,
 	}
-	return path, nil
 }
 
-func (handlers *Handlers) getExchangeMoonpayBuySupported(r *http.Request) (interface{}, error) {
-	acctCode := mux.Vars(r)["code"]
-	// TODO: Refactor to make use of a map.
-	var acct accounts.Interface
-	for _, a := range handlers.backend.Accounts() {
-		if !a.Config().Active {
-			continue
-		}
-		if string(a.Config().Code) == acctCode {
-			acct = a
-			break
-		}
+func (handlers *Handlers) getMarketVendors(r *http.Request) interface{} {
+	type vendors struct {
+		Vendors []string `json:"vendors"`
 	}
-	// TODO: Offline() can be removed from here once there is a unified way of initializing accounts
-	// and showing sync status, offline/fatal states, etc.
-	return acct != nil && acct.Offline() == nil && exchanges.IsMoonpaySupported(acct.Coin().Code()), nil
+
+	supported := vendors{Vendors: []string{}}
+	acct, err := handlers.backend.GetAccountFromCode(accountsTypes.Code(mux.Vars(r)["code"]))
+	if err != nil {
+		return supported
+	}
+
+	accountValid := acct != nil && acct.Offline() == nil && !acct.FatalError()
+	if !accountValid {
+		return supported
+	}
+
+	if market.IsMoonpaySupported(acct.Coin().Code()) {
+		supported.Vendors = append(supported.Vendors, market.MoonpayName)
+	}
+	if market.IsPocketSupported(acct.Coin().Code()) {
+		supported.Vendors = append(supported.Vendors, market.PocketName)
+		supported.Vendors = append(supported.Vendors, market.PocketOTCName)
+	}
+	if market.IsBtcDirectSupported(acct.Coin().Code()) {
+		supported.Vendors = append(supported.Vendors, market.BTCDirectName)
+		supported.Vendors = append(supported.Vendors, market.BTCDirectOTCName)
+	}
+	if market.IsBitrefillSupported(acct.Coin().Code()) {
+		supported.Vendors = append(supported.Vendors, market.BitrefillName)
+	}
+	if market.IsSwapKitSupported(acct.Coin().Code()) {
+		supported.Vendors = append(supported.Vendors, market.SwapKitName)
+	}
+
+	return supported
 }
 
-func (handlers *Handlers) getAOPPHandler(r *http.Request) (interface{}, error) {
-	return handlers.backend.AOPP(), nil
-}
-
-func (handlers *Handlers) getExchangeMoonpayBuy(r *http.Request) (interface{}, error) {
-	acctCode := accounts.Code(mux.Vars(r)["code"])
-	// TODO: Refactor to make use of a map.
-	var acct accounts.Interface
-	for _, a := range handlers.backend.Accounts() {
-		if !a.Config().Active {
-			continue
-		}
-		if a.Config().Code == acctCode {
-			acct = a
-			break
-		}
-	}
-	if acct == nil {
-		return nil, fmt.Errorf("unknown account code %q", acctCode)
+func (handlers *Handlers) getMarketMoonpayBuyInfo(r *http.Request) interface{} {
+	type result struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+		URL          string `json:"url,omitempty"`
+		Address      string `json:"address,omitempty"`
 	}
 
-	if err := acct.Initialize(); err != nil {
-		return nil, err
+	acct, err := handlers.backend.GetAccountFromCode(accountsTypes.Code(mux.Vars(r)["code"]))
+	if err != nil {
+		handlers.log.WithField("handler", "getMarketMoonpayBuyInfo").WithError(err).Error("handler failed")
+		return result{Success: false, ErrorMessage: err.Error()}
 	}
 
-	params := exchanges.BuyMoonpayParams{
+	lang := handlers.backend.Config().AppConfig().Backend.UserLanguage
+	if len(lang) == 0 {
+		// userLanguage config is empty if the set locale matches the system locale, so we have
+		// to retrieve that.
+		lang = utilConfig.MainLocaleFromNative(handlers.backend.Environment().NativeLocale())
+	}
+	params := market.BuyMoonpayParams{
 		Fiat: handlers.backend.Config().AppConfig().Backend.MainFiat,
-		Lang: handlers.backend.Config().AppConfig().Backend.UserLanguage,
+		Lang: lang,
 	}
-	buy, err := exchanges.BuyMoonpay(acct, params)
+	buy, err := market.MoonpayInfo(acct, params)
 	if err != nil {
-		return nil, err
+		handlers.log.WithField("handler", "getMarketMoonpayBuyInfo").WithError(err).Error("handler failed")
+		return result{Success: false, ErrorMessage: err.Error()}
 	}
-	resp := struct {
-		URL     string `json:"url"`
-		Address string `json:"address"`
-	}{
+	return result{
+		Success: true,
 		URL:     buy.URL,
 		Address: buy.Address,
 	}
-	return resp, nil
 }
 
-func (handlers *Handlers) postAOPPChooseAccountHandler(r *http.Request) (interface{}, error) {
+func (handlers *Handlers) getMarketBtcDirectInfo(r *http.Request) interface{} {
+	type result struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+		Url          string `json:"url"`
+		ApiKey       string `json:"apiKey"`
+		Address      string `json:"address,omitempty"`
+	}
+
+	code := accountsTypes.Code(mux.Vars(r)["code"])
+	acct, err := handlers.backend.GetAccountFromCode(code)
+	accountValid := acct != nil && acct.Offline() == nil && !acct.FatalError()
+	if err != nil || !accountValid {
+		return result{Success: false, ErrorMessage: "Account is not valid."}
+	}
+
+	action := market.Action(mux.Vars(r)["action"])
+	btcInfo, err := market.BtcDirectInfo(action, acct, handlers.backend.DevServers())
+	if err != nil {
+		return result{Success: false, ErrorMessage: err.Error()}
+	}
+
+	return result{
+		Success: true,
+		Url:     btcInfo.Url,
+		ApiKey:  btcInfo.ApiKey,
+		Address: btcInfo.Address,
+	}
+}
+
+func (handlers *Handlers) getMarketPocketURL(r *http.Request) interface{} {
+	lang := handlers.backend.Config().AppConfig().Backend.UserLanguage
+	if len(lang) == 0 {
+		// userLanguage config is empty if the set locale matches the system locale, so we have
+		// to retrieve that.
+		lang = utilConfig.MainLocaleFromNative(handlers.backend.Environment().NativeLocale())
+	}
+
+	action, err := market.ParseAction(mux.Vars(r)["action"])
+	if err != nil {
+		return struct {
+			Success      bool   `json:"success"`
+			ErrorMessage string `json:"errorMessage"`
+		}{Success: false, ErrorMessage: err.Error()}
+	}
+	return struct {
+		Success bool   `json:"success"`
+		Url     string `json:"url"`
+	}{
+		Success: true,
+		Url:     market.PocketURL(handlers.backend.DevServers(), lang, action),
+	}
+}
+
+func (handlers *Handlers) postPocketWidgetVerifyAddress(r *http.Request) interface{} {
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+		ErrorCode    string `json:"errorCode,omitempty"`
+	}
+
 	var request struct {
-		AccountCode accounts.Code `json:"accountCode"`
+		AccountCode accountsTypes.Code `json:"accountCode"`
+		Address     string             `json:"address"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		return nil, errp.WithStack(err)
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+
+	account, err := handlers.backend.GetAccountFromCode(request.AccountCode)
+	if err != nil {
+		handlers.log.Error(err)
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+
+	err = market.PocketWidgetVerifyAddress(account, request.Address)
+	if err != nil {
+		handlers.log.WithField("code", account.Config().Code).Error(err)
+		if errCode, ok := errp.Cause(err).(errp.ErrorCode); ok {
+			return response{Success: false, ErrorCode: string(errCode)}
+		}
+		return response{Success: false, ErrorMessage: err.Error()}
+	}
+	return response{Success: true}
+
+}
+
+func (handlers *Handlers) getMarketBitrefillInfo(r *http.Request) interface{} {
+	type result struct {
+		Success      bool    `json:"success"`
+		ErrorMessage string  `json:"errorMessage,omitempty"`
+		Url          string  `json:"url"`
+		WidgetURL    string  `json:"widgetUrl"`
+		Ref          string  `json:"ref"`
+		Address      *string `json:"address"`
+	}
+
+	code := accountsTypes.Code(mux.Vars(r)["code"])
+	bitrefillInfo, err := handlers.backend.MarketBitrefillInfo(code)
+	if err != nil {
+		return result{Success: false, ErrorMessage: err.Error()}
+	}
+
+	return result{
+		Success:   true,
+		Url:       bitrefillInfo.Url,
+		WidgetURL: bitrefillInfo.WidgetURL,
+		Ref:       bitrefillInfo.Ref,
+		Address:   bitrefillInfo.Address,
+	}
+}
+
+func (handlers *Handlers) getAOPP(r *http.Request) interface{} {
+	return handlers.backend.AOPP()
+}
+
+func (handlers *Handlers) postAOPPChooseAccount(r *http.Request) interface{} {
+	type response struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+
+	var request struct {
+		AccountCode accountsTypes.Code `json:"accountCode"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return response{Success: false, ErrorMessage: err.Error()}
 	}
 
 	handlers.backend.AOPPChooseAccount(request.AccountCode)
-	return nil, nil
+	return response{Success: true}
 }
 
-func (handlers *Handlers) postAOPPCancelHandler(r *http.Request) (interface{}, error) {
+func (handlers *Handlers) postAOPPCancel(r *http.Request) interface{} {
 	handlers.backend.AOPPCancel()
-	return nil, nil
+	return nil
 }
 
-func (handlers *Handlers) postAOPPApproveHandler(r *http.Request) (interface{}, error) {
+func (handlers *Handlers) postAOPPApprove(r *http.Request) interface{} {
 	handlers.backend.AOPPApprove()
-	return nil, nil
+	return nil
+}
+
+func (handlers *Handlers) postCancelConnectKeystore(r *http.Request) interface{} {
+	handlers.backend.CancelConnectKeystore()
+	return nil
+}
+
+func (handlers *Handlers) postSetWatchonly(r *http.Request) interface{} {
+	type response struct {
+		Success bool `json:"success"`
+	}
+	var request struct {
+		RootFingerprint jsonp.HexBytes `json:"rootFingerprint"`
+		Watchonly       bool           `json:"watchonly"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return response{Success: false}
+	}
+	if err := handlers.backend.SetWatchonly([]byte(request.RootFingerprint), request.Watchonly); err != nil {
+		return response{Success: false}
+	}
+	return response{Success: true}
+}
+
+func (handlers *Handlers) postOnAuthSettingChanged(r *http.Request) interface{} {
+	handlers.backend.Environment().OnAuthSettingChanged(
+		handlers.backend.Config().AppConfig().Backend.Authentication)
+	return nil
+}
+
+func (handlers *Handlers) postClearCache(r *http.Request) interface{} {
+	type result struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+	}
+	if err := handlers.backend.ClearCache(); err != nil {
+		return result{Success: false, ErrorMessage: err.Error()}
+	}
+	return result{Success: true}
+}
+
+func (handlers *Handlers) postExportLog(r *http.Request) interface{} {
+	type result struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+		ErrorCode    string `json:"errorCode,omitempty"`
+	}
+	if err := handlers.backend.ExportLogs(); err != nil {
+		return result{Success: false, ErrorMessage: err.Error()}
+	}
+	return result{Success: true}
+}
+
+func (handlers *Handlers) postExportNotes(r *http.Request) interface{} {
+	type result struct {
+		Success bool   `json:"success"`
+		Message string `json:"message,omitempty"`
+		Aborted bool   `json:"aborted"`
+	}
+	if err := handlers.backend.ExportNotes(); err != nil {
+		if errp.Cause(err) == errp.ErrUserAbort {
+			return result{Success: false, Aborted: true}
+		}
+		handlers.log.WithError(err).Error("Error exporting notes")
+		return result{Success: false, Message: err.Error()}
+	}
+	return result{Success: true}
+}
+
+func (handlers *Handlers) postExportBalanceStatement(r *http.Request) interface{} {
+	type result struct {
+		Success   bool   `json:"success"`
+		Message   string `json:"message,omitempty"`
+		Aborted   bool   `json:"aborted"`
+		ErrorCode string `json:"errorCode,omitempty"`
+	}
+	var request struct {
+		AccountCodes []accountsTypes.Code  `json:"accountCodes"`
+		SnapshotDate string                `json:"snapshotDate"`
+		NumberFormat *backend.NumberFormat `json:"numberFormat"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return result{Success: false, Message: err.Error()}
+	}
+	if request.SnapshotDate == "" {
+		return result{Success: false, Message: "snapshot date is required"}
+	}
+	snapshotDate, err := time.ParseInLocation("2006-01-02", request.SnapshotDate, time.Local)
+	if err != nil {
+		return result{Success: false, Message: "invalid snapshot date"}
+	}
+	if err := handlers.backend.ExportBalanceStatement(request.AccountCodes, snapshotDate, request.NumberFormat); err != nil {
+		if errp.Cause(err) == errp.ErrUserAbort {
+			return result{Success: false, Aborted: true}
+		}
+		handlers.log.WithError(err).Error("Error exporting balance statement")
+		if errCode, ok := errp.Cause(err).(errp.ErrorCode); ok {
+			return result{Success: false, Message: err.Error(), ErrorCode: string(errCode)}
+		}
+		return result{Success: false, Message: err.Error()}
+	}
+	return result{Success: true}
+}
+
+func (handlers *Handlers) postImportNotes(r *http.Request) interface{} {
+	type result struct {
+		Success bool                       `json:"success"`
+		Message string                     `json:"message,omitempty"`
+		Data    *backend.ImportNotesResult `json:"data"`
+	}
+
+	var fileContentsBase64 string
+	if err := json.NewDecoder(r.Body).Decode(&fileContentsBase64); err != nil {
+		return result{Success: false, Message: err.Error()}
+	}
+	fileContents, err := hex.DecodeString(fileContentsBase64)
+	if err != nil {
+		return result{Success: false, Message: err.Error()}
+	}
+	data, err := handlers.backend.ImportNotes(fileContents)
+	if err != nil {
+		handlers.log.WithError(err).Error("Error importing notes")
+		return result{Success: false, Message: err.Error()}
+	}
+	return result{Success: true, Data: data}
+}
+
+func (handlers *Handlers) getBluetoothState(r *http.Request) interface{} {
+	return handlers.backend.Bluetooth().State()
+}
+
+func (handlers *Handlers) postBluetoothConnect(r *http.Request) interface{} {
+	var identifier string
+	if err := json.NewDecoder(r.Body).Decode(&identifier); err != nil {
+		// We assume this will never fail to simplify handling in the frontend.
+		return nil
+	}
+
+	handlers.backend.Environment().BluetoothConnect(identifier)
+	return nil
+}
+
+func (handlers *Handlers) getOnline(r *http.Request) interface{} {
+	return handlers.backend.IsOnline()
+}
+
+func (handlers *Handlers) getKeystoreShowBackupBanner(r *http.Request) interface{} {
+	rootFingerint := mux.Vars(r)["rootFingerprint"]
+
+	type response struct {
+		Success   bool   `json:"success"`
+		Show      bool   `json:"show,omitempty"`
+		Fiat      string `json:"fiat,omitempty"`
+		Threshold string `json:"threshold,omitempty"`
+	}
+
+	keystoresAccounts, err := handlers.backend.AccountsByKeystore()
+	if err != nil {
+		handlers.log.WithError(err).Error("Could not retrieve accounts by keystore")
+		return response{
+			Success: false,
+		}
+	}
+
+	defaultFiat := handlers.backend.Config().AppConfig().Backend.MainFiat
+
+	if !slices.Contains([]string{"USD", "CHF", "EUR"}, defaultFiat) {
+		// For the banner, if the fiat currency used by the user is not of these three,
+		// we default to USD.
+		defaultFiat = "USD"
+	}
+
+	accounts, ok := keystoresAccounts[rootFingerint]
+	if !ok {
+		handlers.log.WithField("fingerprint", rootFingerint).Error("No accounts found for the given root fingerprint")
+		return response{
+			Success: false,
+		}
+	}
+	balance, _, err := handlers.backend.AccountsFiatAndCoinBalance(accounts, defaultFiat)
+	if err != nil {
+		handlers.log.WithError(err).Error("Could not retrieve fiat balance for keystore")
+		return response{
+			Success: false,
+		}
+	}
+
+	threshold := big.NewRat(1000, 1)
+	overThreshold := balance.Cmp(threshold) > 0
+
+	// BackupReminderAllowed is tri-state: nil = unchecked, false = permanently suppressed,
+	// true = eligible to show when above threshold.
+	var backupReminderConfig *bool
+	rootFingerprint, err := hex.DecodeString(rootFingerint)
+	if err != nil {
+		handlers.log.WithError(err).Error("Invalid root fingerprint")
+		return response{
+			Success: false,
+		}
+	}
+	if allowed, err := handlers.backend.KeystoreBackupReminderAllowed(rootFingerprint); err == nil {
+		backupReminderConfig = allowed
+	}
+
+	show := overThreshold
+
+	if backupReminderConfig == nil {
+		show = false
+		if err := handlers.backend.SetKeystoreBackupReminderAllowed(
+			rootFingerprint,
+			!overThreshold,
+		); err != nil {
+			handlers.log.WithError(err).Error("Could not persist backup reminder eligibility state")
+		}
+	} else if !*backupReminderConfig {
+		show = false
+	}
+
+	return response{
+		Success:   true,
+		Show:      show,
+		Fiat:      defaultFiat,
+		Threshold: coinpkg.FormatAsCurrency(threshold, defaultFiat),
+	}
+}
+
+func (handlers *Handlers) postConnectKeystore(r *http.Request) interface{} {
+	type response struct {
+		Success   bool   `json:"success"`
+		ErrorCode string `json:"errorCode,omitempty"`
+	}
+
+	var request struct {
+		RootFingerprint jsonp.HexBytes     `json:"rootFingerprint"`
+		RequiredFeature keystore.Feature   `json:"requiredFeature"`
+		AccountCode     accountsTypes.Code `json:"accountCode"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return response{Success: false}
+	}
+
+	connectedKeystore, err := handlers.backend.ConnectKeystore([]byte(request.RootFingerprint))
+	if errp.Cause(err) == errp.ErrUserAbort {
+		return response{
+			Success:   false,
+			ErrorCode: errp.ErrUserAbort.Error(),
+		}
+	}
+	if err != nil {
+		return response{Success: false}
+	}
+	if request.RequiredFeature != "" {
+		if err := handlers.backend.CheckKeystoreFeature(connectedKeystore, request.RequiredFeature, request.AccountCode); err != nil {
+			if keystoreErr, ok := errp.Cause(err).(keystore.KeystoreError); ok {
+				return response{Success: false, ErrorCode: keystoreErr.Error()}
+			}
+			return response{Success: false}
+		}
+	}
+	return response{Success: true}
+}
+
+func (handlers *Handlers) postSwapSign(r *http.Request) interface{} {
+	type result struct {
+		Success           bool                     `json:"success"`
+		ErrorCode         errp.ErrorCode           `json:"errorCode,omitempty"`
+		ErrorMessage      string                   `json:"errorMessage,omitempty"`
+		ExpectedBuyAmount string                   `json:"expectedBuyAmount,omitempty"`
+		SwapID            string                   `json:"swapId,omitempty"`
+		TxInput           *backend.SwapSignTxInput `json:"txInput,omitempty"`
+	}
+
+	var request struct {
+		BuyAccountCode  accountsTypes.Code `json:"buyAccountCode"`
+		RouteID         string             `json:"routeId"`
+		SellAccountCode accountsTypes.Code `json:"sellAccountCode"`
+		SellAmount      string             `json:"sellAmount"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return result{Success: false, ErrorMessage: "Request body is required and must be a valid JSON object."}
+	}
+	if request.BuyAccountCode == "" {
+		return result{Success: false, ErrorMessage: "buyAccountCode is required."}
+	}
+	if request.SellAccountCode == "" {
+		return result{Success: false, ErrorMessage: "sellAccountCode is required."}
+	}
+	if request.RouteID == "" {
+		return result{Success: false, ErrorMessage: "routeId is required."}
+	}
+	if request.SellAmount == "" {
+		return result{Success: false, ErrorMessage: "sellAmount is required."}
+	}
+	swapResult, err := handlers.backend.PrepareSwap(
+		request.BuyAccountCode,
+		request.SellAccountCode,
+		request.RouteID,
+		request.SellAmount,
+	)
+	if err != nil {
+		if errp.Cause(err) == accounts.ErrSyncInProgress {
+			return result{Success: false, ErrorCode: accounts.ErrSyncInProgress, ErrorMessage: err.Error()}
+		}
+		return result{Success: false, ErrorMessage: err.Error()}
+	}
+
+	return result{
+		Success:           true,
+		ExpectedBuyAmount: swapResult.ExpectedBuyAmount,
+		SwapID:            swapResult.SwapID,
+		TxInput:           &swapResult.TxInput,
+	}
+}
+
+func (handlers *Handlers) postSwapkitQuote(r *http.Request) interface{} {
+	// Success describes quote retrieval; amount validation is reported independently.
+	type result struct {
+		Success             bool                   `json:"success"`
+		QuoteErrorCode      errp.ErrorCode         `json:"quoteErrorCode,omitempty"`
+		ErrorMessage        string                 `json:"errorMessage,omitempty"`
+		ErrorData           *swapkit.APIErrorData  `json:"errorData,omitempty"`
+		ValidationErrorCode errp.ErrorCode         `json:"validationErrorCode,omitempty"`
+		Quote               *swapkit.QuoteResponse `json:"quote,omitempty"`
+	}
+	var request struct {
+		SellAccountCode accountsTypes.Code `json:"sellAccountCode"`
+		BuyCoinCode     string             `json:"buyCoinCode"`
+		SellAmount      string             `json:"sellAmount"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return result{
+			QuoteErrorCode: swapkit.ErrInvalidRequest,
+			ErrorMessage:   "Request body is required and must be a valid JSON object.",
+		}
+	}
+	quoteResult, quoteError := handlers.backend.SwapQuote(
+		request.SellAccountCode, request.BuyCoinCode, request.SellAmount,
+	)
+	response := result{
+		Success:             quoteError == nil,
+		Quote:               quoteResult.Quote,
+		ValidationErrorCode: quoteResult.ValidationErrorCode,
+	}
+	if quoteError != nil {
+		response.QuoteErrorCode = quoteError.ErrorCode
+		response.ErrorMessage = quoteError.Message
+		response.ErrorData = quoteError.Data
+	}
+	return response
 }

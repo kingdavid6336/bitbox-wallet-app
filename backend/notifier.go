@@ -1,25 +1,14 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package backend
 
 import (
 	"fmt"
 
-	bbolt "github.com/coreos/bbolt"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts"
+	accountsTypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"go.etcd.io/bbolt"
 )
 
 const (
@@ -48,11 +37,11 @@ func (notifier *Notifier) Close() error {
 
 type notifierForAccount struct {
 	db          *bbolt.DB
-	accountCode accounts.Code
+	accountCode accountsTypes.Code
 }
 
 // ForAccount returns a Notifier for a specific account.
-func (notifier *Notifier) ForAccount(accountCode accounts.Code) accounts.Notifier {
+func (notifier *Notifier) ForAccount(accountCode accountsTypes.Code) accounts.Notifier {
 	return &notifierForAccount{db: notifier.db, accountCode: accountCode}
 }
 

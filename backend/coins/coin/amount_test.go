@@ -1,16 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package coin_test
 
@@ -21,13 +9,13 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/rates"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewAmountFromString(t *testing.T) {
 	for decimals := 0; decimals <= 20; decimals++ {
-		decimals := decimals // avoids referencing the same variable across loop iterations
 		unit := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil)
 		t.Run(fmt.Sprintf("decimals=%d", decimals), func(t *testing.T) {
 			require.NoError(t, quick.Check(func(amount int64) bool {
@@ -46,7 +34,6 @@ func TestNewAmountFromString(t *testing.T) {
 		"1/1000",
 		"0.123456789", // only up to 8 decimals allowed
 	} {
-		fail := fail // avoids referencing the same variable across loop iterations
 		t.Run(fail, func(t *testing.T) {
 			_, err := coin.NewAmountFromString(fail, big.NewInt(1e8))
 			require.Error(t, err)
@@ -102,4 +89,14 @@ func TestSendAmount(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(0), amount.BigInt().Int64())
 
+}
+
+func TestFormatWithConversionsAtTime(t *testing.T) {
+	testCoin := mockCoin(t)
+	rateUpdater := rates.MockRateUpdater()
+
+	amount := coin.NewAmountFromInt64(12345678)
+	formattedAmount := amount.FormatWithConversionsAtTime(&testCoin, nil, rateUpdater)
+	// conversions are tested separately, we just check for the estimated flag when timestamp is nil.
+	require.True(t, formattedAmount.Estimated)
 }

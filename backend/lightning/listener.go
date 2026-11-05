@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package lightning
+
+import (
+	"sync"
+
+	"github.com/breez/breez-sdk-spark-go/breez_sdk_spark"
+	"github.com/sirupsen/logrus"
+)
+
+type sdkLogger struct {
+	log *logrus.Entry
+}
+
+func (logger *sdkLogger) Log(l breez_sdk_spark.LogEntry) {
+	logger.log.Printf("Received log [%v]: %v", l.Level, l.Line)
+}
+
+var (
+	logListener      *sdkLogger
+	logListenerMutex sync.Mutex
+	activeDebugLogs  *bool
+)
+
+// initializeLogging sets the process-wide SDK log filter once. Changes require an app restart.
+func initializeLogging(log *logrus.Entry, debugLogs bool) {
+	logListenerMutex.Lock()
+	defer logListenerMutex.Unlock()
+
+	if logListener == nil {
+		logListener = &sdkLogger{log}
+
+		logFilter := "warn"
+		if debugLogs {
+			logFilter = "debug"
+		}
+		var loggerImpl breez_sdk_spark.Logger = logListener
+		if err := breez_sdk_spark.InitLogging(nil, &loggerImpl, &logFilter); err != nil {
+			log.WithError(err).Error("BreezSDK: Error init logging")
+		} else {
+			activeDebugLogs = &debugLogs
+		}
+	}
+}
+
+// LoggingRestartRequired reports whether the saved preference differs from the active SDK filter.
+// Before logging is initialized, the next connection will use the saved preference directly.
+func (lightning *Lightning) LoggingRestartRequired() bool {
+	logListenerMutex.Lock()
+	defer logListenerMutex.Unlock()
+	return activeDebugLogs != nil &&
+		*activeDebugLogs != lightning.backendConfig.AppConfig().Backend.LightningDebugLogs
+}
+
+// var logListener *BreezLogListener
+
+// // BreezLogListener stores the log handler for listening to log events from the Breez SDK.
+// type BreezLogListener struct {
+// 	log *logrus.Entry
+// }
+
+// // Log receives log entries of different log levels and logs then the handlers log.
+// // Implementation of breez_sdk.EventListener.
+// func (listener *BreezLogListener) Log(logEntry breez_sdk.LogEntry) {
+// 	if logEntry.Level != "TRACE" {
+// 		listener.log.Infof("BreezSDK: [%s] %s", logEntry.Level, logEntry.Line)
+// 	} else {
+// 		listener.log.Tracef("BreezSDK: [%s] %s", logEntry.Level, logEntry.Line)
+// 	}
+// }
+
+// // initializeLogging manages the Breez SDK logging handling by only calling SetLogStream once.
+// func initializeLogging(log *logrus.Entry) {
+// 	if logListener == nil {
+// 		logListener = &BreezLogListener{log}
+
+// 		if err := breez_sdk.SetLogStream(logListener); err != nil {
+// 			log.WithError(err).Warn("BreezSDK: SetLogStream failed")
+// 		}
+// 	}
+// }

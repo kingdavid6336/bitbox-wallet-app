@@ -1,0 +1,82 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  width: 100%;
+}
+
+.keystoreContainer {
+  background-color: var(--background-secondary);
+}
+
+.keystoreName {
+  color: var(--color-tertiary);
+}
+
+.accountsList {
+  display: flex;
+  flex-direction: column;
+  margin: var(--space-half) 0;
+  gap: var(--space-quarter);
+}
+
+.accountItem {
+  align-items: center;
+  background-color: var(--background-secondary);
+  border-radius: var(--radius-lg);
+  display: flex;
+  color: var(--color-text);
+  gap: var(--space-quarter);
+  padding: var(--space-half) var(--space-three-quarter);
+  text-decoration: none;
+  transition: background-color 120ms ease;
+}
+
+.accountItem:active {
+  background-color: var(--background-tap-active);
+}
+
+.accountIcon {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.accountIcon img {
+  display: block;
+  max-width: 24px;
+}
+
+.accountName {
+  flex-basis: auto;
+  flex-grow: 1;
+  flex-shrink: 1;
+  margin: 0;
+  margin-right: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountBalanceContainer {
+  align-items: baseline;
+  color: var(--color-secondary);
+  display: flex;
+  flex-shrink: 1;
+  flex-grow: 1;
+  font-size: var(--size-default);
+  justify-content: flex-end;
+  margin-left: auto;
+  max-width: 60%;
+  overflow: hidden;
+  overflow: clip;
+  text-align: right;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--color-mediumgray);
+}

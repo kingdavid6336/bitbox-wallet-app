@@ -1,23 +1,10 @@
-// Copyright 2018 Shift Devices AG
-// Copyright 2020 Shift Crypto AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package backend
 
 import (
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/eth/erc20"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth/erc20"
 )
 
 type erc20Token struct {
@@ -25,6 +12,13 @@ type erc20Token struct {
 	name  string
 	unit  string
 	token *erc20.Token
+}
+
+// ERC20TokenInfo contains the frontend-facing metadata for a supported ERC20 token.
+type ERC20TokenInfo struct {
+	Code coin.Code
+	Name string
+	Unit string
 }
 
 var erc20Tokens = []erc20Token{
@@ -49,12 +43,6 @@ var erc20Tokens = []erc20Token{
 		name:  "Basic Attention Token",
 		unit:  "BAT",
 		token: erc20.NewToken("0x0d8775f648430679a709e98d2b0cb6250d2887ef", 18),
-	},
-	{
-		code:  "eth-erc20-sai0x89d2",
-		name:  "Sai",
-		unit:  "SAI",
-		token: erc20.NewToken("0x89d24a6b4ccb1b6faa2625fe562bdd9a23260359", 18),
 	},
 	{
 		code:  "eth-erc20-dai0x6b17",
@@ -102,4 +90,17 @@ func erc20TokenByCode(code coin.Code) *erc20Token {
 		}
 	}
 	return nil
+}
+
+// ERC20Tokens returns the supported ERC20 tokens exposed to the frontend.
+func ERC20Tokens() []ERC20TokenInfo {
+	result := make([]ERC20TokenInfo, 0, len(erc20Tokens))
+	for _, token := range erc20Tokens {
+		result = append(result, ERC20TokenInfo{
+			Code: token.code,
+			Name: token.name,
+			Unit: token.unit,
+		})
+	}
+	return result
 }

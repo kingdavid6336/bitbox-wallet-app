@@ -5,17 +5,18 @@
 package blockchain
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
 	"math/big"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
+	"github.com/btcsuite/btcd/txscript/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 )
 
 const (
@@ -41,6 +42,20 @@ const (
 	// baseSubsidy is the starting subsidy amount for mined blocks.  This
 	// value is halved every SubsidyHalvingInterval blocks.
 	baseSubsidy = 50 * btcutil.SatoshiPerBitcoin
+
+	// coinbaseHeightAllocSize is the amount of bytes that the
+	// ScriptBuilder will allocate when validating the coinbase height.
+	coinbaseHeightAllocSize = 5
+
+	// maxTimeWarp is a maximum number of seconds that the timestamp of the first
+	// block of a difficulty adjustment period is allowed to
+	// be earlier than the last block of the previous period (BIP94).
+	maxTimeWarp = 600 * time.Second
+
+	// bip34ReenableBIP30Height is the height where BIP0030 is re-enabled even
+	// though BIP34 is active.  This mirrors Bitcoin Core's safeguard against
+	// coinbases that serialized future heights prior to BIP34 activation.
+	bip34ReenableBIP30Height int32 = 1983702
 )
 
 var (
@@ -181,6 +196,56 @@ func isBIP0030Node(node *blockNode) bool {
 	return false
 }
 
+// bip0030CheckNeeded determines if the expensive overwrite check from BIP0030
+// needs to be executed for the provided block node under the supplied network
+// parameters.
+//
+// There are two blocks in the chain which violate this rule, so the check must
+// be skipped for those blocks.  The isBIP0030Node function is used to determine
+// if this block is one of the two blocks that must be skipped.
+//
+// In addition, as of BIP0034, duplicate coinbases are no longer possible due to
+// its requirement for including the block height in the coinbase and thus it is
+// no longer possible to create transactions that 'overwrite' older ones.
+// Therefore, only enforce the rule if BIP0034 is not yet active, or the chain
+// has reached the height bip34ReenableBIP30Height where the optimization must
+// no longer apply.  This is a useful optimization because the BIP0030 check is
+// expensive since it involves a ton of cache misses in the utxoset.
+func bip0030CheckNeeded(node *blockNode, params *chaincfg.Params) bool {
+	// Sanity checks for the inputs not to dereference a nil pointer.
+	if node == nil || params == nil {
+		return false
+	}
+
+	// Skip the check for the historical mainnet blocks that overwrote
+	// earlier coinbases before BIP0030 existed.
+	if isBIP0030Node(node) {
+		return false
+	}
+
+	// Once BIP0034 is known to be active on this chain, duplicate coinbases
+	// can no longer occur, so the check can be omitted until the re-enable
+	// height.  See the following comment for the details about re-enabling:
+	// https://github.com/bitcoin/bitcoin/pull/12204#issuecomment-359106628
+	h := node.height
+	if params.BIP0034Height < h && h < bip34ReenableBIP30Height {
+		// Make sure that BIP0034 was activated.  We need to make sure
+		// that there is a block with the hash we expect at the height
+		// BIP0034Height.  If this is not the case, we might be on an
+		// alternate chain that hasn't activated BIP34 yet - even if its
+		// height is higher.  In that case, BIP30 still applies.
+		if params.BIP0034Hash != nil && node.parent != nil {
+			ancestor := node.parent.Ancestor(params.BIP0034Height)
+			want := params.BIP0034Hash
+			if ancestor != nil && ancestor.hash.IsEqual(want) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
 // CalcBlockSubsidy returns the subsidy amount a block at the provided height
 // should have. This is mainly used for determining how much the coinbase for
 // newly generated blocks awards as well as validating the coinbase for blocks
@@ -238,9 +303,9 @@ func CheckTransactionSanity(tx *btcutil.Tx) error {
 			return ruleError(ErrBadTxOutValue, str)
 		}
 		if satoshi > btcutil.MaxSatoshi {
-			str := fmt.Sprintf("transaction output value of %v is "+
-				"higher than max allowed value of %v", satoshi,
-				btcutil.MaxSatoshi)
+			str := fmt.Sprintf("transaction output value is "+
+				"higher than max allowed value: %v > %v ",
+				satoshi, btcutil.MaxSatoshi)
 			return ruleError(ErrBadTxOutValue, str)
 		}
 
@@ -302,8 +367,8 @@ func CheckTransactionSanity(tx *btcutil.Tx) error {
 // target difficulty as claimed.
 //
 // The flags modify the behavior of this function as follows:
-//  - BFNoPoWCheck: The check to ensure the block hash is less than the target
-//    difficulty is not performed.
+//   - BFNoPoWCheck: The check to ensure the block hash is less than the target
+//     difficulty is not performed.
 func checkProofOfWork(header *wire.BlockHeader, powLimit *big.Int, flags BehaviorFlags) error {
 	// The target difficulty must be larger than zero.
 	target := CompactToBig(header.Bits)
@@ -421,13 +486,15 @@ func CountP2SHSigOps(tx *btcutil.Tx, isCoinBaseTx bool, utxoView *UtxoViewpoint)
 	return totalSigOps, nil
 }
 
-// checkBlockHeaderSanity performs some preliminary checks on a block header to
+// CheckBlockHeaderSanity performs some preliminary checks on a block header to
 // ensure it is sane before continuing with processing.  These checks are
 // context free.
 //
 // The flags do not modify the behavior of this function directly, however they
 // are needed to pass along to checkProofOfWork.
-func checkBlockHeaderSanity(header *wire.BlockHeader, powLimit *big.Int, timeSource MedianTimeSource, flags BehaviorFlags) error {
+func CheckBlockHeaderSanity(header *wire.BlockHeader, powLimit *big.Int,
+	timeSource MedianTimeSource, flags BehaviorFlags) error {
+
 	// Ensure the proof of work bits in the block header is in min/max range
 	// and the block hash is less than the target value described by the
 	// bits.
@@ -467,7 +534,7 @@ func checkBlockHeaderSanity(header *wire.BlockHeader, powLimit *big.Int, timeSou
 func checkBlockSanity(block *btcutil.Block, powLimit *big.Int, timeSource MedianTimeSource, flags BehaviorFlags) error {
 	msgBlock := block.MsgBlock()
 	header := &msgBlock.Header
-	err := checkBlockHeaderSanity(header, powLimit, timeSource, flags)
+	err := CheckBlockHeaderSanity(header, powLimit, timeSource, flags)
 	if err != nil {
 		return err
 	}
@@ -527,12 +594,11 @@ func checkBlockSanity(block *btcutil.Block, powLimit *big.Int, timeSource Median
 	// checks.  Bitcoind builds the tree here and checks the merkle root
 	// after the following checks, but there is no reason not to check the
 	// merkle root matches here.
-	merkles := BuildMerkleTreeStore(block.Transactions(), false)
-	calculatedMerkleRoot := merkles[len(merkles)-1]
-	if !header.MerkleRoot.IsEqual(calculatedMerkleRoot) {
+	calcMerkleRoot := CalcMerkleRoot(block.Transactions(), false)
+	if !header.MerkleRoot.IsEqual(&calcMerkleRoot) {
 		str := fmt.Sprintf("block merkle root is invalid - block "+
 			"header indicates %v, but calculated value is %v",
-			header.MerkleRoot, calculatedMerkleRoot)
+			header.MerkleRoot, calcMerkleRoot)
 		return ruleError(ErrBadMerkleRoot, str)
 	}
 
@@ -609,16 +675,25 @@ func ExtractCoinbaseHeight(coinbaseTx *btcutil.Tx) (int32, error) {
 		return 0, ruleError(ErrMissingCoinbaseHeight, str)
 	}
 
-	serializedHeightBytes := make([]byte, 8)
-	copy(serializedHeightBytes, sigScript[1:serializedLen+1])
-	serializedHeight := binary.LittleEndian.Uint64(serializedHeightBytes)
+	// We use 4 bytes here since it saves us allocations. We use a stack
+	// allocation rather than a heap allocation here.
+	var serializedHeightBytes [4]byte
+	copy(serializedHeightBytes[:], sigScript[1:serializedLen+1])
 
-	return int32(serializedHeight), nil
+	serializedHeight := int32(
+		binary.LittleEndian.Uint32(serializedHeightBytes[:]),
+	)
+
+	if err := compareScript(serializedHeight, sigScript); err != nil {
+		return 0, err
+	}
+
+	return serializedHeight, nil
 }
 
-// checkSerializedHeight checks if the signature script in the passed
+// CheckSerializedHeight checks if the signature script in the passed
 // transaction starts with the serialized block height of wantHeight.
-func checkSerializedHeight(coinbaseTx *btcutil.Tx, wantHeight int32) error {
+func CheckSerializedHeight(coinbaseTx *btcutil.Tx, wantHeight int32) error {
 	serializedHeight, err := ExtractCoinbaseHeight(coinbaseTx)
 	if err != nil {
 		return err
@@ -633,22 +708,56 @@ func checkSerializedHeight(coinbaseTx *btcutil.Tx, wantHeight int32) error {
 	return nil
 }
 
-// checkBlockHeaderContext performs several validation checks on the block header
+func compareScript(height int32, script []byte) error {
+	scriptBuilder := txscript.NewScriptBuilder(
+		txscript.WithScriptAllocSize(coinbaseHeightAllocSize),
+	)
+	scriptHeight, err := scriptBuilder.AddInt64(
+		int64(height),
+	).Script()
+	if err != nil {
+		return err
+	}
+
+	if !bytes.HasPrefix(script, scriptHeight) {
+		str := fmt.Sprintf("the coinbase signature script does not "+
+			"minimally encode the height %d", height)
+		return ruleError(ErrBadCoinbaseHeight, str)
+	}
+
+	return nil
+}
+
+// CheckBlockHeaderContext performs several validation checks on the block header
 // which depend on its position within the block chain.
 //
 // The flags modify the behavior of this function as follows:
-//  - BFFastAdd: All checks except those involving comparing the header against
-//    the checkpoints are not performed.
+//   - BFFastAdd: All checks except those involving comparing the header against
+//     the checkpoints are not performed.
+//
+// The skipCheckpoint boolean is used so that libraries can skip the checkpoint
+// sanity checks.
 //
 // This function MUST be called with the chain state lock held (for writes).
-func (b *BlockChain) checkBlockHeaderContext(header *wire.BlockHeader, prevNode *blockNode, flags BehaviorFlags) error {
+// NOTE: Ignore the above lock requirement if this function is not passed a
+// *Blockchain instance as the ChainCtx argument.
+func CheckBlockHeaderContext(header *wire.BlockHeader, prevNode HeaderCtx,
+	flags BehaviorFlags, c ChainCtx, skipCheckpoint bool) error {
+
+	// The height of this block is one more than the referenced previous
+	// block.
+	blockHeight := prevNode.Height() + 1
+
+	params := c.ChainParams()
+
 	fastAdd := flags&BFFastAdd == BFFastAdd
 	if !fastAdd {
 		// Ensure the difficulty specified in the block header matches
 		// the calculated difficulty based on the previous block and
 		// difficulty retarget rules.
-		expectedDifficulty, err := b.calcNextRequiredDifficulty(prevNode,
-			header.Timestamp)
+		expectedDifficulty, err := calcNextRequiredDifficulty(
+			prevNode, header.Timestamp, c,
+		)
 		if err != nil {
 			return err
 		}
@@ -661,45 +770,30 @@ func (b *BlockChain) checkBlockHeaderContext(header *wire.BlockHeader, prevNode 
 
 		// Ensure the timestamp for the block header is after the
 		// median time of the last several blocks (medianTimeBlocks).
-		medianTime := prevNode.CalcPastMedianTime()
+		medianTime := CalcPastMedianTime(prevNode)
 		if !header.Timestamp.After(medianTime) {
 			str := "block timestamp of %v is not after expected %v"
 			str = fmt.Sprintf(str, header.Timestamp, medianTime)
 			return ruleError(ErrTimeTooOld, str)
 		}
-	}
 
-	// The height of this block is one more than the referenced previous
-	// block.
-	blockHeight := prevNode.height + 1
-
-	// Ensure chain matches up to predetermined checkpoints.
-	blockHash := header.BlockHash()
-	if !b.verifyCheckpoint(blockHeight, &blockHash) {
-		str := fmt.Sprintf("block at height %d does not match "+
-			"checkpoint hash", blockHeight)
-		return ruleError(ErrBadCheckpoint, str)
-	}
-
-	// Find the previous checkpoint and prevent blocks which fork the main
-	// chain before it.  This prevents storage of new, otherwise valid,
-	// blocks which build off of old blocks that are likely at a much easier
-	// difficulty and therefore could be used to waste cache and disk space.
-	checkpointNode, err := b.findPreviousCheckpoint()
-	if err != nil {
-		return err
-	}
-	if checkpointNode != nil && blockHeight < checkpointNode.height {
-		str := fmt.Sprintf("block at height %d forks the main chain "+
-			"before the previous checkpoint at height %d",
-			blockHeight, checkpointNode.height)
-		return ruleError(ErrForkTooOld, str)
+		// Testnet4 only: Check timestamp against prev for
+		// difficulty-adjustment blocks to prevent timewarp attacks.
+		if params.EnforceBIP94 {
+			err := assertNoTimeWarp(
+				blockHeight, c.BlocksPerRetarget(),
+				header.Timestamp,
+				time.Unix(prevNode.Timestamp(), 0),
+			)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	// Reject outdated block versions once a majority of the network
 	// has upgraded.  These were originally voted on by BIP0034,
 	// BIP0065, and BIP0066.
-	params := b.chainParams
 	if header.Version < 2 && blockHeight >= params.BIP0034Height ||
 		header.Version < 3 && blockHeight >= params.BIP0066Height ||
 		header.Version < 4 && blockHeight >= params.BIP0065Height {
@@ -709,15 +803,68 @@ func (b *BlockChain) checkBlockHeaderContext(header *wire.BlockHeader, prevNode 
 		return ruleError(ErrBlockVersionTooOld, str)
 	}
 
+	if skipCheckpoint {
+		// If the caller wants us to skip the checkpoint checks, we'll
+		// return early.
+		return nil
+	}
+
+	// Ensure chain matches up to predetermined checkpoints.
+	blockHash := header.BlockHash()
+	if !c.VerifyCheckpoint(blockHeight, &blockHash) {
+		str := fmt.Sprintf("block at height %d does not match "+
+			"checkpoint hash", blockHeight)
+		return ruleError(ErrBadCheckpoint, str)
+	}
+
+	// Find the previous checkpoint and prevent blocks which fork the main
+	// chain before it.  This prevents storage of new, otherwise valid,
+	// blocks which build off of old blocks that are likely at a much easier
+	// difficulty and therefore could be used to waste cache and disk space.
+	checkpointNode, err := c.FindPreviousCheckpoint()
+	if err != nil {
+		return err
+	}
+	if checkpointNode != nil && blockHeight < checkpointNode.Height() {
+		str := fmt.Sprintf("block at height %d forks the main chain "+
+			"before the previous checkpoint at height %d",
+			blockHeight, checkpointNode.Height())
+		return ruleError(ErrForkTooOld, str)
+	}
+
 	return nil
 }
 
-// checkBlockContext peforms several validation checks on the block which depend
+// assertNoTimeWarp checks the timestamp of the block against the previous
+// block's timestamp for the first block of each difficulty adjustment interval
+// to prevent timewarp attacks. This is defined in BIP-0094.
+func assertNoTimeWarp(blockHeight, blocksPerReTarget int32, headerTimestamp,
+	prevBlockTimestamp time.Time) error {
+
+	// If this isn't the first block of the difficulty adjustment interval,
+	// then we can exit early.
+	if blockHeight%blocksPerReTarget != 0 {
+		return nil
+	}
+
+	// Check timestamp for the first block of each difficulty adjustment
+	// interval, except the genesis block.
+	if headerTimestamp.Before(prevBlockTimestamp.Add(-maxTimeWarp)) {
+		str := "block's timestamp %v is too early on diff adjustment " +
+			"block %v"
+		str = fmt.Sprintf(str, headerTimestamp, prevBlockTimestamp)
+		return ruleError(ErrTimewarpAttack, str)
+	}
+
+	return nil
+}
+
+// checkBlockContext performs several validation checks on the block which depend
 // on its position within the block chain.
 //
 // The flags modify the behavior of this function as follows:
-//  - BFFastAdd: The transaction are not checked to see if they are finalized
-//    and the somewhat expensive BIP0034 validation is not performed.
+//   - BFFastAdd: The transaction are not checked to see if they are finalized
+//     and the somewhat expensive BIP0034 validation is not performed.
 //
 // The flags are also passed to checkBlockHeaderContext.  See its documentation
 // for how the flags modify its behavior.
@@ -726,7 +873,7 @@ func (b *BlockChain) checkBlockHeaderContext(header *wire.BlockHeader, prevNode 
 func (b *BlockChain) checkBlockContext(block *btcutil.Block, prevNode *blockNode, flags BehaviorFlags) error {
 	// Perform all block header related validation checks.
 	header := &block.MsgBlock().Header
-	err := b.checkBlockHeaderContext(header, prevNode, flags)
+	err := CheckBlockHeaderContext(header, prevNode, flags, b, false)
 	if err != nil {
 		return err
 	}
@@ -746,7 +893,7 @@ func (b *BlockChain) checkBlockContext(block *btcutil.Block, prevNode *blockNode
 		// timestamps for all lock-time based checks.
 		blockTime := header.Timestamp
 		if csvState == ThresholdActive {
-			blockTime = prevNode.CalcPastMedianTime()
+			blockTime = CalcPastMedianTime(prevNode)
 		}
 
 		// The height of this block is one more than the referenced
@@ -772,7 +919,7 @@ func (b *BlockChain) checkBlockContext(block *btcutil.Block, prevNode *blockNode
 			blockHeight >= b.chainParams.BIP0034Height {
 
 			coinbaseTx := block.Transactions()[0]
-			err := checkSerializedHeight(coinbaseTx, blockHeight)
+			err := CheckSerializedHeight(coinbaseTx, blockHeight)
 			if err != nil {
 				return err
 			}
@@ -830,24 +977,24 @@ func (b *BlockChain) checkBlockContext(block *btcutil.Block, prevNode *blockNode
 //
 // This function MUST be called with the chain state lock held (for reads).
 func (b *BlockChain) checkBIP0030(node *blockNode, block *btcutil.Block, view *UtxoViewpoint) error {
-	// Fetch utxos for all of the transaction ouputs in this block.
+	// Fetch utxos for all of the transaction outputs in this block.
 	// Typically, there will not be any utxos for any of the outputs.
-	fetchSet := make(map[wire.OutPoint]struct{})
+	fetch := make([]wire.OutPoint, 0, len(block.Transactions()))
 	for _, tx := range block.Transactions() {
 		prevOut := wire.OutPoint{Hash: *tx.Hash()}
 		for txOutIdx := range tx.MsgTx().TxOut {
 			prevOut.Index = uint32(txOutIdx)
-			fetchSet[prevOut] = struct{}{}
+			fetch = append(fetch, prevOut)
 		}
 	}
-	err := view.fetchUtxos(b.db, fetchSet)
+	err := view.fetchUtxos(b.utxoCache, fetch)
 	if err != nil {
 		return err
 	}
 
 	// Duplicate transactions are only allowed if the previous transaction
 	// is fully spent.
-	for outpoint := range fetchSet {
+	for _, outpoint := range fetch {
 		utxo := view.LookupEntry(outpoint)
 		if utxo != nil && !utxo.IsSpent() {
 			str := fmt.Sprintf("tried to overwrite transaction %v "+
@@ -919,8 +1066,8 @@ func CheckTransactionInputs(tx *btcutil.Tx, txHeight int32, utxoView *UtxoViewpo
 			return 0, ruleError(ErrBadTxOutValue, str)
 		}
 		if originTxSatoshi > btcutil.MaxSatoshi {
-			str := fmt.Sprintf("transaction output value of %v is "+
-				"higher than max allowed value of %v",
+			str := fmt.Sprintf("transaction output value is "+
+				"higher than max allowed value: %v > %v ",
 				btcutil.Amount(originTxSatoshi),
 				btcutil.MaxSatoshi)
 			return 0, ruleError(ErrBadTxOutValue, str)
@@ -1010,20 +1157,9 @@ func (b *BlockChain) checkConnectBlock(node *blockNode, block *btcutil.Block, vi
 	// BIP0030 added a rule to prevent blocks which contain duplicate
 	// transactions that 'overwrite' older transactions which are not fully
 	// spent.  See the documentation for checkBIP0030 for more details.
-	//
-	// There are two blocks in the chain which violate this rule, so the
-	// check must be skipped for those blocks.  The isBIP0030Node function
-	// is used to determine if this block is one of the two blocks that must
-	// be skipped.
-	//
-	// In addition, as of BIP0034, duplicate coinbases are no longer
-	// possible due to its requirement for including the block height in the
-	// coinbase and thus it is no longer possible to create transactions
-	// that 'overwrite' older ones.  Therefore, only enforce the rule if
-	// BIP0034 is not yet active.  This is a useful optimization because the
-	// BIP0030 check is expensive since it involves a ton of cache misses in
-	// the utxoset.
-	if !isBIP0030Node(node) && (node.height < b.chainParams.BIP0034Height) {
+	// Sometimes BIP0030 must to skipped (as an exception) or may be skipped
+	// (as an optimization), see bip0030CheckNeeded for details.
+	if bip0030CheckNeeded(node, b.chainParams) {
 		err := b.checkBIP0030(node, block, view)
 		if err != nil {
 			return err
@@ -1031,11 +1167,11 @@ func (b *BlockChain) checkConnectBlock(node *blockNode, block *btcutil.Block, vi
 	}
 
 	// Load all of the utxos referenced by the inputs for all transactions
-	// in the block don't already exist in the utxo view from the database.
+	// in the block don't already exist in the utxo view from the cache.
 	//
 	// These utxo entries are needed for verification of things such as
 	// transaction inputs, counting pay-to-script-hashes, and scripts.
-	err := view.fetchInputUtxos(b.db, block)
+	err := view.fetchInputUtxos(b.utxoCache, block)
 	if err != nil {
 		return err
 	}
@@ -1181,12 +1317,12 @@ func (b *BlockChain) checkConnectBlock(node *blockNode, block *btcutil.Block, vi
 	if csvState == ThresholdActive {
 		// If the CSV soft-fork is now active, then modify the
 		// scriptFlags to ensure that the CSV op code is properly
-		// validated during the script checks bleow.
+		// validated during the script checks below.
 		scriptFlags |= txscript.ScriptVerifyCheckSequenceVerify
 
 		// We obtain the MTP of the *previous* block in order to
 		// determine if transactions in the current block are final.
-		medianTime := node.parent.CalcPastMedianTime()
+		medianTime := CalcPastMedianTime(node.parent)
 
 		// Additionally, if the CSV soft-fork package is now active,
 		// then we also enforce the relative sequence number based
@@ -1216,6 +1352,18 @@ func (b *BlockChain) checkConnectBlock(node *blockNode, block *btcutil.Block, vi
 	if enforceSegWit {
 		scriptFlags |= txscript.ScriptVerifyWitness
 		scriptFlags |= txscript.ScriptStrictMultiSig
+	}
+
+	// Before we execute the main scripts, we'll also check to see if
+	// taproot is active or not.
+	taprootState, err := b.deploymentState(
+		node.parent, chaincfg.DeploymentTaproot,
+	)
+	if err != nil {
+		return err
+	}
+	if taprootState == ThresholdActive {
+		scriptFlags |= txscript.ScriptVerifyTaproot
 	}
 
 	// Now that the inexpensive checks are done and have passed, verify the
@@ -1276,3 +1424,68 @@ func (b *BlockChain) CheckConnectBlockTemplate(block *btcutil.Block) error {
 	newNode := newBlockNode(&header, tip)
 	return b.checkConnectBlock(newNode, block, view, nil)
 }
+
+// ChainParams returns the Blockchain's configured chaincfg.Params.
+//
+// NOTE: Part of the ChainCtx interface.
+func (b *BlockChain) ChainParams() *chaincfg.Params {
+	return b.chainParams
+}
+
+// BlocksPerRetarget returns the number of blocks before retargeting occurs.
+//
+// NOTE: Part of the ChainCtx interface.
+func (b *BlockChain) BlocksPerRetarget() int32 {
+	return b.blocksPerRetarget
+}
+
+// MinRetargetTimespan returns the minimum amount of time to use in the
+// difficulty calculation.
+//
+// NOTE: Part of the ChainCtx interface.
+func (b *BlockChain) MinRetargetTimespan() int64 {
+	return b.minRetargetTimespan
+}
+
+// MaxRetargetTimespan returns the maximum amount of time to use in the
+// difficulty calculation.
+//
+// NOTE: Part of the ChainCtx interface.
+func (b *BlockChain) MaxRetargetTimespan() int64 {
+	return b.maxRetargetTimespan
+}
+
+// VerifyCheckpoint checks that the height and hash match the stored
+// checkpoints.
+//
+// NOTE: Part of the ChainCtx interface.
+func (b *BlockChain) VerifyCheckpoint(height int32,
+	hash *chainhash.Hash) bool {
+
+	return b.verifyCheckpoint(height, hash)
+}
+
+// FindPreviousCheckpoint finds the checkpoint we've encountered during
+// validation.
+//
+// NOTE: Part of the ChainCtx interface.
+func (b *BlockChain) FindPreviousCheckpoint() (HeaderCtx, error) {
+	checkpoint, err := b.findPreviousCheckpoint()
+	if err != nil {
+		return nil, err
+	}
+
+	if checkpoint == nil {
+		// This check is necessary because if we just return the nil
+		// blockNode as a HeaderCtx, a caller performing a nil-check
+		// will fail. This is a quirk of go where a nil value stored in
+		// an interface is different from the actual nil interface.
+		return nil, nil
+	}
+
+	return checkpoint, err
+}
+
+// A compile-time assertion to ensure BlockChain implements the ChainCtx
+// interface.
+var _ ChainCtx = (*BlockChain)(nil)

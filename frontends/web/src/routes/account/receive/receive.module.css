@@ -1,20 +1,17 @@
-.receiveContent {
-    margin: 0 auto;
-    text-align: center;
-    max-width: 420px;
-    width: 100%;
-}
-
 .labels {
-    margin: var(--spacing-default) 0;
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin: var(--space-half) 0;
 }
 
 .label {
     color: var(--color-secondary);
+    flex-grow: 1;
     font-size: var(--size-default);
     font-weight: 400;
-    padding: 0 var(--space-quarter);
     margin: 0;
+    padding: 0 var(--space-quarter);
 }
 
 .qrCodeContainer {
@@ -22,77 +19,23 @@
     min-height: 260px;
 }
 
-.verifyContent {
-    width: 100%;
-}
-
-.verifyContent p {
-    color: var(--color-blue);
-    font-size: var(--size-default);
-}
-
-pre.verifyAddress {
-    margin-top: var(--spacing-default);
-    text-align: center;
-    background-color: var(--color-lightgray);
-    border-radius: 2px;
-    padding: var(--spacing-default) 0;
-}
-
-.bottomButtons {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    padding: 0 var(--spacing-large) var(--spacing-default) var(--spacing-large);
-    max-width: var(--content-width);
-    width: 100%;
-    margin: 0 auto;
-}
-
-.button {
-    min-width: 70px;
-    margin: 0 var(--spacing-half);
-}
-
-.arrowLeft,
-.arrowRight {
-    width: 16px;
-    position: relative;
-    top: 3px;
-}
-
-.arrowLeft {
-    margin-right: 3px;
-}
-
-.arrowRight {
-    margin-left: 3px;
-}
-
 .previous,
 .next {
-    text-decoration: none;
-    font-size: var(--size-button);
-    line-height: 1;
+    appearance: none;
+    background: none;
+    border: 0;
     color: var(--color-blue);
+    font-size: var(--size-default);
+    line-height: 1;
+    padding: 0;
+    text-decoration: none;
 }
 
+.previous img,
 .next img {
-    height: 16px;
-    margin-left: 4px;
-}
-
-.previous img {
-    height: 16px;
-    margin-right: 4px;
-}
-
-.disabled {
-    color: var(--color-mediumgray);
-}
-
-.arrow {
-    
+    display: block;
+    height: min(2.4rem, 36px);
+    width: min(2.4rem, 36px);
 }
 
 .hide {
@@ -101,26 +44,22 @@ pre.verifyAddress {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: var(--color-white);
+    background-color: var(--background-secondary);
 }
 
 .changeType {
+    appearance: none;
+    background: none;
+    border: none;
     color: var(--color-secondary);
     cursor: pointer;
+    display: inline-block;
+    font-size: var(--size-small);
     text-align: center;
     text-decoration: underline;
+    padding: var(--space-quarter);
 }
 
-@media (max-width: 640px) {
-    .addressField {
-        min-width: 0 !important;
-    }
-
-    .addressField input {
-        font-size: var(--size-small);
-    }
-
-    .bottomButtons {
-        padding: 0 var(--spacing-half) var(--spacing-half) var(--spacing-half);
-    }
+.messageContainer {
+    margin-top: var(--space-quarter);
 }

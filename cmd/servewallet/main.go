@@ -1,16 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package main
 
@@ -20,27 +8,55 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/arguments"
-	btctypes "github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/types"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/usb"
-	backendHandlers "github.com/digitalbitbox/bitbox-wallet-app/backend/handlers"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/config"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/system"
+	backendPkg "github.com/BitBoxSwiss/bitbox-wallet-app/backend"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/arguments"
+	btctypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/bitbox02/simulator"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/usb"
+	backendHandlers "github.com/BitBoxSwiss/bitbox-wallet-app/backend/handlers"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/versioninfo"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/config"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/logging"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/system"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/useragent"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	port    = 8082
-	address = "0.0.0.0"
+	port               = 8082
+	defaultBindAddress = "127.0.0.1"
+	bindAddressEnvVar  = "BITBOX_DEV_BIND_HOST"
+	darwin             = "darwin"
 )
+
+var backend *backendPkg.Backend
+
+func bindAddress() string {
+	if address := os.Getenv(bindAddressEnvVar); address != "" {
+		return address
+	}
+	return defaultBindAddress
+}
 
 // webdevEnvironment implements backend.Environment.
 type webdevEnvironment struct {
+	// This is deliberately not secure storage. It exercises the encrypted mnemonic path in webdev
+	// and persists keys only so the development wallet remains usable across backend restarts.
+	lightningEncryptionKeys   *config.File
+	lightningEncryptionKeysMu *sync.Mutex
+}
+
+func newWebdevEnvironment(configDir string) webdevEnvironment {
+	return webdevEnvironment{
+		lightningEncryptionKeys:   config.NewFile(configDir, "lightning-encryption-keys.json"),
+		lightningEncryptionKeysMu: &sync.Mutex{},
+	}
 }
 
 // NotifyUser implements backend.Environment.
@@ -67,6 +83,11 @@ func (webdevEnvironment) NotifyUser(text string) {
 
 // DeviceInfos implements backend.Environment.
 func (webdevEnvironment) DeviceInfos() []usb.DeviceInfo {
+	testDeviceInfo := simulator.TestDeviceInfo()
+	if testDeviceInfo != nil {
+		// We are in "test device" mode.
+		return []usb.DeviceInfo{testDeviceInfo}
+	}
 	return usb.DeviceInfos()
 }
 
@@ -80,28 +101,219 @@ func (webdevEnvironment) UsingMobileData() bool {
 	return false
 }
 
+// Auth implements backend.Environment.
+func (webdevEnvironment) Auth() {
+	log := logging.Get().WithGroup("servewallet")
+	log.Info("Webdev Auth")
+	if backend != nil {
+		backend.AuthResult(backendPkg.AuthResultOk)
+		log.Info("Webdev Auth OK")
+	}
+}
+
+// OnAuthSettingChanged implements backend.Environment.
+func (webdevEnvironment) OnAuthSettingChanged(enabled bool) {
+}
+
+// CanEncryptLightningMnemonic implements backend.Environment.
+func (webdevEnvironment) CanEncryptLightningMnemonic() bool {
+	return true
+}
+
+// StoreLightningEncryptionKey implements backend.Environment.
+func (env webdevEnvironment) StoreLightningEncryptionKey(accountCode string, encryptionKey string) error {
+	env.lightningEncryptionKeysMu.Lock()
+	defer env.lightningEncryptionKeysMu.Unlock()
+
+	keys, err := env.loadLightningEncryptionKeys()
+	if err != nil {
+		return err
+	}
+	keys[accountCode] = encryptionKey
+	return env.lightningEncryptionKeys.WriteJSON(keys)
+}
+
+// LoadLightningEncryptionKey implements backend.Environment.
+func (env webdevEnvironment) LoadLightningEncryptionKey(accountCode string) (string, error) {
+	env.lightningEncryptionKeysMu.Lock()
+	defer env.lightningEncryptionKeysMu.Unlock()
+
+	keys, err := env.loadLightningEncryptionKeys()
+	if err != nil {
+		return "", err
+	}
+	key, ok := keys[accountCode]
+	if !ok {
+		return "", fmt.Errorf("Lightning encryption key not found for account %q", accountCode)
+	}
+	return key, nil
+}
+
+// DeleteLightningEncryptionKey implements backend.Environment.
+func (env webdevEnvironment) DeleteLightningEncryptionKey(accountCode string) error {
+	env.lightningEncryptionKeysMu.Lock()
+	defer env.lightningEncryptionKeysMu.Unlock()
+
+	keys, err := env.loadLightningEncryptionKeys()
+	if err != nil {
+		return err
+	}
+	delete(keys, accountCode)
+	return env.lightningEncryptionKeys.WriteJSON(keys)
+}
+
+func (env webdevEnvironment) loadLightningEncryptionKeys() (map[string]string, error) {
+	keys := map[string]string{}
+	if !env.lightningEncryptionKeys.Exists() {
+		return keys, nil
+	}
+	if err := env.lightningEncryptionKeys.ReadJSON(&keys); err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
+// BluetoothConnect implements backend.Environment.
+func (webdevEnvironment) BluetoothConnect(identifier string) {
+}
+
+// UserAgentPlatform implements backend.Environment.
+func (webdevEnvironment) UserAgentPlatform() string {
+	return useragent.PlatformFromRuntime()
+}
+
 // NativeLocale naively implements backend.Environment.
 // This version is unlikely to work on Windows.
 func (webdevEnvironment) NativeLocale() string {
+	log := logging.Get().WithGroup("servewallet")
 	v := os.Getenv("LC_ALL")
 	if v == "" {
-		v = os.Getenv("LANG")
+		if lang, ok := os.LookupEnv("LANG"); ok {
+			v = lang
+		} else if runtime.GOOS == darwin {
+			out, err := exec.Command("defaults", "read", "-g", "AppleLocale").Output()
+			if err != nil {
+				log.Warnf("failed to read AppleLocale via defaults: %v", err)
+			} else {
+				v = strings.Split(strings.TrimSpace(string(out)), "@")[0]
+			}
+		}
 	}
+
 	// Strip charset from the LANG. It is unsupported by JS Date formatting
 	// used in the frontend and breaks UI in unexpected ways.
 	// We are always UTF-8 anyway.
 	return strings.Split(v, ".")[0]
 }
 
+func normalizeAppleSeparator(s string) string {
+	// macOS defaults may encode narrow no-break space as \U202f.
+	replacer := strings.NewReplacer(
+		`\\U202f`, "\u202f",
+		`\\U202F`, "\u202f",
+		`\U202f`, "\u202f",
+		`\U202F`, "\u202f",
+	)
+	return replacer.Replace(s)
+}
+
+func parseAppleICUNumberSymbols(out []byte) *backendPkg.NumberFormat {
+	result := &backendPkg.NumberFormat{}
+
+	re := regexp.MustCompile(`(\d+)\s*=\s*"([^"]*)"`)
+	for _, m := range re.FindAllStringSubmatch(string(out), -1) {
+		switch m[1] {
+		case "0":
+			result.DecimalSeparator = normalizeAppleSeparator(m[2])
+		case "1":
+			result.GroupSeparator = normalizeAppleSeparator(m[2])
+		}
+	}
+
+	if result.DecimalSeparator == "" &&
+		result.GroupSeparator == "" {
+		return nil
+	}
+
+	return result
+}
+
+// NumberFormatting in webdev
+func (webdevEnvironment) NumberFormat() *backendPkg.NumberFormat {
+	log := logging.Get().WithGroup("servewallet")
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
+
+	out, err := exec.Command("defaults", "read", "-g", "AppleICUNumberSymbols").Output()
+
+	if err != nil {
+		log.Warnf("failed to read AppleICUNumberSymbols via defaults: %v", err)
+		return nil
+	}
+
+	return parseAppleICUNumberSymbols(out)
+}
+
+// GetSaveFilename implements backend.Environment.
+func (webdevEnvironment) GetSaveFilename(suggestedFilename string) string {
+	if runtime.GOOS == darwin {
+		defaultDir := filepath.Dir(suggestedFilename)
+		defaultName := filepath.Base(suggestedFilename)
+		script := fmt.Sprintf(
+			`POSIX path of (choose file name with prompt "Choose export location" default location POSIX file "%s/" default name "%s")`,
+			escapeAppleScript(defaultDir),
+			escapeAppleScript(defaultName),
+		)
+		out, err := exec.Command("osascript", "-e", script).CombinedOutput() // #nosec G204
+		if err != nil {
+			// User cancellation from osascript should abort the export.
+			if strings.Contains(strings.ToLower(string(out)), "user canceled") {
+				return ""
+			}
+			logging.Get().
+				WithGroup("servewallet").
+				WithError(err).
+				WithField("output", strings.TrimSpace(string(out))).
+				Warn("save dialog failed, falling back to suggested filename")
+			return suggestedFilename
+		}
+		return strings.TrimSpace(string(out))
+	}
+	return suggestedFilename
+}
+
+func escapeAppleScript(input string) string {
+	escaped := strings.ReplaceAll(input, "\\", "\\\\")
+	return strings.ReplaceAll(escaped, "\"", "\\\"")
+}
+
+// SetDarkTheme implements backend.Environment.
+func (webdevEnvironment) SetDarkTheme(isDark bool) {
+	// nothing to do here.
+}
+
+// DetectDarkTheme implements backend.Environment.
+func (webdevEnvironment) DetectDarkTheme() bool {
+	// dark theme detection is not implemented in webdev. If needed pls check the
+	// implementation in frontends/qt/server/server.go
+	return false
+}
+
 func main() {
 	config.SetAppDir("appfolder.dev")
+	address := bindAddress()
 
 	mainnet := flag.Bool("mainnet", false, "switch to mainnet instead of testnet coins")
 	regtest := flag.Bool("regtest", false, "use regtest instead of testnet coins")
-	devmode := flag.Bool("devmode", true, "switch to dev mode")
 	devservers := flag.Bool("devservers", true, "switch to dev servers")
 	gapLimitsReceive := flag.Uint("gapLimitReceive", 0, "gap limit for receive addresses")
 	gapLimitsChange := flag.Uint("gapLimitChange", 0, "gap limit for change addresses")
+	simulatorPort := flag.Int("simulatorPort", 15423, "port for the BitBox02 simulator")
+	useSimulator := flag.Bool("simulator", false, "use the BitBox02 simulator")
+	uri := flag.String("uri", "", "URI to handle on startup (aopp: or lightning:)")
+	coingeckoURL := flag.String("coingeckoURL", "", "CoinGecko API URL for testing exchange rates")
+
 	flag.Parse()
 
 	var gapLimits *btctypes.GapLimits
@@ -123,24 +335,46 @@ func main() {
 		}
 	}(log)
 	log.Info("--------------- Started application --------------")
+	log.WithField("goos", runtime.GOOS).
+		WithField("goarch", runtime.GOARCH).
+		WithField("version", versioninfo.Version).
+		Info("environment")
+
 	// since we are in dev-mode, we can drop the authorization token
 	connectionData := backendHandlers.NewConnectionData(-1, "")
-	backend, err := backend.NewBackend(
+	appDir := config.AppDir()
+	newBackend, err := backendPkg.NewBackend(
 		arguments.NewArguments(
-			config.AppDir(),
+			appDir,
 			!*mainnet,
 			*regtest,
-			*devmode,
 			*devservers,
 			gapLimits,
 		),
-		webdevEnvironment{})
+		newWebdevEnvironment(appDir))
 	if err != nil {
 		log.WithField("error", err).Panic(err)
+	}
+	backend = newBackend
+	if *coingeckoURL != "" {
+		backend.RatesUpdater().SetCoingeckoURL(*coingeckoURL)
 	}
 	handlers := backendHandlers.NewHandlers(backend, connectionData)
 	log.WithFields(logrus.Fields{"address": address, "port": port}).Info("Listening for HTTP")
 	fmt.Printf("Listening on: http://localhost:%d\n", port)
+
+	if *useSimulator {
+		// The simulator is only allowed when running in testnet mode.
+		if !backend.Testing() {
+			log.Panic("The BitBox02 simulator can only be used in testnet mode.")
+		}
+		simulator.Init(*simulatorPort)
+	}
+
+	if *uri != "" {
+		backend.HandleURI(*uri)
+	}
+
 	if err := http.ListenAndServe(fmt.Sprintf("%s:%d", address, port), handlers.Router); err != nil {
 		log.WithFields(logrus.Fields{"address": address, "port": port, "error": err.Error()}).Fatal("Failed to listen for HTTP")
 	}

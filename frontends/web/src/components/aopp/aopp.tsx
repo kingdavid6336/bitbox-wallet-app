@@ -1,248 +1,260 @@
-/**
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import * as accountAPI from '../../api/account';
-import * as aoppAPI from '../../api/aopp';
-import { subscribe } from '../../decorators/subscribe';
-import { translate, TranslateProps } from '../../decorators/translate';
-import { equal } from '../../utils/equal';
-import { SimpleMarkup } from '../../utils/simplemarkup';
-import { View, ViewHeader, ViewContent, ViewButtons } from '../view/view';
-import { Message } from '../message/message';
-import { Button, Field, Label, Select } from '../forms';
-import { CopyableInput } from '../copy/Copy';
-import { BitBox02Stylized, Cancel, CaretDown, Checked } from '../icon';
+import React, { ReactNode, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import * as accountAPI from '@/api/account';
+import * as aoppAPI from '@/api/aopp';
+import { equal } from '@/utils/equal';
+import { SimpleMarkup } from '@/utils/markup';
+import { View, ViewHeader, ViewContent, ViewButtons } from '@/components/view/view';
+import { Message } from '@/components/message/message';
+import { Button, Field, Label, Select } from '@/components/forms';
+import { CopyableInput } from '@/components/copy/Copy';
+import { PointToBitBox02 } from '@/components/icon';
 import { VerifyAddress } from './verifyaddress';
 import { Vasp } from './vasp';
-import * as styles from './aopp.module.css';
+import { FirmwareUpgradeRequiredDialog } from '@/components/dialog/firmware-upgrade-required-dialog';
+import styles from './aopp.module.css';
 
-const Banner = ({ children }: RenderableProps<{}>) => (
-    <div className={styles.banner}>{children}</div>
+type TProps = {
+  children: ReactNode;
+};
+
+const Banner = ({ children }: TProps) => (
+  <div className={styles.banner}>{children}</div>
 );
 
-interface State {
-    accountCode: accountAPI.AccountCode;
-}
+const domain = (callback: string): string => {
+  try {
+    return new URL(callback).host;
+  } catch {
+    return '';
+  }
+};
 
-interface AoppProps {
-}
+export const Aopp = () => {
+  const { t } = useTranslation();
 
-interface SubscribedProps {
-    aopp?: aoppAPI.Aopp;
-}
+  const [accountCode, setAccountCode] = useState<accountAPI.AccountCode>('');
+  const [aopp, setAopp] = useState<aoppAPI.Aopp>();
 
-type Props = SubscribedProps & AoppProps & TranslateProps;
+  const [prevAopp, setPrevAopp] = useState(aopp);
 
-const domain = (callback: string): string => new URL(callback).host;
+  useEffect(() => {
+    aoppAPI.getAOPP().then(setAopp);
+    return aoppAPI.subscribeAOPP(setAopp);
+  }, []);
 
-class Aopp extends Component<Props, State> {
-    public readonly state: State = {
-        accountCode: '',
-    };
-
-    public componentDidMount() {
-        this.setAccountCodeDefault();
+  useEffect(() => {
+    if (aopp !== prevAopp) {
+      setPrevAopp(aopp);
+      if (aopp?.state === 'choosing-account'
+      && aopp.accounts.length
+      && (prevAopp?.state !== 'choosing-account' || !equal(aopp.accounts, prevAopp?.accounts))) {
+        setAccountCode(aopp.accounts[0].code);
+      }
     }
+  }, [aopp, prevAopp]);
 
-    public componentDidUpdate(prevProps) {
-        if (this.props.aopp === undefined) {
-            return;
-        }
-        if (this.props.aopp.state === 'choosing-account') {
-            if (!equal(this.props.aopp.accounts, prevProps.aopp?.accounts)) {
-                this.setAccountCodeDefault();
-            }
-        }
+  const chooseAccount = (e: React.SyntheticEvent) => {
+    if (accountCode) {
+      aoppAPI.chooseAccount(accountCode);
     }
+    e.preventDefault();
+  };
 
-    private setAccountCodeDefault() {
-        const { aopp } = this.props;
-        if (aopp === undefined || aopp.state !== 'choosing-account') {
-            return;
-        }
-        if (aopp.accounts.length) {
-            this.setState({ accountCode: aopp.accounts[0].code });
-        }
+  if (!aopp) {
+    return null;
+  }
+  switch (aopp.state) {
+  case 'error':
+    if (aopp.errorCode === 'firmwareUpgradeRequired') {
+      return (
+        <FirmwareUpgradeRequiredDialog
+          open
+          onClose={aoppAPI.cancel}
+        />
+      );
     }
-
-    private chooseAccount = (e: Event) => {
-        if (this.state.accountCode) {
-            aoppAPI.chooseAccount(this.state.accountCode);
-        }
-        e.preventDefault();
-    }
-
-    public render(
-        { t, aopp }: RenderableProps<Props>,
-        { accountCode }: State,
-    ) {
-        if (!aopp) {
-            return null;
-        }
-        switch (aopp.state) {
-            case 'error':
-                return (
-                    <View center position="fullscreen">
-                        <ViewHeader title={t('aopp.errorTitle')}>
-                            <p>{domain(aopp.callback)}</p>
-                        </ViewHeader>
-                        <ViewContent>
-                            <Message type="error">
-                                <Cancel className={styles.smallIcon} />
-                                {t(`error.${aopp.errorCode}`, { host: domain(aopp.callback) })}
-                            </Message>
-                        </ViewContent>
-                        <ViewButtons>
-                            <Button danger onClick={aoppAPI.cancel}>{t('button.dismiss')}</Button>
-                        </ViewButtons>
-                    </View>
-                );
-            case 'inactive':
-                // Inactive, waiting for action.
-                return null;
-            case 'user-approval':
-                return (
-                    <View center position="fullscreen">
-                        <ViewHeader title={t('aopp.title')} withAppLogo />
-                        <ViewContent>
-                            <Vasp prominent
-                                hostname={domain(aopp.callback)}
-                                fallback={(
-                                    <SimpleMarkup tagName="p" markup={t('aopp.addressRequest', {
-                                        host: `<strong>${domain(aopp.callback)}</strong>`
-                                    })}/>
-                                )}
-                                withLogoText={t('aopp.addressRequestWithLogo')} />
-                        </ViewContent>
-                        <ViewButtons>
-                            <Button primary onClick={aoppAPI.approve}>{t('button.continue')}</Button>
-                            <Button secondary onClick={aoppAPI.cancel}>{t('dialog.cancel')}</Button>
-                        </ViewButtons>
-                    </View>
-                );
-            case 'awaiting-keystore':
-                return (
-                    <Banner>{t('aopp.banner')}</Banner>
-                );
-            case 'choosing-account': {
-                const options = aopp.accounts.map(account => {
-                    return {
-                        text: account.name,
-                        value: account.code,
-                    };
-                });
-                return (
-                    <form onSubmit={this.chooseAccount}>
-                        <View center position="fullscreen">
-                            <ViewHeader title={t('aopp.title')}>
-                                <Vasp hostname={domain(aopp.callback)} />
-                            </ViewHeader>
-                            <ViewContent>
-                                <Select
-                                    label={t('buy.info.selectLabel')}
-                                    options={options}
-                                    defaultValue={options[0].value}
-                                    value={accountCode}
-                                    onChange={e => this.setState({ accountCode: (e.target as HTMLSelectElement)?.value })}
-                                    id="account" />
-                            </ViewContent>
-                            <ViewButtons>
-                                <Button primary type="submit">{t('button.next')}</Button>
-                                <Button secondary onClick={aoppAPI.cancel}>{t('dialog.cancel')}</Button>
-                            </ViewButtons>
-                        </View>
-                    </form>
-                );
-            }
-            case 'syncing':
-                return (
-                    <View center position="fullscreen">
-                        <ViewHeader title={t('aopp.title')}>
-                            <Vasp hostname={domain(aopp.callback)} />
-                        </ViewHeader>
-                        <ViewContent>
-                            <p>{t('aopp.syncing')}</p>
-                        </ViewContent>
-                        <ViewButtons>
-                            <Button secondary onClick={aoppAPI.cancel}>{t('dialog.cancel')}</Button>
-                        </ViewButtons>
-                    </View>
-                );
-            case 'signing':
-                return (
-                    <View center position="fullscreen">
-                        <ViewHeader small title={t('aopp.title')}>
-                            <Vasp hostname={domain(aopp.callback)} />
-                        </ViewHeader>
-                        <ViewContent>
-                            <p>{t('aopp.signing')}</p>
-                            <Field>
-                                <Label>{t('aopp.labelAddress')}</Label>
-                                <CopyableInput alignLeft flexibleHeight value={aopp.address} />
-                            </Field>
-                            <Field>
-                                <Label>{t('aopp.labelMessage')}</Label>
-                                <div className={styles.message}>
-                                    {aopp.message}
-                                </div>
-                            </Field>
-                            <CaretDown className={styles.caret} />
-                            <BitBox02Stylized className={styles.device} />
-                        </ViewContent>
-                    </View>
-                );
-            case 'success':
-                return (
-                    <View center position="fullscreen">
-                        <ViewContent>
-                            <Checked className={styles.largeIcon} />
-                            <p className={styles.successText}>{t('aopp.success.title')}</p>
-                            <p className={styles.proceed}>
-                                {t('aopp.success.message', { host: domain(aopp.callback) })}
-                            </p>
-                            <Field>
-                                <Label>{t('aopp.labelAddress')}</Label>
-                                <CopyableInput alignLeft flexibleHeight value={aopp.address} />
-                            </Field>
-                            <Field style="margin-bottom: 0;">
-                                <Label>{t('aopp.labelMessage')}</Label>
-                                <div className={styles.message}>
-                                    {aopp.message}
-                                </div>
-                            </Field>
-                        </ViewContent>
-                        <ViewButtons>
-                            <Button primary onClick={aoppAPI.cancel}>{t('button.done')}</Button>
-                            <VerifyAddress
-                                accountCode={aopp.accountCode}
-                                address={aopp.address}
-                                addressID={aopp.addressID} />
-                        </ViewButtons>
-                    </View>
-                );
-        }
-    }
-}
-
-const subscribeHOC = subscribe<SubscribedProps, AoppProps & TranslateProps>(
-    { aopp: 'aopp' },
-    false,
-    false,
-)(Aopp);
-
-const translateHOC = translate<AoppProps>()(subscribeHOC);
-export { translateHOC as Aopp };
+    return (
+      <View
+        fullscreen
+        textCenter
+        verticallyCentered
+        width="580px">
+        <ViewHeader title={t('aopp.errorTitle')}>
+          <p>{domain(aopp.callback)}</p>
+        </ViewHeader>
+        <ViewContent>
+          <Message type="error">
+            {t(`error.${aopp.errorCode}`, { host: domain(aopp.callback) })}
+          </Message>
+        </ViewContent>
+        <ViewButtons>
+          <Button danger onClick={aoppAPI.cancel}>{t('button.dismiss')}</Button>
+        </ViewButtons>
+      </View>
+    );
+  case 'inactive':
+    // Inactive, waiting for action.
+    return null;
+  case 'user-approval':
+    const host = domain(aopp.callback);
+    const addressRequestMsg = aopp.xpubRequired ? 'aopp.addressRequestWithXPub' : 'aopp.addressRequest';
+    const addressRequestWithLogoMsg = aopp.xpubRequired ? 'aopp.addressRequestWithLogoAndXPub' : 'aopp.addressRequestWithLogo';
+    return (
+      <View
+        fullscreen
+        textCenter
+        verticallyCentered
+        width="580px">
+        <ViewHeader title={t('aopp.title')} withAppLogo />
+        <ViewContent>
+          <Vasp prominent
+            hostname={domain(aopp.callback)}
+            fallback={(
+              <SimpleMarkup tagName="p" markup={t(addressRequestMsg, {
+                host: `<strong>${host}</strong>`
+              })} />
+            )}
+            withLogoText={t(addressRequestWithLogoMsg)} />
+          {
+            aopp.xpubRequired ?
+              (
+                <Message type="info"> {t('aopp.xpubRequested', { host: `${host}` })} </Message>
+              ) : ''
+          }
+        </ViewContent>
+        <ViewButtons>
+          <Button primary onClick={aoppAPI.approve}>{t('button.continue')}</Button>
+          <Button secondary onClick={aoppAPI.cancel}>{t('dialog.cancel')}</Button>
+        </ViewButtons>
+      </View>
+    );
+  case 'awaiting-keystore':
+    return (
+      <Banner>{t('aopp.banner')}</Banner>
+    );
+  case 'choosing-account': {
+    const options = aopp.accounts.map(account => {
+      return {
+        text: account.name,
+        value: account.code,
+      };
+    });
+    return (
+      <form onSubmit={chooseAccount}>
+        <View
+          fullscreen
+          textCenter
+          verticallyCentered
+          width="580px">
+          <ViewHeader title={t('aopp.title')}>
+            <Vasp hostname={domain(aopp.callback)} />
+          </ViewHeader>
+          <ViewContent>
+            <Select
+              label={t('buy.info.selectLabel')}
+              options={options}
+              value={accountCode}
+              onChange={e => setAccountCode((e.target as HTMLSelectElement)?.value)}
+              id="account" />
+          </ViewContent>
+          <ViewButtons>
+            <Button primary type="submit">{t('button.next')}</Button>
+            <Button secondary onClick={aoppAPI.cancel}>{t('dialog.cancel')}</Button>
+          </ViewButtons>
+        </View>
+      </form>
+    );
+  }
+  case 'syncing':
+    return (
+      <View
+        fullscreen
+        textCenter
+        verticallyCentered
+        width="580px">
+        <ViewHeader title={t('aopp.title')}>
+          <Vasp hostname={domain(aopp.callback)} />
+        </ViewHeader>
+        <ViewContent>
+          <p>{t('account.syncing')}</p>
+        </ViewContent>
+        <ViewButtons>
+          <Button secondary onClick={aoppAPI.cancel}>{t('dialog.cancel')}</Button>
+        </ViewButtons>
+      </View>
+    );
+  case 'signing':
+    return (
+      <View
+        fullscreen
+        textCenter
+        verticallyCentered
+        width="580px">
+        <ViewHeader small title={t('aopp.title')}>
+          <Vasp hostname={domain(aopp.callback)} />
+        </ViewHeader>
+        <ViewContent>
+          <p>{t('aopp.signing')}</p>
+          <Field>
+            <Label>{t('aopp.labelAddress')}</Label>
+            <CopyableInput
+              alignLeft
+              flexibleHeight
+              value={aopp.address}
+              displayValue={aopp.displayAddress}
+            />
+          </Field>
+          <Field>
+            <Label>{t('aopp.labelMessage')}</Label>
+            <div className={styles.message}>
+              {aopp.message}
+            </div>
+          </Field>
+          <PointToBitBox02 />
+        </ViewContent>
+      </View>
+    );
+  case 'success':
+    return (
+      <View
+        fitContent
+        fullscreen
+        textCenter
+        verticallyCentered
+        width="580px">
+        <ViewContent withIcon="success">
+          <p className={styles.successText}>{t('aopp.success.title')}</p>
+          <p className={styles.proceed}>
+            {t('aopp.success.message', { host: domain(aopp.callback) })}
+          </p>
+          <Field>
+            <Label>{t('aopp.labelAddress')}</Label>
+            <CopyableInput
+              alignLeft
+              flexibleHeight
+              value={aopp.address}
+              displayValue={aopp.displayAddress}
+              dataTestId="aopp-address"
+            />
+          </Field>
+          <Field style={{ marginBottom: 0 }}>
+            <Label>{t('aopp.labelMessage')}</Label>
+            <div className={styles.message} data-testid="aopp-message">
+              {aopp.message}
+            </div>
+          </Field>
+        </ViewContent>
+        <ViewButtons>
+          <Button primary onClick={aoppAPI.cancel}>{t('button.done')}</Button>
+          <VerifyAddress
+            accountCode={aopp.accountCode}
+            displayAddress={aopp.displayAddress}
+            addressID={aopp.addressID} />
+        </ViewButtons>
+      </View>
+    );
+  }
+};

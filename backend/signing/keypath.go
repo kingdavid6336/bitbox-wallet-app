@@ -1,27 +1,16 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package signing
 
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
-	"github.com/btcsuite/btcutil/hdkeychain"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/btcsuite/btcd/btcutil/v2/hdkeychain"
 )
 
 const (
@@ -133,7 +122,7 @@ func (relativeKeypath RelativeKeypath) Encode() string {
 
 // Child appends the given node to this relative keypath.
 func (relativeKeypath RelativeKeypath) Child(index uint32, hardened bool) RelativeKeypath {
-	newKeypath := append(RelativeKeypath{}, relativeKeypath...)
+	newKeypath := slices.Clone(relativeKeypath)
 	return append(newKeypath, keyNode{index, hardened})
 }
 
@@ -202,13 +191,13 @@ func (absoluteKeypath AbsoluteKeypath) Encode() string {
 
 // Child appends the given node to this absolute keypath.
 func (absoluteKeypath AbsoluteKeypath) Child(index uint32, hardened bool) AbsoluteKeypath {
-	newKeypath := append(AbsoluteKeypath{}, absoluteKeypath...)
+	newKeypath := slices.Clone(absoluteKeypath)
 	return append(newKeypath, keyNode{index, hardened})
 }
 
 // Append appends a relative keypath to this absolute keypath.
 func (absoluteKeypath AbsoluteKeypath) Append(suffix RelativeKeypath) AbsoluteKeypath {
-	newKeypath := append(AbsoluteKeypath{}, absoluteKeypath...)
+	newKeypath := slices.Clone(absoluteKeypath)
 	return append(newKeypath, suffix...)
 }
 

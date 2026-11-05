@@ -1,0 +1,23 @@
+.navigation {
+  box-sizing: border-box;
+  flex-grow: 0;
+  justify-content: center;
+  margin: 0 auto;
+  max-width: var(--content-width);
+  padding: 0 var(--space-default);
+  width: 100%;
+}
+
+.tabLabel {
+  display: inline-block;
+  position: relative;
+}
+
+.newBadge {
+  line-height: 1;
+  pointer-events: none;
+  position: absolute;
+  right: -24px;
+  top: -16px;
+  z-index: 1;
+}

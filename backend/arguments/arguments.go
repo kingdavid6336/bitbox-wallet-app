@@ -1,25 +1,13 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package arguments
 
 import (
-	"os"
 	"path"
 
-	btctypes "github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/types"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
+	btctypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/types"
+	utilconfig "github.com/BitBoxSwiss/bitbox-wallet-app/util/config"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/logging"
 	"github.com/sirupsen/logrus"
 )
 
@@ -30,8 +18,11 @@ type Arguments struct {
 	// bitbox02DirectoryPath stores the location where bitbox02 application data is stored.
 	bitbox02DirectoryPath string
 
-	// cacheDirectoryPath stores the location where application data is stored.
+	// cacheDirectoryPath stores the location where disposable application caches are stored.
 	cacheDirectoryPath string
+
+	// lightningDirectoryPath stores persistent Lightning application data.
+	lightningDirectoryPath string
 
 	// notesDirectoryPath is the location where transaction notes (labels) are stored.
 	notesDirectoryPath string
@@ -42,16 +33,20 @@ type Arguments struct {
 	// accountsConfigFilename stores the filename of the accounts configuration.
 	accountsConfigFilename string
 
+	// lightningConfigFilename stores the filename of the lightning configuration.
+	lightningConfigFilename string
+
 	// Testing stores whether the application is for testing only.
 	testing bool
 
 	// Testing stores whether the application is for regtest.
 	regtest bool
 
-	// devmode stores whether the application is in dev mode
-	devmode bool
-
-	//devservers stores wether the app should connect to the dev servers. The devservers configuration is not persisted when switching back to production.
+	// devservers stores wether the app should connect to the dev servers.
+	// This also applies to the Pocket and BTCDirect widget environments:
+	// if devserver is true, the widgets will be loaded from the staging environment,
+	// otherwise from production.
+	// The devservers configuration is not persisted when switching back to production.
 	devservers bool
 
 	// gapLimits optionally forces the gap limits used in btc/ltc.
@@ -66,7 +61,6 @@ func NewArguments(
 	mainDirectoryPath string,
 	testing bool,
 	regtest bool,
-	devmode bool,
 	devservers bool,
 	gapLimits *btctypes.GapLimits,
 ) *Arguments {
@@ -74,36 +68,58 @@ func NewArguments(
 		panic("Cannot use -regtest with -mainnet.")
 	}
 
+	if err := utilconfig.EnsurePrivateDir(mainDirectoryPath); err != nil {
+		panic("Cannot create the main directory.")
+	}
+
 	bitbox02DirectoryPath := path.Join(mainDirectoryPath, "bitbox02")
-	if err := os.MkdirAll(bitbox02DirectoryPath, 0700); err != nil {
+	if err := utilconfig.EnsurePrivateDir(bitbox02DirectoryPath); err != nil {
 		panic("Cannot create the bitbox02 directory.")
 	}
 
-	cacheDirectoryPath := path.Join(mainDirectoryPath, "cache")
-	if err := os.MkdirAll(cacheDirectoryPath, 0700); err != nil {
+	cacheDirectoryPath := utilconfig.CacheDir(mainDirectoryPath)
+	if err := utilconfig.EnsurePrivateDir(cacheDirectoryPath); err != nil {
 		panic("Cannot create the cache directory.")
 	}
 
+	lightningDirectoryPath := path.Join(mainDirectoryPath, "lightning")
+	if err := utilconfig.EnsurePrivateDir(lightningDirectoryPath); err != nil {
+		panic("Cannot create the lightning directory.")
+	}
+
 	notesDirectoryPath := path.Join(mainDirectoryPath, "notes")
-	if err := os.MkdirAll(notesDirectoryPath, 0700); err != nil {
+	if err := utilconfig.EnsurePrivateDir(notesDirectoryPath); err != nil {
 		panic("Cannot create the notes directory.")
 	}
 
 	log := logging.Get().WithGroup("arguments")
+	appConfigFilename := path.Join(mainDirectoryPath, "config.json")
+	if err := utilconfig.EnsurePrivateFileIfExists(appConfigFilename); err != nil {
+		log.WithError(err).Warn("Could not restrict app config file permissions")
+	}
+	accountsConfigFilename := path.Join(mainDirectoryPath, "accounts.json")
+	if err := utilconfig.EnsurePrivateFileIfExists(accountsConfigFilename); err != nil {
+		log.WithError(err).Warn("Could not restrict accounts config file permissions")
+	}
+	lightningConfigFilename := path.Join(mainDirectoryPath, "lightning.json")
+	if err := utilconfig.EnsurePrivateFileIfExists(lightningConfigFilename); err != nil {
+		log.WithError(err).Warn("Could not restrict lightning config file permissions")
+	}
 	arguments := &Arguments{
 		mainDirectoryPath:     mainDirectoryPath,
 		bitbox02DirectoryPath: bitbox02DirectoryPath,
 
-		cacheDirectoryPath:     cacheDirectoryPath,
-		notesDirectoryPath:     notesDirectoryPath,
-		appConfigFilename:      path.Join(mainDirectoryPath, "config.json"),
-		accountsConfigFilename: path.Join(mainDirectoryPath, "accounts.json"),
-		testing:                testing,
-		regtest:                regtest,
-		devmode:                devmode,
-		devservers:             devservers,
-		gapLimits:              gapLimits,
-		log:                    log,
+		cacheDirectoryPath:      cacheDirectoryPath,
+		lightningDirectoryPath:  lightningDirectoryPath,
+		notesDirectoryPath:      notesDirectoryPath,
+		appConfigFilename:       appConfigFilename,
+		accountsConfigFilename:  accountsConfigFilename,
+		lightningConfigFilename: lightningConfigFilename,
+		testing:                 testing,
+		regtest:                 regtest,
+		devservers:              devservers,
+		gapLimits:               gapLimits,
+		log:                     log,
 	}
 
 	log.Infof("Arguments: %+v", arguments)
@@ -126,6 +142,11 @@ func (arguments *Arguments) AccountsConfigFilename() string {
 	return arguments.accountsConfigFilename
 }
 
+// LightningConfigFilename returns the path to the lightning config file of the backend.
+func (arguments *Arguments) LightningConfigFilename() string {
+	return arguments.lightningConfigFilename
+}
+
 // BitBox02DirectoryPath returns the path where BitBox data is stored.
 // The above constructor ensures that the directory with the returned path exists.
 func (arguments *Arguments) BitBox02DirectoryPath() string {
@@ -138,6 +159,12 @@ func (arguments *Arguments) CacheDirectoryPath() string {
 	return arguments.cacheDirectoryPath
 }
 
+// LightningDirectoryPath returns the path where persistent Lightning application data is stored.
+// The above constructor ensures that the directory with the returned path exists.
+func (arguments *Arguments) LightningDirectoryPath() string {
+	return arguments.lightningDirectoryPath
+}
+
 // NotesDirectoryPath returns the path to the notes directory of the backend.
 // The above constructor ensures that the directory with the returned path exists.
 func (arguments *Arguments) NotesDirectoryPath() string {
@@ -147,11 +174,6 @@ func (arguments *Arguments) NotesDirectoryPath() string {
 // Testing returns whether the backend is for testing only.
 func (arguments *Arguments) Testing() bool {
 	return arguments.testing
-}
-
-// DevMode returns whether the backend is in developer mode.
-func (arguments *Arguments) DevMode() bool {
-	return arguments.devmode
 }
 
 // DevServers returns whether the backend should use the development servers.

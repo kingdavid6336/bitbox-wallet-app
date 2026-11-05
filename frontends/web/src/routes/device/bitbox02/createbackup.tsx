@@ -1,97 +1,70 @@
-/**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import { translate, TranslateProps } from '../../../decorators/translate';
-import { apiPost } from '../../../utils/request';
-import { alertUser } from '../../../components/alert/Alert';
-import { confirmation } from '../../../components/confirm/Confirm';
-import { Button } from '../../../components/forms';
-import { WaitDialog } from '../../../components/wait-dialog/wait-dialog';
+import { useState } from 'react';
+import { checkBackup, createBackup as createBackupAPI } from '@/api/bitbox02';
+import { alertUser } from '@/components/alert/Alert';
+import { confirmation } from '@/components/confirm/Confirm';
+import { Button } from '@/components/forms';
+import { PointToBitBox02 } from '@/components/icon';
+import { WaitDialog } from '@/components/wait-dialog/wait-dialog';
+import { useTranslation } from 'react-i18next';
 
-interface CreateProps {
-    deviceID: string;
-}
+type TProps = {
+  deviceID: string;
+};
 
-type Props = CreateProps & TranslateProps;
+export const Create = ({ deviceID }: TProps) => {
+  const [creatingBackup, setCreatingBackup] = useState(false);
+  const [disabled, setDisabled] = useState(false);
+  const { t } = useTranslation();
 
-interface State {
-    creatingBackup: boolean;
-    disabled: boolean;
-}
+  const createBackup = () => {
+    setCreatingBackup(true);
+    createBackupAPI(deviceID, 'sdcard')
+      .then((result) => {
+        setCreatingBackup(false);
+        setDisabled(false);
+        if (!result.success) {
+          alertUser(t('backup.create.fail'));
+        }
+      })
+      .catch(console.error);
+  };
 
-class Create extends Component<Props, State> {
-    public readonly state: State = {
-        creatingBackup: false,
-        disabled: false,
-    };
-
-    private createBackup = () => {
-        this.setState({ creatingBackup: true });
-        apiPost('devices/bitbox02/' + this.props.deviceID + '/backups/create').then(({ success }) => {
-            if (!success) {
-                alertUser(this.props.t('backup.create.fail'));
-            }
-            this.setState({ creatingBackup: false, disabled: false });
+  const maybeCreateBackup = async () => {
+    setDisabled(true);
+    try {
+      const check = await checkBackup(deviceID, true);
+      if (check.success) {
+        confirmation(t('backup.create.alreadyExists'), result => {
+          if (result) {
+            createBackup();
+          } else {
+            setDisabled(false);
+          }
         });
+        return;
+      }
+      createBackup();
+    } catch (error) {
+      console.error(error);
     }
+  };
 
-    private maybeCreateBackup = () => {
-        this.setState({ disabled: true });
-        apiPost('devices/bitbox02/' + this.props.deviceID + '/backups/check', {
-            silent: true,
-        }).then(check => {
-            if (check.success) {
-                confirmation(this.props.t('backup.create.alreadyExists'), result => {
-                    if (result) {
-                        this.createBackup();
-                    } else {
-                        this.setState({ disabled: false });
-                    }
-                });
-                return;
-            }
-            this.createBackup();
-        });
-    }
-
-    public render(
-        { t }: RenderableProps<Props>,
-        {
-            creatingBackup,
-            disabled,
-        }: State) {
-        return (
-            <span>
-                <Button
-                    primary
-                    disabled={disabled}
-                    onClick={() => this.maybeCreateBackup()}>
-                    {t('backup.create.title')}
-                </Button>
-                { creatingBackup && (
-                    <WaitDialog title={t('backup.create.title')}>
-                        {t('bitbox02Interact.followInstructions')}
-                    </WaitDialog>
-                )}
-            </span>
-        );
-    }
-}
-
-const HOC = translate<CreateProps>()(Create);
-export { HOC as Create };
+  return (
+    <>
+      <Button
+        primary
+        disabled={disabled}
+        onClick={maybeCreateBackup}>
+        {t('backup.create.title')}
+      </Button>
+      { creatingBackup && (
+        <WaitDialog title={t('backup.create.title')}>
+          <p className="text-center">{t('bitbox02Interact.followInstructions')}</p>
+          <PointToBitBox02 />
+        </WaitDialog>
+      )}
+    </>
+  );
+};

@@ -1,0 +1,136 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { useCallback, useContext, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocation, useParams } from 'wouter';
+import { useLoad } from '@/hooks/api';
+import { SessionTypes } from '@walletconnect/types';
+import { getSdkError } from '@walletconnect/utils';
+import { WCWeb3WalletContext } from '@/contexts/WCWeb3WalletContext';
+import { truncateMiddle } from '@/utils/address';
+import { getAddressFromEIPString } from '@/utils/walletconnect';
+import { AccountCode, getReceiveAddressList } from '@/api/account';
+import { GuideWrapper, GuidedContent, Header, Main } from '@/components/layout';
+import { View, ViewContent } from '@/components/view/view';
+import { WCSessionCard } from './components/session-card/session-card';
+import { Button } from '@/components/forms';
+import { Status } from '@/components/status/status';
+import { WCGuide } from './guide';
+import { WCLoadError } from './load-error';
+import { ContentWrapper } from '@/components/contentwrapper/contentwrapper';
+import styles from './dashboard.module.css';
+import { useAppState } from '@/contexts/app-state-context';
+
+type TRouteParams = {
+  code: AccountCode;
+};
+
+export const DashboardWalletConnect = () => {
+  const { code = '' } = useParams<TRouteParams>();
+  const [, navigate] = useLocation();
+  const { t } = useTranslation();
+  const { activeAccounts } = useAppState();
+  const { web3wallet, isWalletInitialized, initializeWeb3Wallet } = useContext(WCWeb3WalletContext);
+  const [sessions, setSessions] = useState<SessionTypes.Struct[]>();
+  const receiveAddressResponse = useLoad(getReceiveAddressList(code));
+  const receiveAddresses = receiveAddressResponse?.success ? receiveAddressResponse.addresses : undefined;
+
+  const updateSessions = useCallback(() => {
+    const activeSessions = Object.values(web3wallet?.getActiveSessions() || []);
+    setSessions(activeSessions);
+  }, [web3wallet]);
+
+  useEffect(() => {
+    if (!web3wallet) {
+      initializeWeb3Wallet();
+      return;
+    }
+    updateSessions();
+  }, [initializeWeb3Wallet, updateSessions, web3wallet]);
+
+  useEffect(() => {
+    if (isWalletInitialized) {
+      web3wallet?.on('session_delete', updateSessions);
+      return () => {
+        web3wallet?.off('session_delete', updateSessions);
+      };
+    }
+  }, [isWalletInitialized, updateSessions, web3wallet]);
+
+  const handleDisconnectSession = async (topic: string) => {
+    await web3wallet?.disconnectSession({
+      topic,
+      reason: getSdkError('USER_DISCONNECTED'),
+    });
+    updateSessions();
+  };
+
+  if (receiveAddressResponse && !receiveAddressResponse.success) {
+    return <WCLoadError errorMessage={receiveAddressResponse.errorMessage} />;
+  }
+
+  if (!receiveAddresses || !isWalletInitialized) {
+    return null;
+  }
+
+  const receiveAddress = truncateMiddle(receiveAddresses[0].addresses[0].address, 6, 6);
+  const accountName = (activeAccounts.find(acct => acct.code === code))?.name || '';
+  const hasSession = sessions && sessions.length > 0;
+
+  return (
+    <GuideWrapper>
+      <GuidedContent>
+        <Main>
+          <ContentWrapper>
+            <Status
+              type="info"
+              dismissibleKey="walletConnectDisclaimerDismissed"
+            >
+              {t('walletConnect.dashboard.disclaimer')}
+            </Status>
+          </ContentWrapper>
+          <Header
+            title={t('walletConnect.walletConnect')}
+          />
+          <View>
+            <ViewContent>
+              <div className={styles.headerContainer}>
+                <div>
+                  <p>{accountName}</p>
+                  <p className={styles.receiveAddress}>{receiveAddress}</p>
+                </div>
+                <Button className={styles.buttonNewConnection} onClick={() => navigate(`/account/${code}/wallet-connect/connect`)} primary>
+                  {t('walletConnect.dashboard.newConnection')}
+                </Button>
+              </div>
+              <hr className={styles.separator} />
+              {hasSession &&
+                (
+                  <div className={styles.sessionCardsContainer}>
+                    <p className={styles.allSessionsHeading}>{t('walletConnect.dashboard.allSessions')}</p>
+                    {sessions.map(session => {
+                      const eip155 = session.namespaces['eip155'];
+                      const receiveAddress = eip155?.accounts[0] && getAddressFromEIPString(eip155.accounts[0]) || '';
+                      return (
+                        <WCSessionCard
+                          key={session.topic}
+                          receiveAddress={receiveAddress}
+                          metadata={session.peer.metadata}
+                          onDisconnect={() => handleDisconnectSession(session.topic)}
+                        />
+                      );
+                    })}
+                  </div>
+                )
+              }
+              {!hasSession &&
+                <p className={styles.noConnectedSessions}>{t('walletConnect.dashboard.noConnectedSessions')}</p>
+              }
+            </ViewContent>
+          </View>
+        </Main>
+      </GuidedContent>
+      <WCGuide />
+    </GuideWrapper>
+  );
+};

@@ -1,141 +1,158 @@
-/**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import { route } from 'preact-router';
-import { translate, TranslateProps } from '../../../decorators/translate';
-import { getInfo, IAccount, ISigningConfigurationList } from '../../../api/account';
-import { isBitcoinBased } from '../utils';
-import { ButtonLink } from '../../../components/forms';
-import { Header } from '../../../components/layout';
-import * as style from './info.module.css';
-import { SigningConfiguration } from './signingconfiguration';
-import { BitcoinBasedAccountInfoGuide } from './guide';
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocation, useParams } from 'wouter';
+import { useSync } from '@/hooks/api';
+import { useAppState } from '@/contexts/app-state-context';
+import { useMountedRef } from '@/hooks/mount';
+import { AccountCode, TStatus, getStatus, exportAccount, getTransactionList, TTransactions } from '@/api/account';
+import { findAccount } from '@/routes/account/utils';
+import { isBitcoinBased, isMessageSigningSupported } from '@/utils/coin';
+import { Header, Main } from '@/components/layout';
+import { View, ViewContent } from '@/components/view/view';
+import { BackButton } from '@/components/backbutton/backbutton';
+import { ActionableItem } from '@/components/actionable-item/actionable-item';
+import { QRCodeLight, QRCodeDark, OutlinedUploadDark, OutlinedUploadLight, OutlinedUnorderedListDark, OutlinedUnorderedListLight, OutlinedFileProtectDark, OutlinedFileProtectLight } from '@/components/icon';
+import { useDarkmode } from '@/hooks/darkmode';
+import { alertUser } from '@/components/alert/Alert';
+import { statusChanged, syncdone } from '@/api/accountsync';
+import style from './info.module.css';
 
-interface InfoProps {
-    accounts: IAccount[];
-    code: string;
-}
+type TRouteParams = {
+  code: AccountCode;
+};
 
-interface State {
-    info?: ISigningConfigurationList;
-    viewXPub: number;
-}
+export const Info = () => {
+  const { code = '' } = useParams<TRouteParams>();
+  const { t } = useTranslation();
+  const { activeAccounts } = useAppState();
+  const { isDarkMode } = useDarkmode();
+  const [, navigate] = useLocation();
+  const status: TStatus | undefined = useSync(
+    () => getStatus(code),
+    cb => statusChanged(code, cb),
+  );
+  const accountReady = (
+    status !== undefined
+    && !status.fatalError
+    && status.synced
+    && status.offlineError === null
+  );
+  const mounted = useMountedRef();
+  const [transactions, setTransactions] = useState<TTransactions | undefined>();
 
-type Props = InfoProps & TranslateProps;
-
-class Info extends Component<Props, State> {
-    public readonly state: State = {
-        info: undefined,
-        viewXPub: 0,
+  useEffect(() => {
+    if (!accountReady) {
+      setTransactions(undefined);
+      return;
     }
+    const fetch = () => {
+      getTransactionList(code)
+        .then(txs => {
+          if (mounted.current) {
+            setTransactions(txs);
+          }
+        })
+        .catch(console.error);
+    };
+    fetch();
+    return syncdone(code, fetch);
+  }, [code, accountReady, mounted]);
 
-    public componentDidMount() {
-        getInfo(this.props.code).then(info => this.setState({ info }));
+  const transactionsLoaded = transactions?.success === true;
+  const hasTransactions = transactionsLoaded && transactions.list.length > 0;
+
+  const account = findAccount(activeAccounts, code);
+  if (!account) {
+    return null;
+  }
+
+  const handleExport = async () => {
+    if (status === undefined || status.fatalError) {
+      return;
     }
-
-    public componentWillMount() {
-        document.addEventListener('keydown', this.handleKeyDown);
+    try {
+      const exportedResult = await exportAccount(code);
+      if (exportedResult !== null && !exportedResult.success) {
+        alertUser(exportedResult.errorMessage);
+      }
+    } catch (error) {
+      console.error(error);
     }
+  };
 
-    public componentWillUnmount() {
-        document.removeEventListener('keydown', this.handleKeyDown);
-    }
+  const isBtcBased = isBitcoinBased(account.coinCode);
+  const canSignMessage = isMessageSigningSupported(account.coinCode);
 
-    private handleKeyDown = (e: KeyboardEvent) => {
-        if (e.keyCode === 27) {
-            route(`/account/${this.props.code}`);
-        }
-    }
-
-    private getAccount(): IAccount | undefined {
-        if (!this.props.accounts) {
-            return;
-        }
-        return this.props.accounts.find(({ code }) => code === this.props.code);
-    }
-
-    private showNextXPub = (): void => {
-        if (!this.state.info) {
-            return;
-        }
-        const numberOfXPubs = this.state.info.signingConfigurations.length;
-        this.setState(({ viewXPub }) => ({
-            viewXPub: (viewXPub + 1) % numberOfXPubs
-        }));
-    }
-
-    public render(
-        { t, code }: RenderableProps<Props>,
-        { info, viewXPub }: State
-    ) {
-        const account = this.getAccount();
-        if (!account || !info) return null;
-        const config = info.signingConfigurations[viewXPub];
-        const numberOfXPubs = info.signingConfigurations.length;
-        const xpubTypes = info.signingConfigurations.map(cfg => cfg.bitcoinSimple?.scriptType);
-
-        return (
-            <div class="contentWithGuide">
-                <div class="container">
-                    <Header title={<h2>{t('accountInfo.title')}</h2>} />
-                    <div class="innerContainer scrollableContainer">
-                        <div class="content padded">
-                            <div class="box larger">
-                                { isBitcoinBased(account.coinCode) ? (
-                                    <h2 className={style.title}>
-                                        {t('accountInfo.extendedPublicKey')}
-                                    </h2>
-                                ) : null }
-                                { (config.bitcoinSimple !== undefined && numberOfXPubs > 1) ? (
-                                    <p className={style.xPubInfo}>
-                                        {t('accountInfo.xpubTypeInfo', {
-                                            current: `${viewXPub + 1}`,
-                                            numberOfXPubs: numberOfXPubs.toString(),
-                                            scriptType: config.bitcoinSimple.scriptType.toUpperCase(),
-                                        })}<br />
-                                        <button class={style.nextButton} onClick={this.showNextXPub}>
-                                            {t(`accountInfo.xpubTypeChangeBtn.${xpubTypes[(viewXPub + 1) % numberOfXPubs]}`)}
-                                        </button>
-                                    </p>
-                                ) : null}
-                                <SigningConfiguration
-                                    key={viewXPub}
-                                    account={account}
-                                    code={code}
-                                    info={config}
-                                    signingConfigIndex={viewXPub}>
-                                    <ButtonLink
-                                        transparent
-                                        href={`/account/${code}`}>
-                                        {t('button.back')}
-                                    </ButtonLink>
-                                </SigningConfiguration>
-                            </div>
-                        </div>
-                    </div>
+  return (
+    <Main>
+      <Header
+        variant="navigation"
+        hideSidebarToggler
+        mobileBackButton
+        onBack={() => history.back()}
+        title={t('accountInfo.title')}
+      />
+      <View fullscreen={false}>
+        <ViewContent>
+          <div className={style.menuList}>
+            <ActionableItem
+              onClick={handleExport}
+              disabled={hasTransactions !== true}
+            >
+              <div className={style.actionItem}>
+                {isDarkMode ? <OutlinedUploadLight className={style.actionIcon} aria-hidden alt="" /> : <OutlinedUploadDark className={style.actionIcon} aria-hidden alt="" />}
+                <div className={style.actionText}>
+                  <span>{t('accountInfo.exportTransactions')}</span>
+                  {transactionsLoaded && !hasTransactions && (
+                    <span className={style.actionHint}>{t('accountInfo.exportTransactionsDisabled')}</span>
+                  )}
                 </div>
-                { isBitcoinBased(account.coinCode) ? (
-                    <BitcoinBasedAccountInfoGuide t={t} coinName={account.coinName} />
-                ) : null }
-            </div>
-        );
-    }
-}
-
-const HOC = translate<InfoProps>()(Info);
-export { HOC as Info };
+              </div>
+            </ActionableItem>
+            <ActionableItem
+              onClick={() => navigate(`/account/${code}/info/xpub-detail`)}
+            >
+              <div className={style.actionItem}>
+                {isDarkMode ? <QRCodeLight className={style.actionIcon} aria-hidden alt="" /> : <QRCodeDark className={style.actionIcon} aria-hidden alt="" />}
+                <span>{t('accountInfo.viewAccountDetails')}</span>
+              </div>
+            </ActionableItem>
+            {canSignMessage && (
+              <ActionableItem
+                onClick={() => navigate(`/account/${code}/sign-message/new`)}
+              >
+                <div className={style.actionItem}>
+                  {isDarkMode ?
+                    <OutlinedFileProtectLight className={style.actionIcon} aria-hidden alt="" /> :
+                    <OutlinedFileProtectDark className={style.actionIcon} aria-hidden alt="" />
+                  }
+                  <span>{t('signMessage.signMessage')}</span>
+                </div>
+              </ActionableItem>
+            )}
+            {isBtcBased && (
+              <ActionableItem
+                onClick={() => navigate(`/account/${code}/addresses`)}
+              >
+                <div className={style.actionItem}>
+                  {isDarkMode ?
+                    <OutlinedUnorderedListLight className={style.actionIcon} aria-hidden alt="" /> :
+                    <OutlinedUnorderedListDark className={style.actionIcon} aria-hidden alt="" />
+                  }
+                  <span>{t('accountInfo.usedAddresses')}</span>
+                </div>
+              </ActionableItem>
+            )}
+          </div>
+          <div className={`${style.footerButtons || ''} hide-on-small`}>
+            <BackButton enableEsc>
+              {t('button.back')}
+            </BackButton>
+          </div>
+        </ViewContent>
+      </View>
+    </Main>
+  );
+};

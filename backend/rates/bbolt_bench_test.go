@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package rates
 
 import (
@@ -10,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	bbolt "github.com/coreos/bbolt"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/test"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.etcd.io/bbolt"
 )
 
 // These benchmarks are independent of the actual rates package code.
@@ -77,7 +79,7 @@ func BenchmarkBoltLoad(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			rates, err := loadIndividual(db, bucketName)
 			require.NoError(b, err, "loadIndividual")
-			assert.Equal(b, 5000, len(rates), "len(rates)")
+			assert.Len(b, rates, 5000, "len(rates)")
 		}
 	})
 
@@ -91,7 +93,7 @@ func BenchmarkBoltLoad(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			rates, err := loadJSON(db, bucketName)
 			require.NoError(b, err, "loadJSON")
-			assert.Equal(b, 5000, len(rates), "len(rates)")
+			assert.Len(b, rates, 5000, "len(rates)")
 		}
 	})
 
@@ -105,7 +107,7 @@ func BenchmarkBoltLoad(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			rates, err := loadGob(db, bucketName)
 			require.NoError(b, err, "loadGob")
-			assert.Equal(b, 5000, len(rates), "len(rates)")
+			assert.Len(b, rates, 5000, "len(rates)")
 		}
 	})
 }

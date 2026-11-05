@@ -8,13 +8,13 @@ import (
 	"errors"
 
 	"github.com/btcsuite/btcd/blockchain"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/btcutil/v2/gcs"
+	"github.com/btcsuite/btcd/btcutil/v2/gcs/builder"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
 	"github.com/btcsuite/btcd/database"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
-	"github.com/btcsuite/btcutil/gcs"
-	"github.com/btcsuite/btcutil/gcs/builder"
+	"github.com/btcsuite/btcd/wire/v2"
 )
 
 const (
@@ -354,4 +354,16 @@ func NewCfIndex(db database.DB, chainParams *chaincfg.Params) *CfIndex {
 // DropCfIndex drops the CF index from the provided database if exists.
 func DropCfIndex(db database.DB, interrupt <-chan struct{}) error {
 	return dropIndex(db, cfIndexParentBucketKey, cfIndexName, interrupt)
+}
+
+// CfIndexInitialized returns true if the cfindex has been created previously.
+func CfIndexInitialized(db database.DB) bool {
+	var exists bool
+	db.View(func(dbTx database.Tx) error {
+		bucket := dbTx.Metadata().Bucket(cfIndexParentBucketKey)
+		exists = bucket != nil
+		return nil
+	})
+
+	return exists
 }

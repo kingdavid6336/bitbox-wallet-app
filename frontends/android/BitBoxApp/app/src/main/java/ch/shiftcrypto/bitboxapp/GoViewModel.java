@@ -1,43 +1,46 @@
 package ch.shiftcrypto.bitboxapp;
 
-import goserver.GoDeviceInfoInterface;
-import goserver.GoEnvironmentInterface;
-import goserver.GoReadWriteCloserInterface;
-import goserver.GoAPIInterface;
-import goserver.Goserver;
-
-import android.content.Context;
-import android.net.ConnectivityManager;
-import android.net.NetworkCapabilities;
-import android.net.NetworkInfo;
-import android.os.Build;
-import android.os.Message;
-import android.os.Handler;
 import android.app.Application;
+import android.content.Context;
 import android.hardware.usb.UsbConstants;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbEndpoint;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
+import android.net.ConnectivityManager;
+import android.os.Handler;
 
 import androidx.lifecycle.AndroidViewModel;
+import androidx.lifecycle.MutableLiveData;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Locale;
 
-public class GoViewModel extends AndroidViewModel {
+import mobileserver.GoDeviceInfoInterface;
+import mobileserver.GoEnvironmentInterface;
+import mobileserver.GoReadWriteCloserInterface;
 
+public class GoViewModel extends AndroidViewModel {
     private class GoDeviceInfo implements GoDeviceInfoInterface {
-        private UsbDevice device;
+        private final UsbDevice device;
+
         public GoDeviceInfo(UsbDevice device) {
             this.device = device;
         }
-        public String identifier(){
+
+        @Override
+        public String identifier() {
             return "androidDevice";
         }
+
+        @Override
         public long interface_() {
             return 0;
         }
+
+        @Override
         public GoReadWriteCloserInterface open() throws Exception {
             if (device != null) {
                 UsbInterface intf = device.getInterface(0);
@@ -61,51 +64,67 @@ public class GoViewModel extends AndroidViewModel {
                 }
                 connection.claimInterface(intf, true);
 
-                return new GoReadWriteCloserInterface(){
+                return new GoReadWriteCloserInterface() {
+                    @Override
                     public void close() throws Exception {
 
                     }
+
+                    @Override
                     public byte[] read(long n) throws Exception {
                         byte[] result = new byte[(int) n];
-                        long read = connection.bulkTransfer(endpointIn, result, result.length, 5000000);
+                        int transferred = connection.bulkTransfer(endpointIn, result, result.length, 5000000);
+                        if (transferred < 0) {
+                            throw new IOException("USB read failed with error code: " + transferred);
+                        }
                         return result;
                     }
-                    public long write(byte[] p0) throws Exception{
-                        return connection.bulkTransfer(endpointOut, p0, p0.length, 5000000);
+
+                    @Override
+                    public long write(byte[] p0) throws Exception {
+                        int transferred = connection.bulkTransfer(endpointOut, p0, p0.length, 5000000);
+                        if (transferred < 0) {
+                            throw new IOException("USB write failed with error code: " + transferred);
+                        }
+                        return transferred;
                     }
                 };
             }
             throw new Exception("nope");
-
-
         }
+
+        @Override
+        public boolean isBluetooth() {
+            return false;
+        }
+
+        @Override
         public String product() {
             return device.getProductName();
         }
-        public String manufacturer() {
-            return device.getManufacturerName();
-        }
+
+        @Override
         public long productID() {
             return device.getProductId();
         }
+
+        @Override
         public String serial() {
             return device.getSerialNumber();
         }
+
+        @Override
         public long usagePage() {
             return 0xFFFF;
         }
+
+        @Override
         public long vendorID() {
             return device.getVendorId();
         }
     }
 
     private class GoEnvironment implements GoEnvironmentInterface {
-        public GoEnvironment() {
-        }
-
-        public void notifyUser(String message) {
-
-        }
 
         private GoDeviceInfoInterface device;
 
@@ -113,86 +132,146 @@ public class GoViewModel extends AndroidViewModel {
             this.device = device;
         }
 
+        @Override
         public GoDeviceInfoInterface deviceInfo() {
             return this.device;
         }
 
+        @Override
+        public void notifyUser(String message) {
+        }
+
+        @Override
         public void systemOpen(String url) throws Exception {
-            Util.systemOpen(getApplication(), url);
+            if (url.startsWith("/")) {
+                if (fileSaveHelper != null) {
+                    fileSaveHelper.promptSave(url, Util.getMimeTypeOrDefault(url));
+                    return;
+                }
+                throw new Exception("File save helper not available");
+            }
+            Util.systemOpenExternal(getApplication(), url);
         }
 
+        @Override
+        public void auth() {
+            Util.log("Auth requested from backend");
+            requestAuth();
+        }
+
+        @Override
+        public String getSaveFilename(String fileName) {
+            File folder = getApplication().getApplicationContext().getExternalFilesDir(null);
+            return new File(folder, fileName).getAbsolutePath();
+        }
+
+        @Override
+        public void onAuthSettingChanged(boolean enabled) {
+            authSetting.postValue(enabled);
+        }
+
+        @Override
+        public boolean canEncryptLightningMnemonic() {
+            return true;
+        }
+
+        @Override
+        public void storeLightningEncryptionKey(String accountCode, String encryptionKey) throws Exception {
+            LightningEncryptionHelper.storeKey(getApplication(), accountCode, encryptionKey);
+        }
+
+        @Override
+        public String loadLightningEncryptionKey(String accountCode) throws Exception {
+            return LightningEncryptionHelper.loadKey(getApplication(), accountCode);
+        }
+
+        @Override
+        public void deleteLightningEncryptionKey(String accountCode) throws Exception {
+            LightningEncryptionHelper.deleteKey(getApplication(), accountCode);
+        }
+
+        @Override
+        public void bluetoothConnect(String identifier) {
+        }
+
+        @Override
         public boolean usingMobileData() {
-            // Adapted from https://stackoverflow.com/a/53243938
-
-            ConnectivityManager cm = (ConnectivityManager)getApplication().getApplicationContext().getSystemService(Context.CONNECTIVITY_SERVICE);
-            if (cm == null) {
-                return false;
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                NetworkCapabilities capabilities = cm.getNetworkCapabilities(cm.getActiveNetwork());
-                return capabilities != null && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR);
-            }
-
-            NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
-            return activeNetwork != null && activeNetwork.getType() == ConnectivityManager.TYPE_MOBILE;
+            return networkHelper != null && networkHelper.usingMobileData();
         }
 
+        @Override
         public String nativeLocale() {
             Context ctx = getApplication().getApplicationContext();
             Locale locale;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                locale = ctx.getResources().getConfiguration().getLocales().get(0);
-            } else {
-                // Deprecated since API level 24.
-                // https://developer.android.com/reference/android/content/res/Configuration#locale.
-                locale = ctx.getResources().getConfiguration().locale;
-            }
+            locale = ctx.getResources().getConfiguration().getLocales().get(0);
             return locale.toString();
         }
-    }
 
-    public class Response {
-        public long queryID;
-        public String response;
-    }
-    private class GoAPI implements GoAPIInterface {
-        Handler callResponseHandler;
-        Handler pushNotificationHandler;
-        public void setMessageHandlers(Handler callResponseHandler, Handler pushNotificationHandler) {
-            this.callResponseHandler = callResponseHandler;
-            this.pushNotificationHandler = pushNotificationHandler;
+        @Override
+        public String userAgentPlatform() {
+            return "android";
         }
-        public void respond(long queryID, String response) {
-            Message msg = Message.obtain();
-            Response resp = new Response();
-            resp.queryID = queryID;
-            resp.response = response;
-            msg.obj = resp;
-            callResponseHandler.sendMessage(msg);
+
+        @Override
+        public void setDarkTheme(boolean isDark) {
+            Util.log("Set Dark Theme GoViewModel - isdark: " + isDark);
+            GoViewModel.this.isDarkTheme.postValue(isDark);
         }
-        public void pushNotify(String msg) {
-            Message m = Message.obtain();
-            m.obj = msg;
-            pushNotificationHandler.sendMessage(m);
+
+        @Override
+        public boolean detectDarkTheme() {
+            // nothing to do here: Dark theme is detected in the frontend using media queries.
+            return false;
         }
     }
 
-    private GoEnvironment goEnvironment;
-    private GoAPI goAPI;
+    private final MutableLiveData<Boolean> isDarkTheme = new MutableLiveData<>();
+    private final MutableLiveData<Boolean> authRequested = new MutableLiveData<>(false);
+    // The value of the backend config's Authentication setting.
+    private final MutableLiveData<Boolean> authSetting = new MutableLiveData<>(false);
+    private final GoEnvironment goEnvironment;
+    private final GoAPI goAPI;
+    private NetworkHelper networkHelper;
+    private FileSaveHelper fileSaveHelper;
+
+    public NetworkHelper getNetworkHelper() {
+        return networkHelper;
+    }
 
     public GoViewModel(Application app) {
         super(app);
-
         this.goEnvironment = new GoEnvironment();
         this.goAPI = new GoAPI();
+        this.networkHelper = new NetworkHelper((ConnectivityManager) app.getSystemService(Context.CONNECTIVITY_SERVICE));
 
-        Goserver.serve(app.getApplicationContext().getFilesDir().getAbsolutePath(), this.goEnvironment, this.goAPI);
     }
 
-    @Override
-    public void onCleared() {
-        super.onCleared();
-        Goserver.shutdown();
+    public MutableLiveData<Boolean> getIsDarkTheme() {
+        return isDarkTheme;
+    }
+
+    public MutableLiveData<Boolean> getAuthRequested() {
+        return authRequested;
+    }
+
+    public MutableLiveData<Boolean> getAuthSetting() {
+        return authSetting;
+    }
+
+    public GoEnvironmentInterface getGoEnvironment() {
+        return goEnvironment;
+    }
+
+    public GoAPI getGoAPI() {
+        return goAPI;
+    }
+
+    public void requestAuth() {
+        this.authRequested.postValue(true);
+    }
+
+    public void closeAuth() {
+        this.authRequested.postValue(false);
     }
 
     public void setMessageHandlers(Handler callResponseHandler, Handler pushNotificationHandler) {
@@ -205,5 +284,9 @@ public class GoViewModel extends AndroidViewModel {
             return;
         }
         this.goEnvironment.setDevice(new GoDeviceInfo(device));
+    }
+
+    public void setFileSaveHelper(FileSaveHelper helper) {
+        this.fileSaveHelper = helper;
     }
 }

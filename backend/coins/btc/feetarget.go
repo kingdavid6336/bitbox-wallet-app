@@ -1,17 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-//
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package btc
 
@@ -19,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/btcsuite/btcutil"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts"
+	"github.com/btcsuite/btcd/btcutil/v2"
 )
 
 // FeeTarget contains the fee rate for a specific fee target.
@@ -42,11 +29,34 @@ func (feeTarget *FeeTarget) Code() accounts.FeeTargetCode {
 
 // FormattedFeeRate returns a string showing the fee rate.
 func (feeTarget *FeeTarget) FormattedFeeRate() string {
-	if feeTarget.feeRatePerKb == nil {
+	return FormatFeeRate(feeTarget.feeRatePerKb)
+}
+
+// FormatFeeRate returns a string showing the fee rate.
+func FormatFeeRate(feeRatePerKb *btcutil.Amount) string {
+	if feeRatePerKb == nil {
 		return ""
 	}
-	feePerByte := fmt.Sprintf("%.03f", float64(*feeTarget.feeRatePerKb)/1000.0)
+	feePerByte := fmt.Sprintf("%.03f", float64(*feeRatePerKb)/1000.0)
 	// Truncate trailing zeroes, and final '.' if the number has no decimal places.
 	feePerByte = strings.TrimRight(strings.TrimRight(feePerByte, "0"), ".")
 	return feePerByte + " sat/vB"
+}
+
+// FeeTargets represents an array of FeeTarget pointers.
+type FeeTargets []*FeeTarget
+
+// highest returns the feeTarget with the highest fee.
+func (feeTargets FeeTargets) highest() *FeeTarget {
+	var highestFeeTarget *FeeTarget
+	for _, feeTarget := range feeTargets {
+		if feeTarget == nil || feeTarget.feeRatePerKb == nil {
+			continue
+		}
+
+		if highestFeeTarget == nil || *feeTarget.feeRatePerKb > *highestFeeTarget.feeRatePerKb {
+			highestFeeTarget = feeTarget
+		}
+	}
+	return highestFeeTarget
 }

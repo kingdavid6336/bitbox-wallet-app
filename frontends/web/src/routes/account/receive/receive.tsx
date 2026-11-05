@@ -1,357 +1,418 @@
-/**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import { route } from 'preact-router';
-import * as accountApi from '../../../api/account';
-import { TDevices } from '../../../api/devices';
-import { alertUser } from '../../../components/alert/Alert';
-import { CopyableInput } from '../../../components/copy/Copy';
-import { Dialog } from '../../../components/dialog/dialog';
-import { Button, ButtonLink } from '../../../components/forms';
-import { Entry } from '../../../components/guide/entry';
-import { Guide } from '../../../components/guide/guide';
-import { Header } from '../../../components/layout';
-import { QRCode } from '../../../components/qrcode/qrcode';
-import Status from '../../../components/status/status';
-import { load } from '../../../decorators/load';
-import { translate, TranslateProps } from '../../../decorators/translate';
-import { apiGet } from '../../../utils/request';
-import { isEthereumBased } from '../utils';
-import * as style from './receive.module.css';
+import React, { useContext, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useParams } from 'wouter';
+import { AppContext } from '@/contexts/AppContext';
+import { useAppState } from '@/contexts/app-state-context';
+import { useLoad } from '@/hooks/api';
+import { useEthAccountActivity } from '@/hooks/account-activity';
+import { UseBackButton } from '@/hooks/backbutton';
+import * as accountApi from '@/api/account';
+import { setAccountReceiveScriptType } from '@/api/backend';
+import { alertUser } from '@/components/alert/Alert';
+import { getScriptName } from '@/routes/account/utils';
+import { isEthereumBased } from '@/utils/coin';
+import { CopyableInput } from '@/components/copy/Copy';
+import { Dialog, DialogButtons, DialogScrollContent } from '@/components/dialog/dialog';
+import { FirmwareUpgradeRequiredDialog } from '@/components/dialog/firmware-upgrade-required-dialog';
+import { Button, Radio } from '@/components/forms';
+import { DesktopBackButton } from '@/components/backbutton/backbutton';
+import { Message } from '@/components/message/message';
+import { ReceiveGuide } from './components/guide';
+import { GuidedContent, GuideWrapper, Header, Main } from '@/components/layout';
+import { QRCode } from '@/components/qrcode/qrcode';
+import { ArrowCirlceLeft, ArrowCirlceLeftActive, ArrowCirlceRight, ArrowCirlceRightActive } from '@/components/icon';
+import { connectKeystore } from '@/api/keystores';
+import style from './receive.module.css';
 
-interface ReceiveProps {
-    code?: string;
-    devices: TDevices;
-    accounts: accountApi.IAccount[];
-    deviceIDs: string[];
-}
+type TAddressTypeDialogProps = {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  preselectedAddressType: number;
+  availableScriptTypes?: accountApi.ScriptType[];
+  insured: boolean;
+  handleAddressTypeChosen: (addressType: number) => void | Promise<void>;
+};
 
-interface State {
-    verifying: boolean;
-    activeIndex: number;
-    paired: boolean | null;
-    addressType: number;
-}
+const AddressTypeDialog = ({
+  open,
+  setOpen,
+  preselectedAddressType,
+  availableScriptTypes,
+  insured,
+  handleAddressTypeChosen,
+}: TAddressTypeDialogProps) => {
+  const { t } = useTranslation();
+  const [addressType, setAddressType] = useState<number>(preselectedAddressType);
 
-interface LoadedReceiveProps {
-    // first array index: address types. second array index: unused addresses of that address type.
-    receiveAddresses: accountApi.ReceiveAddressList;
-    secureOutput: {
-        hasSecureOutput: boolean;
-        optional: boolean;
-    };
-}
+  useEffect(() => {
+    setAddressType(preselectedAddressType);
+  }, [open, preselectedAddressType]);
 
-type Props = LoadedReceiveProps & ReceiveProps & TranslateProps;
+  return (
+    <Dialog open={open} onClose={() => setOpen(false)} medium title={t('receive.changeScriptType')} >
+      <form
+        onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          handleAddressTypeChosen(addressType);
+        }}
+        style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}
+      >
+        <DialogScrollContent>
+          {availableScriptTypes && availableScriptTypes.map((scriptType, i) => (
+            <div key={scriptType}>
+              <Radio
+                checked={addressType === i}
+                id={scriptType}
+                name="scriptType"
+                onChange={() => setAddressType(i)}
+                title={getScriptName(scriptType)}>
+                {t(`receive.scriptType.${scriptType}`)}
+              </Radio>
+              {scriptType === 'p2tr' && addressType === i && (
+                <Message type="warning" className={style.messageContainer}>
+                  {t('receive.taprootWarning')}
+                </Message>
+              )}
+            </div>
+          ))}
+          {insured && (
+            <Message type="warning">
+              {t('receive.bitsuranceWarning')}
+            </Message>
+          )}
+        </DialogScrollContent>
+        <DialogButtons>
+          <Button primary type="submit">
+            {t('button.done')}
+          </Button>
+        </DialogButtons>
+      </form>
+    </Dialog>
+  );
+};
 
-class Receive extends Component<Props, State> {
-    public readonly state: State = {
-        verifying: false,
-        activeIndex: 0,
-        paired: null,
-        addressType: 0,
+// For BTC/LTC: all possible address types we want to offer to the user, ordered by priority (first one is default).
+// Types that are not available in the addresses delivered by the backend should be ignored.
+const scriptTypes: accountApi.ScriptType[] = ['p2wpkh', 'p2tr', 'p2wpkh-p2sh'];
+
+// Find index in list of receive addresses that matches the given script type, or -1 if not found.
+const getIndexOfMatchingScriptType = (
+  receiveAddresses: accountApi.TReceiveAddressList[],
+  scriptType: accountApi.ScriptType
+): number => {
+  if (!receiveAddresses) {
+    return -1;
+  }
+  return receiveAddresses.findIndex(addrs => addrs.scriptType !== null && scriptType === addrs.scriptType);
+};
+
+const getAvailableScriptTypes = (
+  receiveAddresses: accountApi.TReceiveAddressList[],
+): accountApi.ScriptType[] => {
+  return scriptTypes.filter(scriptType => getIndexOfMatchingScriptType(receiveAddresses, scriptType) >= 0);
+};
+
+const getReceiveScriptTypeIndex = (
+  availableScriptTypes: accountApi.ScriptType[],
+  receiveScriptType?: accountApi.ScriptType,
+): number => {
+  if (!receiveScriptType) {
+    return 0;
+  }
+  const scriptTypeIndex = availableScriptTypes.findIndex(scriptType => scriptType === receiveScriptType);
+  return scriptTypeIndex >= 0 ? scriptTypeIndex : 0;
+};
+
+type TProps = {
+  code: accountApi.AccountCode;
+};
+
+export const Receive = () => {
+  const { code = '' } = useParams<TProps>();
+  const { t } = useTranslation();
+  const { activeAccounts } = useAppState();
+
+  const [verifying, setVerifying] = useState<false | 'secure' | 'insecure'>(false);
+  const [firmwareUpgradeRequired, setFirmwareUpgradeRequired] = useState(false);
+  const [activeIndex, setActiveIndex] = useState<number>(0);
+  // index into `availableScriptTypes`, or 0 if none are available.
+  const [addressType, setAddressType] = useState<number>(0);
+  const [addressTypeDialog, setAddressTypeDialog] = useState<boolean>(false);
+  const [currentAddresses, setCurrentAddresses] = useState<accountApi.TReceiveAddress[]>();
+  const [currentAddressIndex, setCurrentAddressIndex] = useState<number>(0);
+
+  const account = activeAccounts.find(({ code: accountCode }) => accountCode === code);
+  const insured = account?.bitsuranceStatus === 'active';
+  useEthAccountActivity(code, account?.coinCode);
+
+  // first array index: address types. second array index: unused addresses of that address type.
+  const receiveAddressResponse = useLoad(accountApi.getReceiveAddressList(code));
+  const receiveAddresses = receiveAddressResponse?.success ? receiveAddressResponse.addresses : undefined;
+  const availableScriptTypes = receiveAddresses ? getAvailableScriptTypes(receiveAddresses) : undefined;
+  const hasManyScriptTypes = availableScriptTypes && availableScriptTypes.length > 1;
+
+  const { isTesting } = useContext(AppContext);
+
+  useEffect(() => {
+    if (receiveAddresses) {
+      setAddressType(getReceiveScriptTypeIndex(
+        getAvailableScriptTypes(receiveAddresses),
+        account?.receiveScriptType,
+      ));
+    }
+  }, [account?.receiveScriptType, receiveAddresses]);
+
+  useEffect(() => {
+    if (receiveAddresses) {
+      const scriptTypes = getAvailableScriptTypes(receiveAddresses);
+      const scriptType = scriptTypes[addressType] as accountApi.ScriptType;
+      let addressIndex = scriptTypes.length > 0 ? getIndexOfMatchingScriptType(receiveAddresses, scriptType) : 0;
+      if (addressIndex === -1) {
+        addressIndex = 0;
+      }
+      setCurrentAddressIndex(addressIndex);
+      setCurrentAddresses(receiveAddresses[addressIndex]?.addresses);
+    }
+  }, [addressType, receiveAddresses]);
+
+  const handleAddressTypeChosen = async (addressType: number) => {
+    const scriptType = availableScriptTypes?.[addressType];
+
+    setActiveIndex(0);
+    setAddressType(addressType);
+    setAddressTypeDialog(false);
+
+    if (!scriptType || account?.receiveScriptType === scriptType) {
+      return;
     }
 
-    public componentDidMount() {
-        if (this.getDevice() === 'bitbox') {
-            apiGet('devices/' + this.props.deviceIDs[0] + '/has-mobile-channel').then(paired => {
-                this.setState({ paired });
-            });
+    try {
+      const response = await setAccountReceiveScriptType(code, scriptType);
+      if (!response.success) {
+        alertUser(response.errorMessage || t('genericError'));
+      }
+    } catch (err) {
+      console.error('Failed to persist receive script type', err);
+    }
+  };
+
+  const verifyAddress = async (addressesIndex: number) => {
+    if (!receiveAddresses || account === undefined) {
+      return;
+    }
+    const connectResult = await connectKeystore(account.keystore.rootFingerprint);
+    if (!connectResult.success) {
+      return;
+    }
+
+    const hasSecureOutput = await accountApi.hasSecureOutput(code)();
+    if (!hasSecureOutput.hasSecureOutput) {
+      setVerifying('insecure');
+      // For the software keystore, the dialog is dismissed manually.
+      return;
+    }
+
+    // For devices with a display, the dialog is dismissed by tapping the device.
+    setVerifying('secure');
+    try {
+      const addressesAtIndex = receiveAddresses[addressesIndex] as accountApi.TReceiveAddressList;
+      const address = addressesAtIndex.addresses[activeIndex] as accountApi.TReceiveAddress;
+      const result = await accountApi.verifyAddress(code, address.addressID);
+      if (!result.success) {
+        if (result.errorCode === 'firmwareUpgradeRequired') {
+          setFirmwareUpgradeRequired(true);
+        } else {
+          alertUser(result.errorMessage || t('genericError'));
         }
+      }
+    } finally {
+      setVerifying(false);
     }
+  };
 
-    public componentWillMount() {
-        this.registerEvents();
+  const previous = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    if (!verifying && activeIndex > 0) {
+      setActiveIndex(activeIndex - 1);
     }
+  };
 
-    public componentWillUnmount() {
-        this.unregisterEvents();
+  const next = (e: React.SyntheticEvent, numAddresses: number) => {
+    e.preventDefault();
+    if (!verifying && activeIndex < numAddresses - 1) {
+      setActiveIndex(activeIndex + 1);
     }
+  };
 
-    private registerEvents = () => {
-        document.addEventListener('keydown', this.handleKeyDown);
+  let uriPrefix = '';
+  if (account) {
+    if (account.coinCode === 'btc' || account.coinCode === 'tbtc') {
+      uriPrefix = 'bitcoin:';
+    } else if (account.coinCode === 'ltc' || account.coinCode === 'tltc') {
+      uriPrefix = 'litecoin:';
     }
+  }
 
-    private unregisterEvents = () => {
-        document.removeEventListener('keydown', this.handleKeyDown);
-    }
+  const currentAddress = currentAddresses?.[activeIndex];
+  const address = currentAddress?.address || '';
+  const displayAddress = currentAddress?.displayAddress ?? '';
+  const displayedMainAddress = verifying ? displayAddress : (address ? address.substring(0, 8) + '...' : '');
 
-    private handleKeyDown = (e: KeyboardEvent) => {
-        if (e.keyCode === 27) {
-            if (!this.state.verifying) {
-                route(`/account/${this.props.code}`);
-            }
-        }
-    }
-
-    private verifyAddress = (addressesIndex: number) => {
-        const { receiveAddresses, secureOutput, code } = this.props;
-        if (code === undefined) {
-            return;
-        }
-        const { activeIndex } = this.state;
-        if (!secureOutput.hasSecureOutput) {
-            this.unregisterEvents();
-            alertUser(this.props.t('receive.warning.secureOutput'), this.registerEvents);
-            return;
-        }
-        this.setState({ verifying: true });
-        accountApi.verifyAddress(
-            code,
-            receiveAddresses[addressesIndex][activeIndex].addressID).then(() => {
-                this.setState({ verifying: false });
-            });
-    }
-
-    private previous = (e: Event) => {
-        e.preventDefault();
-        const activeIndex = this.state.activeIndex;
-        if (!this.state.verifying && activeIndex > 0) {
-            this.setState({
-                activeIndex: activeIndex - 1,
-            });
-        }
-    }
-
-    private next = (e: Event, numAddresses: number) => {
-        e.preventDefault();
-        const { verifying, activeIndex } = this.state;
-        if (!verifying && activeIndex < numAddresses - 1) {
-            this.setState({
-                activeIndex: activeIndex + 1,
-            });
-        }
-    }
-
-    private getAccount = () => {
-        return this.props.accounts.find(({ code }) => code === this.props.code);
-    }
-
-    private getDevice = () => {
-        if (this.props.deviceIDs.length === 0) {
-            return undefined;
-        }
-        return this.props.devices[this.props.deviceIDs[0]];
-    }
-
-    private toggleAddressType = () => {
-        this.setState(({ addressType }) => ({
-            addressType: addressType ? 0 : 1,
-        }));
-    }
-
-    public render(
-        { t,
-          code,
-          receiveAddresses,
-          secureOutput }: RenderableProps<Props>,
-        { verifying,
-          activeIndex,
-          paired,
-          addressType }: State,
-    ) {
-        const account = this.getAccount();
-        if (account === undefined) {
-            return null;
-        }
-        let uriPrefix = '';
-        if (account.coinCode === 'btc' || account.coinCode === 'tbtc') {
-            uriPrefix = 'bitcoin:';
-        } else if (account.coinCode === 'ltc' || account.coinCode === 'tltc') {
-            uriPrefix = 'litecoin:';
-        }
-        // enable copying only after verification has been invoked if verification is possible and not optional.
-        const forceVerification = secureOutput.hasSecureOutput && !secureOutput.optional;
-        const enableCopy = !forceVerification;
-
-        const currentAddresses = receiveAddresses[addressType];
-
-        let address = currentAddresses[activeIndex].address;
-        if (!enableCopy && !verifying) {
-            address = address.substring(0, 8) + '...';
-        }
-
-        let verifyLabel = t('receive.verify'); // fallback
-        const device = this.getDevice();
-        if (device === 'bitbox') {
-            verifyLabel = t('receive.verifyBitBox01');
-        } else if (device === 'bitbox02') {
-            verifyLabel = t('receive.verifyBitBox02');
-        }
-        const content = (
-            <div style="position: relative;">
-                <div class={style.qrCodeContainer}>
-                    <QRCode data={enableCopy ? uriPrefix + address : undefined} />
-                </div>
-                <div class={['flex flex-row flex-between flex-items-center', style.labels].join(' ')}>
-                    {
-                        currentAddresses.length > 1 && (
-                            <a
-                                href="#"
-                                className={['flex flex-row flex-items-center', verifying || activeIndex === 0 ? style.disabled : '', style.previous].join(' ')}
-                                onClick={this.previous}>
-                                <svg
-                                    className={[style.arrow, verifying ? style.disabled : ''].join(' ')}
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="24"
-                                    height="24"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <polyline points="12 8 8 12 12 16"></polyline>
-                                    <line x1="16" y1="12" x2="8" y2="12"></line>
-                                </svg>
-                                {/* {t('button.previous')} */}
-                            </a>
-                        )
-                    }
-                    <p class={style.label}>{t('receive.label')} {currentAddresses.length > 1 ? `(${activeIndex + 1}/${currentAddresses.length})` : ''}</p>
-                    {
-                        currentAddresses.length > 1 && (
-                            <a
-                                href="#"
-                                className={['flex flex-row flex-items-center', verifying || activeIndex >= currentAddresses.length - 1 ? style.disabled : '', style.next].join(' ')}
-                                onClick={e => this.next(e, currentAddresses.length)}>
-                                {/* {t('button.next')} */}
-                                <svg
-                                    className={[style.arrow, verifying ? style.disabled : ''].join(' ')}
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="24"
-                                    height="24"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <polyline points="12 16 16 12 12 8"></polyline>
-                                    <line x1="8" y1="12" x2="16" y2="12"></line>
-                                </svg>
-                            </a>
-                        )
-                    }
-                </div>
-                <CopyableInput disabled={!enableCopy} value={address} flexibleHeight />
-                { receiveAddresses.length > 1 && (
-                    <p className={style.changeType} onClick={this.toggleAddressType}>
-                        {t(`receive.addressType.${this.state.addressType}`)}
-                    </p>
-                )}
+  return (
+    <GuideWrapper>
+      <GuidedContent>
+        <Main>
+          <Header
+            variant="navigation"
+            mobileBackButton
+            title={t('receive.title', { accountName: account?.coinName })}
+          />
+          <div className="content narrow isVerticallyCentered">
+            {receiveAddressResponse && !receiveAddressResponse.success && (
+              <>
+                <Message type="error">{receiveAddressResponse.errorMessage || t('genericError')}</Message>
                 <div className="buttons">
-                    {
-                        forceVerification && (
-                            <Button
-                                primary
-                                disabled={verifying || secureOutput === undefined}
-                                onClick={() => this.verifyAddress(addressType)}>
-                                {t('receive.showFull')}
-                            </Button>
-                        )
-                    }
-                    {
-                        !forceVerification && (
-                            <Button
-                                primary
-                                disabled={verifying || secureOutput === undefined}
-                                onClick={() => this.verifyAddress(addressType)}>
-                                {verifyLabel}
-                            </Button>
-                        )
-                    }
-                    <ButtonLink
-                        transparent
-                        href={`/account/${code}`}>
-                        {t('button.back')}
-                    </ButtonLink>
+                  <DesktopBackButton enableEsc>{t('button.back')}</DesktopBackButton>
                 </div>
-                {
-                    forceVerification && verifying && (
-                        <div className={style.hide}></div>
-                    )
-                }
-                {
-                    forceVerification && verifying && (
-                        <Dialog
-                            title={verifyLabel}
-                            disableEscape={true}
-                            medium centered>
-                            <div className="text-center">
-                                {
-                                    isEthereumBased(account.coinCode) &&
-                                    <p>
-                                        <strong>
-                                            {t('receive.onlyThisCoin.warning', {
-                                                coinName: account.coinName,
-                                            })}
-                                        </strong><br />
-                                        {t('receive.onlyThisCoin.description')}
-                                    </p>
-                                }
-                                <QRCode data={uriPrefix + address} />
-                                <p>{t('receive.verifyInstruction')}</p>
-                            </div>
-                            <div className="m-bottom-half">
-                                <CopyableInput value={address} flexibleHeight />
-                            </div>
-                        </Dialog>
-                    )
-                }
-            </div>
-        );
+              </>
+            )}
+            <div className="box large text-center" hidden={!receiveAddresses}>
+              { receiveAddresses && currentAddresses && (
+                <div style={{ position: 'relative' }}>
+                  <div className={style.qrCodeContainer}>
+                    <QRCode data={undefined} />
+                  </div>
+                  <div className={style.labels}>
+                    { currentAddresses.length > 1 && (
+                      <button
+                        className={style.previous}
+                        onClick={previous}>
+                        {(verifying || activeIndex === 0) ? (
+                          <ArrowCirlceLeft />
+                        ) : (
+                          <ArrowCirlceLeftActive title={t('button.previous')} />
+                        )}
+                      </button>
+                    )}
+                    <p className={style.label}>
+                      {t('receive.label')} {currentAddresses.length > 1 ? `(${activeIndex + 1}/${currentAddresses.length})` : ''}
+                    </p>
+                    { currentAddresses.length > 1 && (
+                      <button
+                        className={style.next}
+                        onClick={e => next(e, currentAddresses.length)}>
+                        {(verifying || activeIndex >= currentAddresses.length - 1) ? (
+                          <ArrowCirlceRight />
+                        ) : (
+                          <ArrowCirlceRightActive title={t('button.next')} />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  <CopyableInput
+                    disabled={true}
+                    value={address}
+                    displayValue={displayedMainAddress}
+                    flexibleHeight
+                  />
+                  { (hasManyScriptTypes || insured) && (
+                    <button
+                      className={style.changeType}
+                      onClick={() => setAddressTypeDialog(true)}>
+                      {t('receive.changeScriptType')}
+                    </button>
+                  )}
 
-        return (
-            <div class="contentWithGuide">
-                <div class="container">
-                    <Status type="warning" hidden={paired !== false}>
-                        {t('warning.receivePairing')}
-                    </Status>
-                    <Header title={<h2>{t('receive.title', { accountName: account.coinName })}</h2>} />
-                    <div class="innerContainer scrollableContainer">
-                        <div class="content narrow isVerticallyCentered">
-                            <div class="box large text-center">
-                                {content}
-                            </div>
+                  <AddressTypeDialog
+                    open={addressTypeDialog}
+                    setOpen={setAddressTypeDialog}
+                    preselectedAddressType={addressType}
+                    availableScriptTypes={availableScriptTypes}
+                    insured={insured}
+                    handleAddressTypeChosen={handleAddressTypeChosen}
+                  />
+
+                  <div className="buttons">
+                    <Button
+                      disabled={verifying !== false}
+                      onClick={() => verifyAddress(currentAddressIndex)}
+                      primary>
+                      {t('receive.verifyBitBox02')}
+                    </Button>
+                    <DesktopBackButton enableEsc={!addressTypeDialog && !verifying && !firmwareUpgradeRequired}>
+                      {t('button.back')}
+                    </DesktopBackButton>
+                  </div>
+                  { verifying && (
+                    <div className={style.hide}></div>
+                  )}
+                  <Dialog
+                    open={!!(account && verifying)}
+                    title={t('receive.verifyBitBox02')}
+                    // disable exit/escape for secure outputs like the BitBox02, where the dialog is
+                    // dimissed by tapping the device
+                    onClose={verifying === 'insecure' ? () => {
+                      setVerifying(false);
+                    } : undefined}
+                    medium centered>
+                    {account && (
+                      <>
+                        {verifying && (
+                          <UseBackButton handler={() => {
+                            if (verifying === 'insecure') {
+                              setVerifying(false);
+                            }
+                            return false;
+                          }} />
+                        )}
+                        <div className="text-center">
+                          { isEthereumBased(account.coinCode) && (
+                            <p>
+                              <strong>
+                                {t('receive.onlyThisCoin.warning', {
+                                  coinName: account.coinName,
+                                })}
+                              </strong><br />
+                              {t('receive.onlyThisCoin.description')}
+                            </p>
+                          )}
+                          <QRCode data={uriPrefix + address} />
+                          <p>{t('receive.verifyInstruction')}</p>
                         </div>
-                    </div>
+                        <div className="m-bottom-half">
+                          <CopyableInput
+                            value={address}
+                            displayValue={displayAddress}
+                            dataTestId="receive-address"
+                            flexibleHeight
+                          />
+                        </div>
+                        {isTesting && (
+                          <Message type="warning">
+                            {t('receive.verifyTestnetWarning')}
+                          </Message>
+                        )}
+                      </>
+                    )}
+                  </Dialog>
                 </div>
-                <Guide>
-                    <Entry key="guide.receive.address" entry={t('guide.receive.address')} />
-                    <Entry key="guide.receive.whyVerify" entry={t('guide.receive.whyVerify')} />
-                    <Entry key="guide.receive.howVerify" entry={t('guide.receive.howVerify')} />
-                    <Entry key="guide.receive.plugout" entry={t('guide.receive.plugout')} />
-                    {currentAddresses.length > 1 && <Entry key="guide.receive.whyMany" entry={t('guide.receive.whyMany')} />}
-                    {currentAddresses.length > 1 && <Entry key="guide.receive.why20" entry={t('guide.receive.why20')} />}
-                    {currentAddresses.length > 1 && <Entry key="guide.receive.addressChange" entry={t('guide.receive.addressChange')} />}
-                    {receiveAddresses.length > 1 && currentAddresses.length > 1 && <Entry key="guide.receive.addressFormats" entry={t('guide.receive.addressFormats')} />}
-                </Guide>
+              )}
             </div>
-        );
-    }
-}
-
-const loadHOC = load<LoadedReceiveProps, ReceiveProps & TranslateProps>(({ code }) => ({
-    secureOutput: `account/${code}/has-secure-output`,
-    receiveAddresses: `account/${code}/receive-addresses`,
-}))(Receive);
-const HOC = translate<ReceiveProps>()(loadHOC);
-export { HOC as Receive };
+          </div>
+        </Main>
+      </GuidedContent>
+      <ReceiveGuide
+        hasMultipleAddresses={currentAddresses ? currentAddresses.length > 1 : false}
+        hasDifferentFormats={receiveAddresses ? receiveAddresses.length > 1 : false}
+      />
+      {firmwareUpgradeRequired && (
+        <FirmwareUpgradeRequiredDialog
+          open
+          onClose={() => setFirmwareUpgradeRequired(false)}
+        />
+      )}
+    </GuideWrapper>
+  );
+};

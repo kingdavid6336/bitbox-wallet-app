@@ -1,203 +1,184 @@
-/**
- * Copyright 2018 Shift Devices AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import { load } from '../../../decorators/load';
-import { translate, TranslateProps } from '../../../decorators/translate';
-import { apiGet, apiPost } from '../../../utils/request';
-import { apiWebsocket } from '../../../utils/websocket';
-import { CenteredContent } from '../../centeredcontent/centeredcontent';
-import { Button } from '../../forms';
-import { BitBox02 } from '../../icon/logo';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import * as bitbox02BootloaderAPI from '@/api/bitbox02bootloader';
+import { useDarkmode } from '@/hooks/darkmode';
+import { useSync, useLoad } from '@/hooks/api';
+import { Button } from '@/components/forms';
+import { View, ViewContent } from '@/components/view/view';
+import { Footer, Main } from '@/components/layout';
+import { BitBox02, BitBox02Inverted, BitBox02Nova, BitBox02NovaInverted } from '@/components/icon/logo';
+import { Message } from '@/components/message/message';
+import { SubTitle } from '@/components/title';
 import { ToggleShowFirmwareHash } from './toggleshowfirmwarehash';
+import style from './bitbox02bootloader.module.css';
 
-interface BitBox02BootloaderProps {
-    deviceID: string;
-}
+type TProps = {
+  deviceID: string;
+};
 
-interface LoadedProps {
-    versionInfo: {
-        // Indicates whether the device has any firmware already installed on it.
-        // It is considered "erased" if there's no firmware, and it also happens
-        // to be the state in which BitBox02 is shipped to customers.
-        erased: boolean;
-        // Indicates whether the user can install/upgrade firmware.
-        canUpgrade: boolean;
-    };
-}
+export const BitBox02Bootloader = ({ deviceID }: TProps) => {
+  const { t } = useTranslation();
+  const { isDarkMode } = useDarkmode();
+  const status = useSync(
+    () => bitbox02BootloaderAPI.getStatus(deviceID),
+    bitbox02BootloaderAPI.syncStatus(deviceID),
+  );
+  const infoResponse = useLoad(
+    status === undefined || status.upgrading ? null : () => bitbox02BootloaderAPI.getInfo(deviceID),
+    [deviceID, status?.upgrading],
+  );
+  const [requestError, setRequestError] = useState<string>();
 
-type Props = BitBox02BootloaderProps & LoadedProps & TranslateProps;
-
-interface State {
-    status: {
-        upgrading: boolean;
-        errMsg?: string;
-        progress: number;
-        upgradeSuccessful: boolean;
-        rebootSeconds: number;
-    };
-}
-
-class BitBox02Bootloader extends Component<Props, State> {
-    constructor(props) {
-        super(props);
-        this.state = {
-            status: {
-                upgrading: false,
-                errMsg: undefined,
-                progress: 0,
-                upgradeSuccessful: false,
-                rebootSeconds: 0,
-            },
-        };
+  const runAction = async (action: () => Promise<bitbox02BootloaderAPI.TBootloaderResponse>) => {
+    const result = await action();
+    if (!result.success) {
+      setRequestError(result.errorMessage || t('genericError'));
+      return;
     }
+    setRequestError(undefined);
+  };
 
-    private unsubscribe!: () => void;
+  if (status === undefined || (infoResponse === undefined && !status.upgrading)) {
+    return null;
+  }
+  if (infoResponse !== undefined && !infoResponse.success) {
+    return (
+      <View fitContent verticallyCentered width="556px">
+        <ViewContent>
+          <Message type="warning">
+            {infoResponse.errorMessage || t('genericError')}
+          </Message>
+        </ViewContent>
+      </View>
+    );
+  }
+  const info = infoResponse?.info;
 
-    public componentDidMount() {
-        this.onStatusChanged();
-        this.unsubscribe = apiWebsocket(({ type, data, deviceID }) => {
-            switch (type) {
-                case 'device':
-                    if (deviceID !== this.props.deviceID) {
-                        return;
-                    }
-                    switch (data) {
-                        case 'statusChanged':
-                            this.onStatusChanged();
-                            break;
-                    }
-                    break;
-            }
-        });
+  let contents;
+  if (status.upgrading) {
+    if (status.upgradeSuccessful) {
+      contents = (
+        <div className="box large">
+          <p style={{ marginBottom: 0 }}>
+            {t('bb02Bootloader.success', {
+              context: (status.erased ? 'install' : ''),
+            })}
+          </p>
+        </div>
+      );
+    } else {
+      const value = Math.round(status.progress * 100);
+      contents = (
+        <>
+          <SubTitle className={style.upgradingTitle}>
+            {t('bb02Bootloader.upgradeTitle', { context: (status.erased ? 'install' : '') })}
+          </SubTitle>
+          { status.additionalUpgradeFollows ? (
+            <p className={style.additionalUpgrade}>
+              {t('bb02Bootloader.additionalUpgradeFollows1')}
+            </p>
+          ) : null }
+          <progress className={style.progressBar} value={value} max="100">{value}%</progress>
+          <div className={style.progressInfo}>
+            <span>
+              {t('bootloader.progress', {
+                context: (status.erased ? 'install' : ''),
+              })}
+            </span>
+            <span>
+              {value}%
+            </span>
+          </div>
+
+          { status.additionalUpgradeFollows ? (
+            <p className={style.additionalUpgrade}>
+              {t('bb02Bootloader.additionalUpgradeFollows2')}
+            </p>
+          ) : null }
+        </>
+      );
     }
-
-    public componentWillUnmount() {
-        this.unsubscribe();
+  } else {
+    if (info === undefined) {
+      return null;
     }
+    contents = (
+      <div className="box large" style={{ minHeight: 340 }}>
+        {info.erased && (
+          <div>
+            <h2>{t('welcome.title')}</h2>
+            <h3 className="subTitle">{t('welcome.getStarted')}</h3>
+          </div>
+        )}
+        <div className="buttons">
+          { info.canUpgrade ? (
+            <Button
+              primary
+              onClick={() => runAction(() => bitbox02BootloaderAPI.upgradeFirmware(deviceID))}>
+              {t('bootloader.button', { context: (info.erased ? 'install' : '') })}
+            </Button>
+          ) : null }
+          { !info.erased && (
+            <Button
+              secondary
+              onClick={() => runAction(() => bitbox02BootloaderAPI.reboot(deviceID))}>
+              {t('bb02Bootloader.abort', { context: !info.canUpgrade ? 'noUpgrade' : '' })}
+            </Button>
+          )}
+        </div>
+        <div className="flex flex-center" style={{ marginTop: 32 }}>
+          {t('bb02Bootloader.orientation')}&nbsp;
+          <Button
+            inline
+            onClick={() => runAction(() => bitbox02BootloaderAPI.screenRotate(deviceID))}
+            transparent>
+            {t('bb02Bootloader.flipscreen')}
+          </Button>
+        </div>
+        <hr/>
+        <details>
+          <summary>
+            {t('bb02Bootloader.advanced.label')}
+          </summary>
+          <div>
+            <br />
+            <ToggleShowFirmwareHash
+              deviceID={deviceID}
+              onError={setRequestError} />
+          </div>
+        </details>
+      </div>
+    );
+  }
 
-    private onStatusChanged = () => {
-        apiGet('devices/bitbox02-bootloader/' + this.props.deviceID + '/status').then(status => {
-            this.setState({ status });
-        });
-    }
+  const logo = (
 
-    private upgradeFirmware = () => {
-        apiPost('devices/bitbox02-bootloader/' + this.props.deviceID + '/upgrade-firmware');
-    }
+    (status.product === 'bitbox02-plus-multi' || status.product === 'bitbox02-plus-btconly') ?
+      (isDarkMode ? <BitBox02NovaInverted /> : <BitBox02Nova />) :
+      (isDarkMode ? <BitBox02Inverted /> : <BitBox02 />)
+  );
 
-    private reboot = () => {
-        apiPost('devices/bitbox02-bootloader/' + this.props.deviceID + '/reboot');
-    }
-
-    private screenRotate = () => {
-        apiPost('devices/bitbox02-bootloader/' + this.props.deviceID + '/screen-rotate');
-    }
-
-    public render(
-        { t,
-          deviceID,
-          versionInfo,
-        }: RenderableProps<Props>,
-        { status,
-        }: State,
-    ) {
-        let contents;
-        if (status.upgrading) {
-            if (status.upgradeSuccessful) {
-                contents = (
-                    <div className="box large">
-                        <p style="margin-bottom: 0;">
-                            {t('bb02Bootloader.success', {
-                                rebootSeconds: status.rebootSeconds.toString(),
-                                context: (versionInfo.erased ? 'install' : ''),
-                            })}
-                        </p>
-                    </div>
-                );
-            } else {
-                const value = Math.round(status.progress * 100);
-                contents = (
-                    <div className="box large">
-                        <progress value={value} max="100">{value}%</progress>
-                        <p style="margin-bottom: 0;">
-                            {t('bootloader.progress', {
-                                progress: value.toString(),
-                                context: (versionInfo.erased ? 'install' : ''),
-                            })}
-                        </p>
-                    </div>
-                );
-            }
-        } else {
-            contents = (
-                <div className="box large" style="min-height: 390px">
-                    {versionInfo.erased && (
-                        <div>
-                            <h2>{t('welcome.title')}</h2>
-                            <h3 className="subTitle">{t('welcome.getStarted')}</h3>
-                        </div>
-                    )}
-                    <div className="buttons">
-                        { versionInfo.canUpgrade ? (
-                            <Button
-                                primary
-                                onClick={this.upgradeFirmware}>
-                                {t('bootloader.button', { context: (versionInfo.erased ? 'install' : '') })}
-                            </Button>
-                            ) : null }
-                        { !versionInfo.erased && (
-                            <Button
-                                transparent
-                                onClick={this.reboot}>
-                                {t('bb02Bootloader.abort', { context: !versionInfo.canUpgrade ? 'noUpgrade' : '' })}
-                            </Button>
-                        )}
-                    </div>
-                    <div className="flex flex-center" style="margin-top: 32px">
-                        {t('bb02Bootloader.orientation')}&nbsp;
-                        <a
-                            onClick={this.screenRotate}
-                            style="text-decoration: underline; cursor: pointer;" >
-                            {t('bb02Bootloader.flipscreen')}
-                        </a>
-                    </div>
-                    <hr/>
-                    <details>
-                        <summary>
-                            {t('bb02Bootloader.advanced.label')}
-                        </summary>
-                          <div>
-                              <br />
-                              <ToggleShowFirmwareHash deviceID={deviceID} />
-                          </div>
-                    </details>
-                </div>
-            );
-        }
-        return (
-            <CenteredContent>
-                <BitBox02 />
-                {contents}
-                <p className="text-center">{status.errMsg}</p>
-            </CenteredContent>
-        );
-    }
-}
-
-const loadHOC = load<LoadedProps, BitBox02BootloaderProps & TranslateProps>(({ deviceID }) => ({ versionInfo: 'devices/bitbox02-bootloader/' + deviceID + '/version-info' }))(BitBox02Bootloader);
-const HOC = translate<BitBox02BootloaderProps>()(loadHOC);
-export { HOC as BitBox02Bootloader };
+  return (
+    <Main>
+      <View fitContent verticallyCentered width="556px">
+        <ViewContent>
+          {logo}
+          {status.errMsg && (
+            <Message type="warning">
+              {status.errMsg}
+            </Message>
+          )}
+          {requestError && (
+            <Message type="warning">
+              {requestError}
+            </Message>
+          )}
+          {contents}
+        </ViewContent>
+        <Footer textCenter />
+      </View>
+    </Main>
+  );
+};

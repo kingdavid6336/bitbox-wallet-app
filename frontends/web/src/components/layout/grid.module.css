@@ -1,0 +1,87 @@
+.grid {
+    --grid-min-height: 0;
+    display: grid;
+    gap: 0 var(--space-default);
+    grid-auto-rows: minmax(var(--grid-min-height), auto);
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.grid-columns-1 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.grid-columns-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.column-2 {
+    grid-column: span 2;
+}
+
+.column p {
+    margin-top: 0;
+}
+
+.columnAsCard {
+    background-color: var(--background-secondary);
+    border-radius: var(--radius-xl);
+    padding: var(--space-default);
+}
+
+.grid.grid-columns-1 .columnAsCard + .columnAsCard {
+    margin-top: var(--space-default);
+}
+
+@media (max-width: 768px) {
+    .grid.responsive {
+        display: block;
+    }
+    .columnAsCard {
+        padding: var(--space-half);
+    }
+    .grid.responsive .columnAsCard + .columnAsCard {
+        margin-top: var(--space-default);
+    }
+}
+
+/* text-align */
+
+.align-start {
+    text-align: start;
+}
+.align-center {
+    text-align: center;
+}
+.align-end {
+    text-align: end;
+}
+
+/* column buttons */
+
+.columnButtons {
+    margin-top: auto;
+}
+
+.columnButtons:not(.columnButtonsInline) button {
+    width: 100%;
+}
+
+.columnButtons button:not(:first-child) {
+    margin-top: var(--space-quarter);
+}
+
+.columnButtonsInline {
+    display: flex;
+    flex-direction: row-reverse;
+}
+
+.columnButtonsInline > a:not(:first-child),
+.columnButtonsInline > button:not(:first-child) {
+    margin-right: var(--space-half);
+    margin-top: 0;
+}

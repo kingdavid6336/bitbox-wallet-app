@@ -1,0 +1,37 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { createContext, useContext } from 'react';
+import type { TAccount } from '@/api/account';
+import type { TDevices } from '@/api/devices';
+import type { TLightningAccount } from '@/api/lightning';
+
+export type TAppMode = 'waiting' | 'unlock' | 'aopp' | 'setup' | 'running';
+
+export type TAppState = {
+  accounts: TAccount[];
+  activeAccounts: TAccount[];
+  deviceIDs: string[];
+  devices: TDevices;
+  mode?: TAppMode;
+  unlock?: {
+    deviceID: string;
+    attestation: boolean | null | undefined;
+  };
+  hasAccounts: boolean;
+  hasBottomNavigation: boolean;
+  hasDevices: boolean;
+  hasLightningAccount: boolean;
+  lightningAccount: TLightningAccount | null | undefined;
+};
+
+export const AppStateContext = createContext<TAppState | null>(null);
+
+export const useAppState = () => {
+  const context = useContext(AppStateContext);
+
+  if (!context) {
+    throw new Error('useAppState must be used inside AppStateProvider');
+  }
+
+  return context;
+};

@@ -1,32 +1,40 @@
 include ../../../hardening.mk.inc
 include ../../../env.mk.inc
+include ../../../version.mk.inc
 CGO=1
 BUILDMODE=c-shared
 GOARCH=amd64
 GOOS=windows
+GOTOOLCHAIN=local
+BREEZ_LIB_DIR=../../../vendor/github.com/breez/breez-sdk-spark-go/breez_sdk_spark/lib/windows-amd64/
 
 windows:
 	CGO_CFLAGS="${GOWINSECFLAGS} ${CFLAGS}" \
 	CGO_LDFLAGS="${GOWINLDFLAGS} ${LFLAGS}" \
-	GOARCH=${GOARCH} CGO_ENABLED=${CGO} GOOS=${GOOS} \
-       	go build -x -mod=vendor \
-        -buildmode="${BUILDMODE}" -o ${LIBNAME}.dll
+	GOARCH=${GOARCH} CGO_ENABLED=${CGO} GOOS=${GOOS} GOTOOLCHAIN=${GOTOOLCHAIN} \
+	go build -trimpath -x -mod=vendor \
+	-ldflags "$(GO_VERSION_LDFLAGS)" \
+	-buildmode="${BUILDMODE}" -o ${LIBNAME}.dll
 
 windows-cross:
 	CC=/usr/bin/x86_64-w64-mingw32-gcc \
 	CC_FOR_TARGET=/usr/bin/x86_64-w64-mingw32-gcc \
 	CGO_CFLAGS="-g ${GOWINSECFLAGS} ${CFLAGS}" \
 	CGO_LDFLAGS="${GOWINLDFLAGS} ${LFLAGS}" \
-	GOARCH=${GOARCH} CGO_ENABLED=${CGO} GOOS=${GOOS} \
-       	go build -x -mod=vendor \
-        -buildmode="${BUILDMODE}" -o ${LIBNAME}.dll
+	GOARCH=${GOARCH} CGO_ENABLED=${CGO} GOOS=${GOOS} GOTOOLCHAIN=${GOTOOLCHAIN} \
+	go build -trimpath -x -mod=vendor \
+	-ldflags "$(GO_VERSION_LDFLAGS)" \
+	-buildmode="${BUILDMODE}" -o ${LIBNAME}.dll
 
 windows-legacy:
-	CGO_ENABLED=1 go build -mod=vendor -ldflags="-s -w" -buildmode=c-archive \
+	CGO_ENABLED=1 go build -mod=vendor -ldflags="-s -w $(GO_VERSION_LDFLAGS)" -buildmode=c-archive \
 		-o libserver.a
 	gcc server.def libserver.a -shared -lwinmm -lhid -lsetupapi -lWs2_32 \
+		-L${BREEZ_LIB_DIR} -lbreez_sdk_spark_bindings \
 		-o libserver.dll -Wl,--out-implib,libserver.lib
 
 clean:
-	-rm ${LIBNAME}.dll
-	-rm ${LIBNAME}.h
+	-rm -f ${LIBNAME}.dll
+	-rm -f ${LIBNAME}.h
+	-rm -f ${LIBNAME}.a
+	-rm -f ${LIBNAME}.lib

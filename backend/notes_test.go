@@ -1,0 +1,269 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package backend
+
+import (
+	"bytes"
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/notes"
+	accountsTypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/addresses"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/blockchain"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/types"
+	coinpkg "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/config"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/test"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/suite"
+)
+
+type notesTestSuite struct {
+	suite.Suite
+	backend *Backend
+}
+
+func (s *notesTestSuite) SetupTest() {
+	s.backend = newBackend(s.T(), testnetDisabled, regtestDisabled)
+
+	notesInstances := map[accountsTypes.Code]*notes.Notes{}
+	notesFunc := func(accountCode accountsTypes.Code) func() *notes.Notes {
+		return func() *notes.Notes {
+			if notesInstances[accountCode] == nil {
+				notesInstance, err := notes.LoadNotes(test.TstTempFile("notes"))
+				s.Require().NoError(err)
+				notesInstances[accountCode] = notesInstance
+			}
+			return notesInstances[accountCode]
+		}
+	}
+	// We mock some transactions so that in the import, transactions can be looked up by ID.
+	transactionsFunc := func(accountCode accountsTypes.Code) func() (accounts.OrderedTransactions, error) {
+		return func() (accounts.OrderedTransactions, error) {
+			switch accountCode {
+			case "v0-55555555-btc-0":
+				return accounts.OrderedTransactions{
+					&accounts.TransactionData{
+						InternalID: "btc-tx-id",
+					},
+				}, nil
+			case "v0-55555555-eth-0":
+				return accounts.OrderedTransactions{
+					&accounts.TransactionData{
+						InternalID: "eth-tx-id",
+					},
+				}, nil
+			case Erc20AccountCode("v0-55555555-eth-0", "eth-erc20-usdt"):
+				return accounts.OrderedTransactions{
+					&accounts.TransactionData{
+						InternalID: "erc20-tx-id",
+					},
+				}, nil
+			default:
+				return nil, nil
+			}
+		}
+	}
+
+	s.backend.makeBtcAccount = func(config *accounts.AccountConfig, coin *btc.Coin, gapLimits *types.GapLimits, getAddress func(coinpkg.Code, blockchain.ScriptHashHex) (*addresses.AccountAddress, error), log *logrus.Entry) accounts.Interface {
+		accountMock := MockBtcAccount(s.T(), config, coin, gapLimits, log)
+		accountMock.NotesFunc = notesFunc(config.Code)
+		accountMock.TransactionsFunc = transactionsFunc(config.Code)
+
+		return accountMock
+	}
+	s.backend.makeEthAccount = func(config *accounts.AccountConfig, coin *eth.Coin, log *logrus.Entry) accounts.Interface {
+		accountMock := MockEthAccount(config, coin, log)
+		accountMock.NotesFunc = notesFunc(config.Code)
+		accountMock.TransactionsFunc = transactionsFunc(config.Code)
+		return accountMock
+	}
+
+	bb02Multi := makeBitBox02Multi()
+	s.backend.registerKeystore(bb02Multi)
+	checkShownAccountsLen(s.T(), s.backend, 3, 3)
+
+	// Activate an ERC20 token.
+	s.Require().NoError(s.backend.SetTokenActive("v0-55555555-eth-0", "eth-erc20-usdt", true))
+}
+
+func (s *notesTestSuite) TearDownTest() {
+	s.backend.Close()
+}
+
+func TestNotesSuite(t *testing.T) {
+	suite.Run(t, &notesTestSuite{})
+}
+
+func (s *notesTestSuite) TestExport() {
+	btcAcct := s.backend.Accounts().lookup("v0-55555555-btc-0")
+	s.Require().NotNil(btcAcct)
+
+	ethAcct := s.backend.Accounts().lookup("v0-55555555-eth-0")
+	s.Require().NotNil(ethAcct)
+
+	erc20Acct := s.backend.Accounts().lookup(Erc20AccountCode("v0-55555555-eth-0", "eth-erc20-usdt"))
+	s.Require().NotNil(erc20Acct)
+
+	// Labels of deactivated accounts are also exported. Let's deactivate an ETH account to check
+	// that the child ERC20 account notes are still being exported.
+	s.Require().NoError(s.backend.SetAccountActive("v0-55555555-eth-0", false))
+
+	// Rename some accounts.
+	s.Require().NoError(s.backend.RenameAccount("v0-55555555-btc-0", "My BTC"))
+	s.Require().NoError(s.backend.RenameAccount("v0-55555555-eth-0", "My ETH"))
+
+	_, err := btcAcct.Account.Notes().SetTxNote("btc-tx-id", "test btc note")
+	s.Require().NoError(err)
+	_, err = ethAcct.Account.Notes().SetTxNote("eth-tx-id", "test eth note")
+	s.Require().NoError(err)
+	_, err = erc20Acct.Account.Notes().SetTxNote("erc20-tx-id", "test erc20 note")
+	s.Require().NoError(err)
+	s.Require().NoError(s.backend.lightning.SetAccount(&config.LightningAccountConfig{
+		Code: "v0-55555555-ln-0",
+	}))
+	_, err = s.backend.lightning.SetTxNote("payment-id", "test lightning note")
+	s.Require().NoError(err)
+
+	var export bytes.Buffer
+	s.Require().NoError(s.backend.exportNotes(&export))
+
+	expected := `{"type":"xpub","ref":"xpub6Cxa67Bfe1Aw5VvLM1Ppua9x28CXH1zUYoAuBzFRjR6hWnA6aUcny84KYkeVcZWnWXxKSkxCEyMA8xic54ydBPWm5oziXpsXq6nX8FELMQn","label":"My BTC","bitboxapp":{"coinCode":"btc","code":"v0-55555555-btc-0"}}
+{"type":"xpub","ref":"xpub6CC9Tsi4eJvmRsGuXwKBfHDWUWN66voNeZFmXRJhYZS6yYgXKZmtz5qnxK9WL2FZP8uF3abyFZ29d7RfMks4FjCCu4LMh3edyeCoyEFuZLZ","label":"My BTC","bitboxapp":{"coinCode":"btc","code":"v0-55555555-btc-0"}}
+{"type":"xpub","ref":"xpub6CUmEcJb7juvnw7fFYybCwvCJuPSEdhTWZCep9X1DBznwB8RRKTYBUidbEPJ9L7ExjrXhem9S759cX3BpzSUSoP2rWh9vqumJ9MPSAbi98F","label":"My BTC","bitboxapp":{"coinCode":"btc","code":"v0-55555555-btc-0"}}
+{"type":"tx","ref":"btc-tx-id","label":"test btc note","bitboxapp":{"coinCode":"btc","code":"v0-55555555-btc-0"}}
+{"type":"xpub","ref":"xpub6DReBHtKxgeZGBKTaaF1GjeBHa8dZwQpRfgYr3kxt782s8KKqio2pR6piBsiqHEPF7Rg3onMkwt9XrSxNTuW4N1VBjVbn6DQ3GPCBEUgtgP","label":"Litecoin","bitboxapp":{"coinCode":"ltc","code":"v0-55555555-ltc-0"}}
+{"type":"xpub","ref":"xpub6CrhULuXbYzo7gXNhSNZ6tzgfMWpwRFEisekvFfuWLtpXcV4jfvWf5yCuhRBvhZoisH4JCVp4ddGEi7XF2QE2S4N8pMkirJbp7N2TF5p5qQ","label":"Litecoin","bitboxapp":{"coinCode":"ltc","code":"v0-55555555-ltc-0"}}
+{"type":"xpub","ref":"xpub6GP83vJASH1kS7dQPWXFjVHDfYajopbG8U3j8peBH67CRCnb8QmDxZJfWpbgCQNHAzCDJ4MyVYjoh7Yv9yo7PQuZ9YyktgrtD9vmeo67Y4E","label":"My ETH","bitboxapp":{"coinCode":"eth","code":"v0-55555555-eth-0"}}
+{"type":"tx","ref":"eth-tx-id","label":"test eth note","bitboxapp":{"coinCode":"eth","code":"v0-55555555-eth-0"}}
+{"type":"tx","ref":"erc20-tx-id","label":"test erc20 note","bitboxapp":{"coinCode":"eth-erc20-usdt","code":"v0-55555555-eth-0-eth-erc20-usdt"}}
+{"type":"bitboxapp-lightning-payment","ref":"payment-id","label":"test lightning note","bitboxapp":{"coinCode":"btc","code":"v0-55555555-ln-0"}}
+`
+	s.Require().Equal(expected, export.String())
+}
+
+func (s *notesTestSuite) TestNotesImport() {
+	s.Require().NoError(s.backend.lightning.SetAccount(&config.LightningAccountConfig{
+		Code: "v0-55555555-ln-0",
+	}))
+
+	btcAcct := s.backend.Accounts().lookup("v0-55555555-btc-0")
+	s.Require().NotNil(btcAcct)
+
+	ethAcct := s.backend.Accounts().lookup("v0-55555555-eth-0")
+	s.Require().NotNil(ethAcct)
+
+	erc20Acct := s.backend.Accounts().lookup(Erc20AccountCode("v0-55555555-eth-0", "eth-erc20-usdt"))
+	s.Require().NotNil(erc20Acct)
+
+	// Sanity check that there are no notes.
+	s.Require().Empty(btcAcct.Account.Notes().TxNote("btc-tx-id"))
+
+	export := `{"type":"xpub","ref":"xpub6Cxa67Bfe1Aw5VvLM1Ppua9x28CXH1zUYoAuBzFRjR6hWnA6aUcny84KYkeVcZWnWXxKSkxCEyMA8xic54ydBPWm5oziXpsXq6nX8FELMQn","label":"My BTC","bitboxapp":{"coinCode":"btc","code":"v0-55555555-btc-0"}}
+{"type":"xpub","ref":"xpub6CC9Tsi4eJvmRsGuXwKBfHDWUWN66voNeZFmXRJhYZS6yYgXKZmtz5qnxK9WL2FZP8uF3abyFZ29d7RfMks4FjCCu4LMh3edyeCoyEFuZLZ","label":"My BTC","bitboxapp":{"coinCode":"btc","code":"v0-55555555-btc-0"}}
+{"type":"xpub","ref":"xpub6CUmEcJb7juvnw7fFYybCwvCJuPSEdhTWZCep9X1DBznwB8RRKTYBUidbEPJ9L7ExjrXhem9S759cX3BpzSUSoP2rWh9vqumJ9MPSAbi98F","label":"My BTC","bitboxapp":{"coinCode":"btc","code":"v0-55555555-btc-0"}}
+{"type":"tx","ref":"btc-tx-id","label":"test btc note","bitboxapp":{"coinCode":"btc","code":"v0-55555555-btc-0"}}
+
+{"type":"xpub","ref":"xpub6DReBHtKxgeZGBKTaaF1GjeBHa8dZwQpRfgYr3kxt782s8KKqio2pR6piBsiqHEPF7Rg3onMkwt9XrSxNTuW4N1VBjVbn6DQ3GPCBEUgtgP","label":"Litecoin","bitboxapp":{"coinCode":"ltc","code":"v0-55555555-ltc-0"}}
+{"type":"xpub","ref":"xpub6CrhULuXbYzo7gXNhSNZ6tzgfMWpwRFEisekvFfuWLtpXcV4jfvWf5yCuhRBvhZoisH4JCVp4ddGEi7XF2QE2S4N8pMkirJbp7N2TF5p5qQ","label":"Litecoin","bitboxapp":{"coinCode":"ltc","code":"v0-55555555-ltc-0"}}
+
+{"type":"xpub","ref":"xpub6GP83vJASH1kS7dQPWXFjVHDfYajopbG8U3j8peBH67CRCnb8QmDxZJfWpbgCQNHAzCDJ4MyVYjoh7Yv9yo7PQuZ9YyktgrtD9vmeo67Y4E","label":"My ETH","bitboxapp":{"coinCode":"eth","code":"v0-55555555-eth-0"}}
+
+{"type":"tx","ref":"eth-tx-id","label":"test eth note","bitboxapp":{"coinCode":"eth","code":"v0-55555555-eth-0"}}
+{"type":"tx","ref":"erc20-tx-id","label":"test erc20 note","bitboxapp":{"coinCode":"eth-erc20-usdt","code":"v0-55555555-eth-0-eth-erc20-usdt"}}
+{"type":"tx","ref":"non-existing-tx-id","label":"test note","bitboxapp":{"coinCode":"eth","code":"NON-EXISTING-ACCOUNT"}}
+{"type":"bitboxapp-lightning-payment","ref":"payment-id","label":"test lightning note","bitboxapp":{"coinCode":"btc","code":"v0-55555555-ln-0"}}
+{"type":"bitboxapp-lightning-payment","ref":"payment-id","label":"wrong wallet note","bitboxapp":{"coinCode":"btc","code":"v0-66666666-ln-0"}}
+{"type":"bitboxapp-lightning-payment","ref":"btc-tx-id","label":"wrong account type","bitboxapp":{"coinCode":"btc","code":"v0-55555555-btc-0"}}
+`
+	result, err := s.backend.ImportNotes([]byte(export))
+	s.Require().NoError(err)
+	s.Require().Equal(
+		&ImportNotesResult{
+			AccountCount:     2,
+			TransactionCount: 4,
+		},
+		result)
+
+	s.Require().Equal("test btc note", btcAcct.Account.Notes().TxNote("btc-tx-id"))
+	s.Require().Equal("test eth note", ethAcct.Account.Notes().TxNote("eth-tx-id"))
+	s.Require().Equal("test erc20 note", erc20Acct.Account.Notes().TxNote("erc20-tx-id"))
+	lightningNotes, err := s.backend.lightning.Notes()
+	s.Require().NoError(err)
+	s.Require().Equal("test lightning note", lightningNotes.TxNote("payment-id"))
+	s.Require().Equal("My BTC", s.backend.Accounts().lookup("v0-55555555-btc-0").Record.Name)
+	s.Require().Equal("Litecoin", s.backend.Accounts().lookup("v0-55555555-ltc-0").Record.Name)
+	s.Require().Equal("My ETH", s.backend.Accounts().lookup("v0-55555555-eth-0").Record.Name)
+}
+
+func (s *notesTestSuite) TestNotesImportWithoutBitBoxAppData() {
+	btcAcct := s.backend.Accounts().lookup("v0-55555555-btc-0")
+	s.Require().NotNil(btcAcct)
+
+	ethAcct := s.backend.Accounts().lookup("v0-55555555-eth-0")
+	s.Require().NotNil(ethAcct)
+
+	erc20Acct := s.backend.Accounts().lookup(Erc20AccountCode("v0-55555555-eth-0", "eth-erc20-usdt"))
+	s.Require().NotNil(erc20Acct)
+
+	// Sanity check that there are no notes.
+	s.Require().Empty(btcAcct.Account.Notes().TxNote("btc-tx-id"))
+
+	veryLong := strings.Repeat("a", 2000)
+	export := fmt.Sprintf(
+		`{"type":"xpub","ref":"xpub6Cxa67Bfe1Aw5VvLM1Ppua9x28CXH1zUYoAuBzFRjR6hWnA6aUcny84KYkeVcZWnWXxKSkxCEyMA8xic54ydBPWm5oziXpsXq6nX8FELMQn","label":"My BTC"}
+{"type":"xpub","ref":"xpub6CC9Tsi4eJvmRsGuXwKBfHDWUWN66voNeZFmXRJhYZS6yYgXKZmtz5qnxK9WL2FZP8uF3abyFZ29d7RfMks4FjCCu4LMh3edyeCoyEFuZLZ","label":"My BTC"}
+{"type":"xpub","ref":"xpub6CUmEcJb7juvnw7fFYybCwvCJuPSEdhTWZCep9X1DBznwB8RRKTYBUidbEPJ9L7ExjrXhem9S759cX3BpzSUSoP2rWh9vqumJ9MPSAbi98F","label":"My BTC"}
+{"type":"tx","ref":"btc-tx-id","label":"test btc note"}
+
+{"type":"xpub","ref":"xpub6DReBHtKxgeZGBKTaaF1GjeBHa8dZwQpRfgYr3kxt782s8KKqio2pR6piBsiqHEPF7Rg3onMkwt9XrSxNTuW4N1VBjVbn6DQ3GPCBEUgtgP","label":"Litecoin"}
+{"type":"xpub","ref":"xpub6CrhULuXbYzo7gXNhSNZ6tzgfMWpwRFEisekvFfuWLtpXcV4jfvWf5yCuhRBvhZoisH4JCVp4ddGEi7XF2QE2S4N8pMkirJbp7N2TF5p5qQ","label":"Litecoin"}
+
+{"type":"xpub","ref":"xpub6GP83vJASH1kS7dQPWXFjVHDfYajopbG8U3j8peBH67CRCnb8QmDxZJfWpbgCQNHAzCDJ4MyVYjoh7Yv9yo7PQuZ9YyktgrtD9vmeo67Y4E","label":"My ETH"}
+{"type":"tx","ref":"eth-tx-id","label":"test eth note"}
+{"type":"tx","ref":"erc20-tx-id","label":"%s"}
+{"type":"tx","ref":"non-existing-tx-id","label":"test note"}
+`, veryLong)
+	result, err := s.backend.ImportNotes([]byte(export))
+	s.Require().NoError(err)
+	s.Require().Equal(
+		&ImportNotesResult{
+			AccountCount:     2,
+			TransactionCount: 3,
+		},
+		result)
+
+	s.Require().Equal("test btc note", btcAcct.Account.Notes().TxNote("btc-tx-id"))
+	s.Require().Equal("test eth note", ethAcct.Account.Notes().TxNote("eth-tx-id"))
+	// Truncated to 1024 chars.
+	s.Require().Equal(veryLong[:1024], erc20Acct.Account.Notes().TxNote("erc20-tx-id"))
+	s.Require().Equal("My BTC", s.backend.Accounts().lookup("v0-55555555-btc-0").Record.Name)
+	s.Require().Equal("Litecoin", s.backend.Accounts().lookup("v0-55555555-ltc-0").Record.Name)
+	s.Require().Equal("My ETH", s.backend.Accounts().lookup("v0-55555555-eth-0").Record.Name)
+}
+
+func (s *notesTestSuite) TestNotesInvalidLine() {
+	export := `{"type":"xpub","ref":"xpub6Cxa67Bfe1Aw5VvLM1Ppua9x28CXH1zUYoAuBzFRjR6hWnA6aUcny84KYkeVcZWnWXxKSkxCEyMA8xic54ydBPWm5oziXpsXq6nX8FELMQn","label":"My BTC","bitboxapp":{"coinCode":"btc","code":"v0-55555555-btc-0"}}
+{"type":"xpub","ref":"xpub6CC9Tsi4eJvmRsGuXwKBfHDWUWN66voNeZFmXRJhYZS6yYgXKZmtz5qnxK9WL2FZP8uF3abyFZ29d7RfMks4FjCCu4LMh3edyeCoyEFuZLZ","label":"My BTC","bitboxapp":{"coinCode":"btc","code":"v0-55555555-btc-0"}}
+{"type":"xpub","ref":"xpub6CUmEcJb7juvnw7fFYybCwvCJuPSEdhTWZCep9X1DBznwB8RRKTYBUidbEPJ9L7ExjrXhem9S759cX3BpzSUSoP2rWh9vqumJ9MPSAbi98F","label":"My BTC","bitboxapp":{"coinCode":"btc","code":"v0-55555555-btc-0"}}
+{"type":"tx","ref":"btc-tx-id","label":"test btc note","bitboxapp":{"coinCode":"btc","code":"v0-55555555-btc-0"}}
+{"type":"xpub","ref":"xpub6DReBHtKxgeZGBKTaaF1GjeBHa8dZwQpRfgYr3kxt782s8KKqio2pR6piBsiqHEPF7Rg3onMkwt9XrSxNTuW4N1VBjVbn6DQ3GPCBEUgtgP","label":"Litecoin","bitboxapp":{"coinCode":"ltc","code":"v0-55555555-ltc-0"}}
+{"type":"xpub","ref":"xpub6CrhULuXbYzo7gXNhSNZ6tzgfMWpwRFEisekvFfuWLtpXcV4jfvWf5yCuhRBvhZoisH4JCVp4ddGEi7XF2QE2S4N8pMkirJbp7N2TF5p5qQ","label":"Litecoin","bitboxapp":{"coinCode":"ltc","code":"v0-55555555-ltc-0"}}
+{"type":"xpub","ref":"xpub6GP83vJASH1kS7dQPWXFjVHDfYajopbG8U3j8peBH67CRCnb8QmDxZJfWpbgCQNHAzCDJ4MyVYjoh7Yv9yo7PQuZ9YyktgrtD9vmeo67Y4E","label":"My ETH","bitboxapp":{"coinCode":"eth","code":"v0-55555555-eth-0"}}
+{"type":"tx","ref":"eth-tx-id","label":"test eth note","bitboxapp":{"coinCode":"eth","code":"v0-55555555-eth-0"}}
+{"type":"tx","ref":"erc20-tx-id","label":"test erc20 note","bitboxapp":{"coinCode":"eth-erc20-usdt","code":"v0-55555555-eth-0-eth-erc20-usdt"}}
+INVALID LINE
+`
+	_, err := s.backend.ImportNotes([]byte(export))
+	s.Require().Error(err)
+
+	// Check that a note before the invalid line was not imported.
+	btcAcct := s.backend.Accounts().lookup("v0-55555555-btc-0")
+	s.Require().NotNil(btcAcct)
+	s.Require().Equal("", btcAcct.Account.Notes().TxNote("btc-tx-id"))
+}

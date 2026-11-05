@@ -1,8 +1,22 @@
+html {
+    font-size: 62.5%; /* 1rem = 10px */
+}
+
+body {
+    font-size: 1.6rem; /* 16px base for body, this will be overwritten on Android  */
+}
+
+.app {
+    font-size: var(--size-default); /* for components that do not define font-size */
+}
+
 html,
 body {
     background-color: var(--background);
     color: var(--color-default);
     font-family: var(--font-family);
+    font-feature-settings: "calt" 0, "clig" 0, "dlig" 0, "frac" 0, "liga" 0;
+    font-variant-ligatures: none;
     font-weight: 400;
     height: 100%;
     line-height: 1.3;
@@ -13,6 +27,11 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 	  -webkit-app-region: drag;
+}
+
+button, textarea, input, select {
+    font-feature-settings: "calt" 0, "clig" 0, "dlig" 0, "frac" 0, "liga" 0;
+    font-variant-ligatures: none;
 }
 
 /*
@@ -27,29 +46,32 @@ body {
 
 hr {
     background: none;
-    border-color: var(--color-mediumgray) transparent;
+    border-color: var(--background-quaternary) transparent;
     border-style: solid;
     border-width: 1px 0 0 0;
-    margin: var(--spacing-large) 0;
+    margin: var(--space-default) 0;
 }
 
 h1, h2, h3, h4, h5 {
     line-height: 1.25;
 }
 
-::-webkit-scrollbar-track {
-    background-color: #F5F5F5;
-}
-
-::-webkit-scrollbar {
+.os-linux ::-webkit-scrollbar,
+.os-windows ::-webkit-scrollbar {
+    background-color: transparent;
     width: 4px;
-    background-color: #F5F5F5;
 }
 
-::-webkit-scrollbar-thumb {
-    background-color: var(--color-gray);
-    /* border: 2px solid #555555; */
+.os-linux ::-webkit-scrollbar-track,
+.os-windows ::-webkit-scrollbar-track {
+    background-color: transparent;
 }
+
+.os-linux ::-webkit-scrollbar-thumb,
+.os-windows ::-webkit-scrollbar-thumb {
+    background-color: var(--color-secondary);
+}
+
 
 p {
     font-weight: 400;
@@ -61,30 +83,24 @@ a {
     cursor: pointer;
 }
 
-/* definition list */
-
-dl div {
-    display: inline-block;
-    margin-right: var(--spacing-large);
-}
-
-dl dt {
-    margin-right: var(--spacing-half);
-    text-indent: 0;
-}
-
-dl dd {
-    margin: 0;
-    font-weight: bold;
-    overflow: hidden;
-    text-overflow: ellipsis;
+a,
+button,
+[role="button"],
+[tabindex],
+input,
+select,
+textarea {
+    -webkit-tap-highlight-color: transparent;
 }
 
 img,
-button,
-label,
-.label {
+button {
     user-select: none;
+    -webkit-user-select: none;
+}
+
+img {
+    -webkit-touch-callout: none;
 }
 
 svg {
@@ -92,5 +108,16 @@ svg {
 }
 
 pre {
+    background-color: var(--background-secondary);
+    display: block;
     font-family: monospace;
+    font-size: var(--size-default);
+    margin: 0 0 var(--space-default) 0;
+    padding: var(--space-default);
+    text-align: center;
+}
+
+progress {
+    display: block;
+    width: 100%;
 }

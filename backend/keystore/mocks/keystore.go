@@ -4,29 +4,13 @@
 package mocks
 
 import (
-	"github.com/btcsuite/btcutil/hdkeychain"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/keystore"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/signing"
+	btctypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/keystore"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/signing"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable"
+	"github.com/btcsuite/btcd/btcutil/v2/hdkeychain"
 	"sync"
-)
-
-var (
-	lockKeystoreMockCanSignMessage             sync.RWMutex
-	lockKeystoreMockCanVerifyAddress           sync.RWMutex
-	lockKeystoreMockCanVerifyExtendedPublicKey sync.RWMutex
-	lockKeystoreMockExtendedPublicKey          sync.RWMutex
-	lockKeystoreMockRootFingerprint            sync.RWMutex
-	lockKeystoreMockSignBTCMessage             sync.RWMutex
-	lockKeystoreMockSignETHMessage             sync.RWMutex
-	lockKeystoreMockSignTransaction            sync.RWMutex
-	lockKeystoreMockSupportsAccount            sync.RWMutex
-	lockKeystoreMockSupportsCoin               sync.RWMutex
-	lockKeystoreMockSupportsMultipleAccounts   sync.RWMutex
-	lockKeystoreMockSupportsUnifiedAccounts    sync.RWMutex
-	lockKeystoreMockType                       sync.RWMutex
-	lockKeystoreMockVerifyAddress              sync.RWMutex
-	lockKeystoreMockVerifyExtendedPublicKey    sync.RWMutex
 )
 
 // Ensure, that KeystoreMock does implement keystore.Keystore.
@@ -35,85 +19,127 @@ var _ keystore.Keystore = &KeystoreMock{}
 
 // KeystoreMock is a mock implementation of keystore.Keystore.
 //
-//     func TestSomethingThatUsesKeystore(t *testing.T) {
+//	func TestSomethingThatUsesKeystore(t *testing.T) {
 //
-//         // make and configure a mocked keystore.Keystore
-//         mockedKeystore := &KeystoreMock{
-//             CanSignMessageFunc: func(in1 coin.Code) bool {
-// 	               panic("mock out the CanSignMessage method")
-//             },
-//             CanVerifyAddressFunc: func(in1 coin.Coin) (bool, bool, error) {
-// 	               panic("mock out the CanVerifyAddress method")
-//             },
-//             CanVerifyExtendedPublicKeyFunc: func() bool {
-// 	               panic("mock out the CanVerifyExtendedPublicKey method")
-//             },
-//             ExtendedPublicKeyFunc: func(in1 coin.Coin, in2 signing.AbsoluteKeypath) (*hdkeychain.ExtendedKey, error) {
-// 	               panic("mock out the ExtendedPublicKey method")
-//             },
-//             RootFingerprintFunc: func() ([]byte, error) {
-// 	               panic("mock out the RootFingerprint method")
-//             },
-//             SignBTCMessageFunc: func(message []byte, keypath signing.AbsoluteKeypath, scriptType signing.ScriptType) ([]byte, error) {
-// 	               panic("mock out the SignBTCMessage method")
-//             },
-//             SignETHMessageFunc: func(message []byte, keypath signing.AbsoluteKeypath) ([]byte, error) {
-// 	               panic("mock out the SignETHMessage method")
-//             },
-//             SignTransactionFunc: func(in1 interface{}) error {
-// 	               panic("mock out the SignTransaction method")
-//             },
-//             SupportsAccountFunc: func(coinInstance coin.Coin, meta interface{}) bool {
-// 	               panic("mock out the SupportsAccount method")
-//             },
-//             SupportsCoinFunc: func(coinInstance coin.Coin) bool {
-// 	               panic("mock out the SupportsCoin method")
-//             },
-//             SupportsMultipleAccountsFunc: func() bool {
-// 	               panic("mock out the SupportsMultipleAccounts method")
-//             },
-//             SupportsUnifiedAccountsFunc: func() bool {
-// 	               panic("mock out the SupportsUnifiedAccounts method")
-//             },
-//             TypeFunc: func() keystore.Type {
-// 	               panic("mock out the Type method")
-//             },
-//             VerifyAddressFunc: func(in1 *signing.Configuration, in2 coin.Coin) error {
-// 	               panic("mock out the VerifyAddress method")
-//             },
-//             VerifyExtendedPublicKeyFunc: func(in1 coin.Coin, in2 *signing.Configuration) error {
-// 	               panic("mock out the VerifyExtendedPublicKey method")
-//             },
-//         }
+//		// make and configure a mocked keystore.Keystore
+//		mockedKeystore := &KeystoreMock{
+//			BTCXPubsFunc: func(coinMoqParam coin.Coin, absoluteKeypaths []signing.AbsoluteKeypath) ([]*hdkeychain.ExtendedKey, error) {
+//				panic("mock out the BTCXPubs method")
+//			},
+//			CanSignMessageFunc: func(code coin.Code) bool {
+//				panic("mock out the CanSignMessage method")
+//			},
+//			CanVerifyAddressFunc: func(coinMoqParam coin.Coin) (bool, bool, error) {
+//				panic("mock out the CanVerifyAddress method")
+//			},
+//			CanVerifyExtendedPublicKeyFunc: func() bool {
+//				panic("mock out the CanVerifyExtendedPublicKey method")
+//			},
+//			DeterministicEntropyFunc: func() ([]byte, error) {
+//				panic("mock out the DeterministicEntropy method")
+//			},
+//			ExtendedPublicKeyFunc: func(coinMoqParam coin.Coin, absoluteKeypath signing.AbsoluteKeypath) (*hdkeychain.ExtendedKey, error) {
+//				panic("mock out the ExtendedPublicKey method")
+//			},
+//			FeaturesFunc: func() *keystore.Features {
+//				panic("mock out the Features method")
+//			},
+//			NameFunc: func() (string, error) {
+//				panic("mock out the Name method")
+//			},
+//			ObserveFunc: func(fn func(observable.Event)) func() {
+//				panic("mock out the Observe method")
+//			},
+//			RootFingerprintFunc: func() ([]byte, error) {
+//				panic("mock out the RootFingerprint method")
+//			},
+//			SignBTCMessageFunc: func(message []byte, keypath signing.AbsoluteKeypath, scriptType signing.ScriptType, coinMoqParam coin.Code) ([]byte, error) {
+//				panic("mock out the SignBTCMessage method")
+//			},
+//			SignETHMessageFunc: func(chainID uint64, message []byte, keypath signing.AbsoluteKeypath) ([]byte, error) {
+//				panic("mock out the SignETHMessage method")
+//			},
+//			SignETHTypedMessageFunc: func(chainID uint64, data []byte, keypath signing.AbsoluteKeypath) ([]byte, error) {
+//				panic("mock out the SignETHTypedMessage method")
+//			},
+//			SignTransactionFunc: func(ifaceVal interface{}) error {
+//				panic("mock out the SignTransaction method")
+//			},
+//			SupportsAccountFunc: func(coinInstance coin.Coin, meta interface{}) bool {
+//				panic("mock out the SupportsAccount method")
+//			},
+//			SupportsCoinFunc: func(coinInstance coin.Coin) bool {
+//				panic("mock out the SupportsCoin method")
+//			},
+//			SupportsDeterministicEntropyFunc: func() bool {
+//				panic("mock out the SupportsDeterministicEntropy method")
+//			},
+//			SupportsEIP1559Func: func() bool {
+//				panic("mock out the SupportsEIP1559 method")
+//			},
+//			SupportsFeatureFunc: func(feature keystore.Feature) error {
+//				panic("mock out the SupportsFeature method")
+//			},
+//			TypeFunc: func() keystore.Type {
+//				panic("mock out the Type method")
+//			},
+//			VerifyAddressBTCFunc: func(accountConfiguration *signing.Configuration, derivation btctypes.Derivation, coinMoqParam coin.Coin) error {
+//				panic("mock out the VerifyAddressBTC method")
+//			},
+//			VerifyAddressETHFunc: func(configuration *signing.Configuration, coinMoqParam coin.Coin) error {
+//				panic("mock out the VerifyAddressETH method")
+//			},
+//			VerifyExtendedPublicKeyFunc: func(coinMoqParam coin.Coin, configuration *signing.Configuration) error {
+//				panic("mock out the VerifyExtendedPublicKey method")
+//			},
+//		}
 //
-//         // use mockedKeystore in code that requires keystore.Keystore
-//         // and then make assertions.
+//		// use mockedKeystore in code that requires keystore.Keystore
+//		// and then make assertions.
 //
-//     }
+//	}
 type KeystoreMock struct {
+	// BTCXPubsFunc mocks the BTCXPubs method.
+	BTCXPubsFunc func(coinMoqParam coin.Coin, absoluteKeypaths []signing.AbsoluteKeypath) ([]*hdkeychain.ExtendedKey, error)
+
 	// CanSignMessageFunc mocks the CanSignMessage method.
-	CanSignMessageFunc func(in1 coin.Code) bool
+	CanSignMessageFunc func(code coin.Code) bool
 
 	// CanVerifyAddressFunc mocks the CanVerifyAddress method.
-	CanVerifyAddressFunc func(in1 coin.Coin) (bool, bool, error)
+	CanVerifyAddressFunc func(coinMoqParam coin.Coin) (bool, bool, error)
 
 	// CanVerifyExtendedPublicKeyFunc mocks the CanVerifyExtendedPublicKey method.
 	CanVerifyExtendedPublicKeyFunc func() bool
 
+	// DeterministicEntropyFunc mocks the DeterministicEntropy method.
+	DeterministicEntropyFunc func() ([]byte, error)
+
 	// ExtendedPublicKeyFunc mocks the ExtendedPublicKey method.
-	ExtendedPublicKeyFunc func(in1 coin.Coin, in2 signing.AbsoluteKeypath) (*hdkeychain.ExtendedKey, error)
+	ExtendedPublicKeyFunc func(coinMoqParam coin.Coin, absoluteKeypath signing.AbsoluteKeypath) (*hdkeychain.ExtendedKey, error)
+
+	// FeaturesFunc mocks the Features method.
+	FeaturesFunc func() *keystore.Features
+
+	// NameFunc mocks the Name method.
+	NameFunc func() (string, error)
+
+	// ObserveFunc mocks the Observe method.
+	ObserveFunc func(fn func(observable.Event)) func()
 
 	// RootFingerprintFunc mocks the RootFingerprint method.
 	RootFingerprintFunc func() ([]byte, error)
 
 	// SignBTCMessageFunc mocks the SignBTCMessage method.
-	SignBTCMessageFunc func(message []byte, keypath signing.AbsoluteKeypath, scriptType signing.ScriptType) ([]byte, error)
+	SignBTCMessageFunc func(message []byte, keypath signing.AbsoluteKeypath, scriptType signing.ScriptType, coinMoqParam coin.Code) ([]byte, error)
 
 	// SignETHMessageFunc mocks the SignETHMessage method.
-	SignETHMessageFunc func(message []byte, keypath signing.AbsoluteKeypath) ([]byte, error)
+	SignETHMessageFunc func(chainID uint64, message []byte, keypath signing.AbsoluteKeypath) ([]byte, error)
+
+	// SignETHTypedMessageFunc mocks the SignETHTypedMessage method.
+	SignETHTypedMessageFunc func(chainID uint64, data []byte, keypath signing.AbsoluteKeypath) ([]byte, error)
 
 	// SignTransactionFunc mocks the SignTransaction method.
-	SignTransactionFunc func(in1 interface{}) error
+	SignTransactionFunc func(ifaceVal interface{}) error
 
 	// SupportsAccountFunc mocks the SupportsAccount method.
 	SupportsAccountFunc func(coinInstance coin.Coin, meta interface{}) bool
@@ -121,42 +147,69 @@ type KeystoreMock struct {
 	// SupportsCoinFunc mocks the SupportsCoin method.
 	SupportsCoinFunc func(coinInstance coin.Coin) bool
 
-	// SupportsMultipleAccountsFunc mocks the SupportsMultipleAccounts method.
-	SupportsMultipleAccountsFunc func() bool
+	// SupportsDeterministicEntropyFunc mocks the SupportsDeterministicEntropy method.
+	SupportsDeterministicEntropyFunc func() bool
 
-	// SupportsUnifiedAccountsFunc mocks the SupportsUnifiedAccounts method.
-	SupportsUnifiedAccountsFunc func() bool
+	// SupportsEIP1559Func mocks the SupportsEIP1559 method.
+	SupportsEIP1559Func func() bool
+
+	// SupportsFeatureFunc mocks the SupportsFeature method.
+	SupportsFeatureFunc func(feature keystore.Feature) error
 
 	// TypeFunc mocks the Type method.
 	TypeFunc func() keystore.Type
 
-	// VerifyAddressFunc mocks the VerifyAddress method.
-	VerifyAddressFunc func(in1 *signing.Configuration, in2 coin.Coin) error
+	// VerifyAddressBTCFunc mocks the VerifyAddressBTC method.
+	VerifyAddressBTCFunc func(accountConfiguration *signing.Configuration, derivation btctypes.Derivation, coinMoqParam coin.Coin) error
+
+	// VerifyAddressETHFunc mocks the VerifyAddressETH method.
+	VerifyAddressETHFunc func(configuration *signing.Configuration, coinMoqParam coin.Coin) error
 
 	// VerifyExtendedPublicKeyFunc mocks the VerifyExtendedPublicKey method.
-	VerifyExtendedPublicKeyFunc func(in1 coin.Coin, in2 *signing.Configuration) error
+	VerifyExtendedPublicKeyFunc func(coinMoqParam coin.Coin, configuration *signing.Configuration) error
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// BTCXPubs holds details about calls to the BTCXPubs method.
+		BTCXPubs []struct {
+			// CoinMoqParam is the coinMoqParam argument value.
+			CoinMoqParam coin.Coin
+			// AbsoluteKeypaths is the absoluteKeypaths argument value.
+			AbsoluteKeypaths []signing.AbsoluteKeypath
+		}
 		// CanSignMessage holds details about calls to the CanSignMessage method.
 		CanSignMessage []struct {
-			// In1 is the in1 argument value.
-			In1 coin.Code
+			// Code is the code argument value.
+			Code coin.Code
 		}
 		// CanVerifyAddress holds details about calls to the CanVerifyAddress method.
 		CanVerifyAddress []struct {
-			// In1 is the in1 argument value.
-			In1 coin.Coin
+			// CoinMoqParam is the coinMoqParam argument value.
+			CoinMoqParam coin.Coin
 		}
 		// CanVerifyExtendedPublicKey holds details about calls to the CanVerifyExtendedPublicKey method.
 		CanVerifyExtendedPublicKey []struct {
 		}
+		// DeterministicEntropy holds details about calls to the DeterministicEntropy method.
+		DeterministicEntropy []struct {
+		}
 		// ExtendedPublicKey holds details about calls to the ExtendedPublicKey method.
 		ExtendedPublicKey []struct {
-			// In1 is the in1 argument value.
-			In1 coin.Coin
-			// In2 is the in2 argument value.
-			In2 signing.AbsoluteKeypath
+			// CoinMoqParam is the coinMoqParam argument value.
+			CoinMoqParam coin.Coin
+			// AbsoluteKeypath is the absoluteKeypath argument value.
+			AbsoluteKeypath signing.AbsoluteKeypath
+		}
+		// Features holds details about calls to the Features method.
+		Features []struct {
+		}
+		// Name holds details about calls to the Name method.
+		Name []struct {
+		}
+		// Observe holds details about calls to the Observe method.
+		Observe []struct {
+			// Fn is the fn argument value.
+			Fn func(observable.Event)
 		}
 		// RootFingerprint holds details about calls to the RootFingerprint method.
 		RootFingerprint []struct {
@@ -169,18 +222,31 @@ type KeystoreMock struct {
 			Keypath signing.AbsoluteKeypath
 			// ScriptType is the scriptType argument value.
 			ScriptType signing.ScriptType
+			// CoinMoqParam is the coinMoqParam argument value.
+			CoinMoqParam coin.Code
 		}
 		// SignETHMessage holds details about calls to the SignETHMessage method.
 		SignETHMessage []struct {
+			// ChainID is the chainID argument value.
+			ChainID uint64
 			// Message is the message argument value.
 			Message []byte
 			// Keypath is the keypath argument value.
 			Keypath signing.AbsoluteKeypath
 		}
+		// SignETHTypedMessage holds details about calls to the SignETHTypedMessage method.
+		SignETHTypedMessage []struct {
+			// ChainID is the chainID argument value.
+			ChainID uint64
+			// Data is the data argument value.
+			Data []byte
+			// Keypath is the keypath argument value.
+			Keypath signing.AbsoluteKeypath
+		}
 		// SignTransaction holds details about calls to the SignTransaction method.
 		SignTransaction []struct {
-			// In1 is the in1 argument value.
-			In1 interface{}
+			// IfaceVal is the ifaceVal argument value.
+			IfaceVal interface{}
 		}
 		// SupportsAccount holds details about calls to the SupportsAccount method.
 		SupportsAccount []struct {
@@ -194,91 +260,166 @@ type KeystoreMock struct {
 			// CoinInstance is the coinInstance argument value.
 			CoinInstance coin.Coin
 		}
-		// SupportsMultipleAccounts holds details about calls to the SupportsMultipleAccounts method.
-		SupportsMultipleAccounts []struct {
+		// SupportsDeterministicEntropy holds details about calls to the SupportsDeterministicEntropy method.
+		SupportsDeterministicEntropy []struct {
 		}
-		// SupportsUnifiedAccounts holds details about calls to the SupportsUnifiedAccounts method.
-		SupportsUnifiedAccounts []struct {
+		// SupportsEIP1559 holds details about calls to the SupportsEIP1559 method.
+		SupportsEIP1559 []struct {
+		}
+		// SupportsFeature holds details about calls to the SupportsFeature method.
+		SupportsFeature []struct {
+			// Feature is the feature argument value.
+			Feature keystore.Feature
 		}
 		// Type holds details about calls to the Type method.
 		Type []struct {
 		}
-		// VerifyAddress holds details about calls to the VerifyAddress method.
-		VerifyAddress []struct {
-			// In1 is the in1 argument value.
-			In1 *signing.Configuration
-			// In2 is the in2 argument value.
-			In2 coin.Coin
+		// VerifyAddressBTC holds details about calls to the VerifyAddressBTC method.
+		VerifyAddressBTC []struct {
+			// AccountConfiguration is the accountConfiguration argument value.
+			AccountConfiguration *signing.Configuration
+			// Derivation is the derivation argument value.
+			Derivation btctypes.Derivation
+			// CoinMoqParam is the coinMoqParam argument value.
+			CoinMoqParam coin.Coin
+		}
+		// VerifyAddressETH holds details about calls to the VerifyAddressETH method.
+		VerifyAddressETH []struct {
+			// Configuration is the configuration argument value.
+			Configuration *signing.Configuration
+			// CoinMoqParam is the coinMoqParam argument value.
+			CoinMoqParam coin.Coin
 		}
 		// VerifyExtendedPublicKey holds details about calls to the VerifyExtendedPublicKey method.
 		VerifyExtendedPublicKey []struct {
-			// In1 is the in1 argument value.
-			In1 coin.Coin
-			// In2 is the in2 argument value.
-			In2 *signing.Configuration
+			// CoinMoqParam is the coinMoqParam argument value.
+			CoinMoqParam coin.Coin
+			// Configuration is the configuration argument value.
+			Configuration *signing.Configuration
 		}
 	}
+	lockBTCXPubs                     sync.RWMutex
+	lockCanSignMessage               sync.RWMutex
+	lockCanVerifyAddress             sync.RWMutex
+	lockCanVerifyExtendedPublicKey   sync.RWMutex
+	lockDeterministicEntropy         sync.RWMutex
+	lockExtendedPublicKey            sync.RWMutex
+	lockFeatures                     sync.RWMutex
+	lockName                         sync.RWMutex
+	lockObserve                      sync.RWMutex
+	lockRootFingerprint              sync.RWMutex
+	lockSignBTCMessage               sync.RWMutex
+	lockSignETHMessage               sync.RWMutex
+	lockSignETHTypedMessage          sync.RWMutex
+	lockSignTransaction              sync.RWMutex
+	lockSupportsAccount              sync.RWMutex
+	lockSupportsCoin                 sync.RWMutex
+	lockSupportsDeterministicEntropy sync.RWMutex
+	lockSupportsEIP1559              sync.RWMutex
+	lockSupportsFeature              sync.RWMutex
+	lockType                         sync.RWMutex
+	lockVerifyAddressBTC             sync.RWMutex
+	lockVerifyAddressETH             sync.RWMutex
+	lockVerifyExtendedPublicKey      sync.RWMutex
+}
+
+// BTCXPubs calls BTCXPubsFunc.
+func (mock *KeystoreMock) BTCXPubs(coinMoqParam coin.Coin, absoluteKeypaths []signing.AbsoluteKeypath) ([]*hdkeychain.ExtendedKey, error) {
+	if mock.BTCXPubsFunc == nil {
+		panic("KeystoreMock.BTCXPubsFunc: method is nil but Keystore.BTCXPubs was just called")
+	}
+	callInfo := struct {
+		CoinMoqParam     coin.Coin
+		AbsoluteKeypaths []signing.AbsoluteKeypath
+	}{
+		CoinMoqParam:     coinMoqParam,
+		AbsoluteKeypaths: absoluteKeypaths,
+	}
+	mock.lockBTCXPubs.Lock()
+	mock.calls.BTCXPubs = append(mock.calls.BTCXPubs, callInfo)
+	mock.lockBTCXPubs.Unlock()
+	return mock.BTCXPubsFunc(coinMoqParam, absoluteKeypaths)
+}
+
+// BTCXPubsCalls gets all the calls that were made to BTCXPubs.
+// Check the length with:
+//
+//	len(mockedKeystore.BTCXPubsCalls())
+func (mock *KeystoreMock) BTCXPubsCalls() []struct {
+	CoinMoqParam     coin.Coin
+	AbsoluteKeypaths []signing.AbsoluteKeypath
+} {
+	var calls []struct {
+		CoinMoqParam     coin.Coin
+		AbsoluteKeypaths []signing.AbsoluteKeypath
+	}
+	mock.lockBTCXPubs.RLock()
+	calls = mock.calls.BTCXPubs
+	mock.lockBTCXPubs.RUnlock()
+	return calls
 }
 
 // CanSignMessage calls CanSignMessageFunc.
-func (mock *KeystoreMock) CanSignMessage(in1 coin.Code) bool {
+func (mock *KeystoreMock) CanSignMessage(code coin.Code) bool {
 	if mock.CanSignMessageFunc == nil {
 		panic("KeystoreMock.CanSignMessageFunc: method is nil but Keystore.CanSignMessage was just called")
 	}
 	callInfo := struct {
-		In1 coin.Code
+		Code coin.Code
 	}{
-		In1: in1,
+		Code: code,
 	}
-	lockKeystoreMockCanSignMessage.Lock()
+	mock.lockCanSignMessage.Lock()
 	mock.calls.CanSignMessage = append(mock.calls.CanSignMessage, callInfo)
-	lockKeystoreMockCanSignMessage.Unlock()
-	return mock.CanSignMessageFunc(in1)
+	mock.lockCanSignMessage.Unlock()
+	return mock.CanSignMessageFunc(code)
 }
 
 // CanSignMessageCalls gets all the calls that were made to CanSignMessage.
 // Check the length with:
-//     len(mockedKeystore.CanSignMessageCalls())
+//
+//	len(mockedKeystore.CanSignMessageCalls())
 func (mock *KeystoreMock) CanSignMessageCalls() []struct {
-	In1 coin.Code
+	Code coin.Code
 } {
 	var calls []struct {
-		In1 coin.Code
+		Code coin.Code
 	}
-	lockKeystoreMockCanSignMessage.RLock()
+	mock.lockCanSignMessage.RLock()
 	calls = mock.calls.CanSignMessage
-	lockKeystoreMockCanSignMessage.RUnlock()
+	mock.lockCanSignMessage.RUnlock()
 	return calls
 }
 
 // CanVerifyAddress calls CanVerifyAddressFunc.
-func (mock *KeystoreMock) CanVerifyAddress(in1 coin.Coin) (bool, bool, error) {
+func (mock *KeystoreMock) CanVerifyAddress(coinMoqParam coin.Coin) (bool, bool, error) {
 	if mock.CanVerifyAddressFunc == nil {
 		panic("KeystoreMock.CanVerifyAddressFunc: method is nil but Keystore.CanVerifyAddress was just called")
 	}
 	callInfo := struct {
-		In1 coin.Coin
+		CoinMoqParam coin.Coin
 	}{
-		In1: in1,
+		CoinMoqParam: coinMoqParam,
 	}
-	lockKeystoreMockCanVerifyAddress.Lock()
+	mock.lockCanVerifyAddress.Lock()
 	mock.calls.CanVerifyAddress = append(mock.calls.CanVerifyAddress, callInfo)
-	lockKeystoreMockCanVerifyAddress.Unlock()
-	return mock.CanVerifyAddressFunc(in1)
+	mock.lockCanVerifyAddress.Unlock()
+	return mock.CanVerifyAddressFunc(coinMoqParam)
 }
 
 // CanVerifyAddressCalls gets all the calls that were made to CanVerifyAddress.
 // Check the length with:
-//     len(mockedKeystore.CanVerifyAddressCalls())
+//
+//	len(mockedKeystore.CanVerifyAddressCalls())
 func (mock *KeystoreMock) CanVerifyAddressCalls() []struct {
-	In1 coin.Coin
+	CoinMoqParam coin.Coin
 } {
 	var calls []struct {
-		In1 coin.Coin
+		CoinMoqParam coin.Coin
 	}
-	lockKeystoreMockCanVerifyAddress.RLock()
+	mock.lockCanVerifyAddress.RLock()
 	calls = mock.calls.CanVerifyAddress
-	lockKeystoreMockCanVerifyAddress.RUnlock()
+	mock.lockCanVerifyAddress.RUnlock()
 	return calls
 }
 
@@ -289,57 +430,172 @@ func (mock *KeystoreMock) CanVerifyExtendedPublicKey() bool {
 	}
 	callInfo := struct {
 	}{}
-	lockKeystoreMockCanVerifyExtendedPublicKey.Lock()
+	mock.lockCanVerifyExtendedPublicKey.Lock()
 	mock.calls.CanVerifyExtendedPublicKey = append(mock.calls.CanVerifyExtendedPublicKey, callInfo)
-	lockKeystoreMockCanVerifyExtendedPublicKey.Unlock()
+	mock.lockCanVerifyExtendedPublicKey.Unlock()
 	return mock.CanVerifyExtendedPublicKeyFunc()
 }
 
 // CanVerifyExtendedPublicKeyCalls gets all the calls that were made to CanVerifyExtendedPublicKey.
 // Check the length with:
-//     len(mockedKeystore.CanVerifyExtendedPublicKeyCalls())
+//
+//	len(mockedKeystore.CanVerifyExtendedPublicKeyCalls())
 func (mock *KeystoreMock) CanVerifyExtendedPublicKeyCalls() []struct {
 } {
 	var calls []struct {
 	}
-	lockKeystoreMockCanVerifyExtendedPublicKey.RLock()
+	mock.lockCanVerifyExtendedPublicKey.RLock()
 	calls = mock.calls.CanVerifyExtendedPublicKey
-	lockKeystoreMockCanVerifyExtendedPublicKey.RUnlock()
+	mock.lockCanVerifyExtendedPublicKey.RUnlock()
+	return calls
+}
+
+// DeterministicEntropy calls DeterministicEntropyFunc.
+func (mock *KeystoreMock) DeterministicEntropy() ([]byte, error) {
+	if mock.DeterministicEntropyFunc == nil {
+		panic("KeystoreMock.DeterministicEntropyFunc: method is nil but Keystore.DeterministicEntropy was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockDeterministicEntropy.Lock()
+	mock.calls.DeterministicEntropy = append(mock.calls.DeterministicEntropy, callInfo)
+	mock.lockDeterministicEntropy.Unlock()
+	return mock.DeterministicEntropyFunc()
+}
+
+// DeterministicEntropyCalls gets all the calls that were made to DeterministicEntropy.
+// Check the length with:
+//
+//	len(mockedKeystore.DeterministicEntropyCalls())
+func (mock *KeystoreMock) DeterministicEntropyCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockDeterministicEntropy.RLock()
+	calls = mock.calls.DeterministicEntropy
+	mock.lockDeterministicEntropy.RUnlock()
 	return calls
 }
 
 // ExtendedPublicKey calls ExtendedPublicKeyFunc.
-func (mock *KeystoreMock) ExtendedPublicKey(in1 coin.Coin, in2 signing.AbsoluteKeypath) (*hdkeychain.ExtendedKey, error) {
+func (mock *KeystoreMock) ExtendedPublicKey(coinMoqParam coin.Coin, absoluteKeypath signing.AbsoluteKeypath) (*hdkeychain.ExtendedKey, error) {
 	if mock.ExtendedPublicKeyFunc == nil {
 		panic("KeystoreMock.ExtendedPublicKeyFunc: method is nil but Keystore.ExtendedPublicKey was just called")
 	}
 	callInfo := struct {
-		In1 coin.Coin
-		In2 signing.AbsoluteKeypath
+		CoinMoqParam    coin.Coin
+		AbsoluteKeypath signing.AbsoluteKeypath
 	}{
-		In1: in1,
-		In2: in2,
+		CoinMoqParam:    coinMoqParam,
+		AbsoluteKeypath: absoluteKeypath,
 	}
-	lockKeystoreMockExtendedPublicKey.Lock()
+	mock.lockExtendedPublicKey.Lock()
 	mock.calls.ExtendedPublicKey = append(mock.calls.ExtendedPublicKey, callInfo)
-	lockKeystoreMockExtendedPublicKey.Unlock()
-	return mock.ExtendedPublicKeyFunc(in1, in2)
+	mock.lockExtendedPublicKey.Unlock()
+	return mock.ExtendedPublicKeyFunc(coinMoqParam, absoluteKeypath)
 }
 
 // ExtendedPublicKeyCalls gets all the calls that were made to ExtendedPublicKey.
 // Check the length with:
-//     len(mockedKeystore.ExtendedPublicKeyCalls())
+//
+//	len(mockedKeystore.ExtendedPublicKeyCalls())
 func (mock *KeystoreMock) ExtendedPublicKeyCalls() []struct {
-	In1 coin.Coin
-	In2 signing.AbsoluteKeypath
+	CoinMoqParam    coin.Coin
+	AbsoluteKeypath signing.AbsoluteKeypath
 } {
 	var calls []struct {
-		In1 coin.Coin
-		In2 signing.AbsoluteKeypath
+		CoinMoqParam    coin.Coin
+		AbsoluteKeypath signing.AbsoluteKeypath
 	}
-	lockKeystoreMockExtendedPublicKey.RLock()
+	mock.lockExtendedPublicKey.RLock()
 	calls = mock.calls.ExtendedPublicKey
-	lockKeystoreMockExtendedPublicKey.RUnlock()
+	mock.lockExtendedPublicKey.RUnlock()
+	return calls
+}
+
+// Features calls FeaturesFunc.
+func (mock *KeystoreMock) Features() *keystore.Features {
+	if mock.FeaturesFunc == nil {
+		panic("KeystoreMock.FeaturesFunc: method is nil but Keystore.Features was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockFeatures.Lock()
+	mock.calls.Features = append(mock.calls.Features, callInfo)
+	mock.lockFeatures.Unlock()
+	return mock.FeaturesFunc()
+}
+
+// FeaturesCalls gets all the calls that were made to Features.
+// Check the length with:
+//
+//	len(mockedKeystore.FeaturesCalls())
+func (mock *KeystoreMock) FeaturesCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockFeatures.RLock()
+	calls = mock.calls.Features
+	mock.lockFeatures.RUnlock()
+	return calls
+}
+
+// Name calls NameFunc.
+func (mock *KeystoreMock) Name() (string, error) {
+	if mock.NameFunc == nil {
+		panic("KeystoreMock.NameFunc: method is nil but Keystore.Name was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockName.Lock()
+	mock.calls.Name = append(mock.calls.Name, callInfo)
+	mock.lockName.Unlock()
+	return mock.NameFunc()
+}
+
+// NameCalls gets all the calls that were made to Name.
+// Check the length with:
+//
+//	len(mockedKeystore.NameCalls())
+func (mock *KeystoreMock) NameCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockName.RLock()
+	calls = mock.calls.Name
+	mock.lockName.RUnlock()
+	return calls
+}
+
+// Observe calls ObserveFunc.
+func (mock *KeystoreMock) Observe(fn func(observable.Event)) func() {
+	if mock.ObserveFunc == nil {
+		panic("KeystoreMock.ObserveFunc: method is nil but Keystore.Observe was just called")
+	}
+	callInfo := struct {
+		Fn func(observable.Event)
+	}{
+		Fn: fn,
+	}
+	mock.lockObserve.Lock()
+	mock.calls.Observe = append(mock.calls.Observe, callInfo)
+	mock.lockObserve.Unlock()
+	return mock.ObserveFunc(fn)
+}
+
+// ObserveCalls gets all the calls that were made to Observe.
+// Check the length with:
+//
+//	len(mockedKeystore.ObserveCalls())
+func (mock *KeystoreMock) ObserveCalls() []struct {
+	Fn func(observable.Event)
+} {
+	var calls []struct {
+		Fn func(observable.Event)
+	}
+	mock.lockObserve.RLock()
+	calls = mock.calls.Observe
+	mock.lockObserve.RUnlock()
 	return calls
 }
 
@@ -350,127 +606,179 @@ func (mock *KeystoreMock) RootFingerprint() ([]byte, error) {
 	}
 	callInfo := struct {
 	}{}
-	lockKeystoreMockRootFingerprint.Lock()
+	mock.lockRootFingerprint.Lock()
 	mock.calls.RootFingerprint = append(mock.calls.RootFingerprint, callInfo)
-	lockKeystoreMockRootFingerprint.Unlock()
+	mock.lockRootFingerprint.Unlock()
 	return mock.RootFingerprintFunc()
 }
 
 // RootFingerprintCalls gets all the calls that were made to RootFingerprint.
 // Check the length with:
-//     len(mockedKeystore.RootFingerprintCalls())
+//
+//	len(mockedKeystore.RootFingerprintCalls())
 func (mock *KeystoreMock) RootFingerprintCalls() []struct {
 } {
 	var calls []struct {
 	}
-	lockKeystoreMockRootFingerprint.RLock()
+	mock.lockRootFingerprint.RLock()
 	calls = mock.calls.RootFingerprint
-	lockKeystoreMockRootFingerprint.RUnlock()
+	mock.lockRootFingerprint.RUnlock()
 	return calls
 }
 
 // SignBTCMessage calls SignBTCMessageFunc.
-func (mock *KeystoreMock) SignBTCMessage(message []byte, keypath signing.AbsoluteKeypath, scriptType signing.ScriptType) ([]byte, error) {
+func (mock *KeystoreMock) SignBTCMessage(message []byte, keypath signing.AbsoluteKeypath, scriptType signing.ScriptType, coinMoqParam coin.Code) ([]byte, error) {
 	if mock.SignBTCMessageFunc == nil {
 		panic("KeystoreMock.SignBTCMessageFunc: method is nil but Keystore.SignBTCMessage was just called")
 	}
 	callInfo := struct {
-		Message    []byte
-		Keypath    signing.AbsoluteKeypath
-		ScriptType signing.ScriptType
+		Message      []byte
+		Keypath      signing.AbsoluteKeypath
+		ScriptType   signing.ScriptType
+		CoinMoqParam coin.Code
 	}{
-		Message:    message,
-		Keypath:    keypath,
-		ScriptType: scriptType,
+		Message:      message,
+		Keypath:      keypath,
+		ScriptType:   scriptType,
+		CoinMoqParam: coinMoqParam,
 	}
-	lockKeystoreMockSignBTCMessage.Lock()
+	mock.lockSignBTCMessage.Lock()
 	mock.calls.SignBTCMessage = append(mock.calls.SignBTCMessage, callInfo)
-	lockKeystoreMockSignBTCMessage.Unlock()
-	return mock.SignBTCMessageFunc(message, keypath, scriptType)
+	mock.lockSignBTCMessage.Unlock()
+	return mock.SignBTCMessageFunc(message, keypath, scriptType, coinMoqParam)
 }
 
 // SignBTCMessageCalls gets all the calls that were made to SignBTCMessage.
 // Check the length with:
-//     len(mockedKeystore.SignBTCMessageCalls())
+//
+//	len(mockedKeystore.SignBTCMessageCalls())
 func (mock *KeystoreMock) SignBTCMessageCalls() []struct {
-	Message    []byte
-	Keypath    signing.AbsoluteKeypath
-	ScriptType signing.ScriptType
+	Message      []byte
+	Keypath      signing.AbsoluteKeypath
+	ScriptType   signing.ScriptType
+	CoinMoqParam coin.Code
 } {
 	var calls []struct {
-		Message    []byte
-		Keypath    signing.AbsoluteKeypath
-		ScriptType signing.ScriptType
+		Message      []byte
+		Keypath      signing.AbsoluteKeypath
+		ScriptType   signing.ScriptType
+		CoinMoqParam coin.Code
 	}
-	lockKeystoreMockSignBTCMessage.RLock()
+	mock.lockSignBTCMessage.RLock()
 	calls = mock.calls.SignBTCMessage
-	lockKeystoreMockSignBTCMessage.RUnlock()
+	mock.lockSignBTCMessage.RUnlock()
 	return calls
 }
 
 // SignETHMessage calls SignETHMessageFunc.
-func (mock *KeystoreMock) SignETHMessage(message []byte, keypath signing.AbsoluteKeypath) ([]byte, error) {
+func (mock *KeystoreMock) SignETHMessage(chainID uint64, message []byte, keypath signing.AbsoluteKeypath) ([]byte, error) {
 	if mock.SignETHMessageFunc == nil {
 		panic("KeystoreMock.SignETHMessageFunc: method is nil but Keystore.SignETHMessage was just called")
 	}
 	callInfo := struct {
+		ChainID uint64
 		Message []byte
 		Keypath signing.AbsoluteKeypath
 	}{
+		ChainID: chainID,
 		Message: message,
 		Keypath: keypath,
 	}
-	lockKeystoreMockSignETHMessage.Lock()
+	mock.lockSignETHMessage.Lock()
 	mock.calls.SignETHMessage = append(mock.calls.SignETHMessage, callInfo)
-	lockKeystoreMockSignETHMessage.Unlock()
-	return mock.SignETHMessageFunc(message, keypath)
+	mock.lockSignETHMessage.Unlock()
+	return mock.SignETHMessageFunc(chainID, message, keypath)
 }
 
 // SignETHMessageCalls gets all the calls that were made to SignETHMessage.
 // Check the length with:
-//     len(mockedKeystore.SignETHMessageCalls())
+//
+//	len(mockedKeystore.SignETHMessageCalls())
 func (mock *KeystoreMock) SignETHMessageCalls() []struct {
+	ChainID uint64
 	Message []byte
 	Keypath signing.AbsoluteKeypath
 } {
 	var calls []struct {
+		ChainID uint64
 		Message []byte
 		Keypath signing.AbsoluteKeypath
 	}
-	lockKeystoreMockSignETHMessage.RLock()
+	mock.lockSignETHMessage.RLock()
 	calls = mock.calls.SignETHMessage
-	lockKeystoreMockSignETHMessage.RUnlock()
+	mock.lockSignETHMessage.RUnlock()
+	return calls
+}
+
+// SignETHTypedMessage calls SignETHTypedMessageFunc.
+func (mock *KeystoreMock) SignETHTypedMessage(chainID uint64, data []byte, keypath signing.AbsoluteKeypath) ([]byte, error) {
+	if mock.SignETHTypedMessageFunc == nil {
+		panic("KeystoreMock.SignETHTypedMessageFunc: method is nil but Keystore.SignETHTypedMessage was just called")
+	}
+	callInfo := struct {
+		ChainID uint64
+		Data    []byte
+		Keypath signing.AbsoluteKeypath
+	}{
+		ChainID: chainID,
+		Data:    data,
+		Keypath: keypath,
+	}
+	mock.lockSignETHTypedMessage.Lock()
+	mock.calls.SignETHTypedMessage = append(mock.calls.SignETHTypedMessage, callInfo)
+	mock.lockSignETHTypedMessage.Unlock()
+	return mock.SignETHTypedMessageFunc(chainID, data, keypath)
+}
+
+// SignETHTypedMessageCalls gets all the calls that were made to SignETHTypedMessage.
+// Check the length with:
+//
+//	len(mockedKeystore.SignETHTypedMessageCalls())
+func (mock *KeystoreMock) SignETHTypedMessageCalls() []struct {
+	ChainID uint64
+	Data    []byte
+	Keypath signing.AbsoluteKeypath
+} {
+	var calls []struct {
+		ChainID uint64
+		Data    []byte
+		Keypath signing.AbsoluteKeypath
+	}
+	mock.lockSignETHTypedMessage.RLock()
+	calls = mock.calls.SignETHTypedMessage
+	mock.lockSignETHTypedMessage.RUnlock()
 	return calls
 }
 
 // SignTransaction calls SignTransactionFunc.
-func (mock *KeystoreMock) SignTransaction(in1 interface{}) error {
+func (mock *KeystoreMock) SignTransaction(ifaceVal interface{}) error {
 	if mock.SignTransactionFunc == nil {
 		panic("KeystoreMock.SignTransactionFunc: method is nil but Keystore.SignTransaction was just called")
 	}
 	callInfo := struct {
-		In1 interface{}
+		IfaceVal interface{}
 	}{
-		In1: in1,
+		IfaceVal: ifaceVal,
 	}
-	lockKeystoreMockSignTransaction.Lock()
+	mock.lockSignTransaction.Lock()
 	mock.calls.SignTransaction = append(mock.calls.SignTransaction, callInfo)
-	lockKeystoreMockSignTransaction.Unlock()
-	return mock.SignTransactionFunc(in1)
+	mock.lockSignTransaction.Unlock()
+	return mock.SignTransactionFunc(ifaceVal)
 }
 
 // SignTransactionCalls gets all the calls that were made to SignTransaction.
 // Check the length with:
-//     len(mockedKeystore.SignTransactionCalls())
+//
+//	len(mockedKeystore.SignTransactionCalls())
 func (mock *KeystoreMock) SignTransactionCalls() []struct {
-	In1 interface{}
+	IfaceVal interface{}
 } {
 	var calls []struct {
-		In1 interface{}
+		IfaceVal interface{}
 	}
-	lockKeystoreMockSignTransaction.RLock()
+	mock.lockSignTransaction.RLock()
 	calls = mock.calls.SignTransaction
-	lockKeystoreMockSignTransaction.RUnlock()
+	mock.lockSignTransaction.RUnlock()
 	return calls
 }
 
@@ -486,15 +794,16 @@ func (mock *KeystoreMock) SupportsAccount(coinInstance coin.Coin, meta interface
 		CoinInstance: coinInstance,
 		Meta:         meta,
 	}
-	lockKeystoreMockSupportsAccount.Lock()
+	mock.lockSupportsAccount.Lock()
 	mock.calls.SupportsAccount = append(mock.calls.SupportsAccount, callInfo)
-	lockKeystoreMockSupportsAccount.Unlock()
+	mock.lockSupportsAccount.Unlock()
 	return mock.SupportsAccountFunc(coinInstance, meta)
 }
 
 // SupportsAccountCalls gets all the calls that were made to SupportsAccount.
 // Check the length with:
-//     len(mockedKeystore.SupportsAccountCalls())
+//
+//	len(mockedKeystore.SupportsAccountCalls())
 func (mock *KeystoreMock) SupportsAccountCalls() []struct {
 	CoinInstance coin.Coin
 	Meta         interface{}
@@ -503,9 +812,9 @@ func (mock *KeystoreMock) SupportsAccountCalls() []struct {
 		CoinInstance coin.Coin
 		Meta         interface{}
 	}
-	lockKeystoreMockSupportsAccount.RLock()
+	mock.lockSupportsAccount.RLock()
 	calls = mock.calls.SupportsAccount
-	lockKeystoreMockSupportsAccount.RUnlock()
+	mock.lockSupportsAccount.RUnlock()
 	return calls
 }
 
@@ -519,76 +828,111 @@ func (mock *KeystoreMock) SupportsCoin(coinInstance coin.Coin) bool {
 	}{
 		CoinInstance: coinInstance,
 	}
-	lockKeystoreMockSupportsCoin.Lock()
+	mock.lockSupportsCoin.Lock()
 	mock.calls.SupportsCoin = append(mock.calls.SupportsCoin, callInfo)
-	lockKeystoreMockSupportsCoin.Unlock()
+	mock.lockSupportsCoin.Unlock()
 	return mock.SupportsCoinFunc(coinInstance)
 }
 
 // SupportsCoinCalls gets all the calls that were made to SupportsCoin.
 // Check the length with:
-//     len(mockedKeystore.SupportsCoinCalls())
+//
+//	len(mockedKeystore.SupportsCoinCalls())
 func (mock *KeystoreMock) SupportsCoinCalls() []struct {
 	CoinInstance coin.Coin
 } {
 	var calls []struct {
 		CoinInstance coin.Coin
 	}
-	lockKeystoreMockSupportsCoin.RLock()
+	mock.lockSupportsCoin.RLock()
 	calls = mock.calls.SupportsCoin
-	lockKeystoreMockSupportsCoin.RUnlock()
+	mock.lockSupportsCoin.RUnlock()
 	return calls
 }
 
-// SupportsMultipleAccounts calls SupportsMultipleAccountsFunc.
-func (mock *KeystoreMock) SupportsMultipleAccounts() bool {
-	if mock.SupportsMultipleAccountsFunc == nil {
-		panic("KeystoreMock.SupportsMultipleAccountsFunc: method is nil but Keystore.SupportsMultipleAccounts was just called")
+// SupportsDeterministicEntropy calls SupportsDeterministicEntropyFunc.
+func (mock *KeystoreMock) SupportsDeterministicEntropy() bool {
+	if mock.SupportsDeterministicEntropyFunc == nil {
+		panic("KeystoreMock.SupportsDeterministicEntropyFunc: method is nil but Keystore.SupportsDeterministicEntropy was just called")
 	}
 	callInfo := struct {
 	}{}
-	lockKeystoreMockSupportsMultipleAccounts.Lock()
-	mock.calls.SupportsMultipleAccounts = append(mock.calls.SupportsMultipleAccounts, callInfo)
-	lockKeystoreMockSupportsMultipleAccounts.Unlock()
-	return mock.SupportsMultipleAccountsFunc()
+	mock.lockSupportsDeterministicEntropy.Lock()
+	mock.calls.SupportsDeterministicEntropy = append(mock.calls.SupportsDeterministicEntropy, callInfo)
+	mock.lockSupportsDeterministicEntropy.Unlock()
+	return mock.SupportsDeterministicEntropyFunc()
 }
 
-// SupportsMultipleAccountsCalls gets all the calls that were made to SupportsMultipleAccounts.
+// SupportsDeterministicEntropyCalls gets all the calls that were made to SupportsDeterministicEntropy.
 // Check the length with:
-//     len(mockedKeystore.SupportsMultipleAccountsCalls())
-func (mock *KeystoreMock) SupportsMultipleAccountsCalls() []struct {
+//
+//	len(mockedKeystore.SupportsDeterministicEntropyCalls())
+func (mock *KeystoreMock) SupportsDeterministicEntropyCalls() []struct {
 } {
 	var calls []struct {
 	}
-	lockKeystoreMockSupportsMultipleAccounts.RLock()
-	calls = mock.calls.SupportsMultipleAccounts
-	lockKeystoreMockSupportsMultipleAccounts.RUnlock()
+	mock.lockSupportsDeterministicEntropy.RLock()
+	calls = mock.calls.SupportsDeterministicEntropy
+	mock.lockSupportsDeterministicEntropy.RUnlock()
 	return calls
 }
 
-// SupportsUnifiedAccounts calls SupportsUnifiedAccountsFunc.
-func (mock *KeystoreMock) SupportsUnifiedAccounts() bool {
-	if mock.SupportsUnifiedAccountsFunc == nil {
-		panic("KeystoreMock.SupportsUnifiedAccountsFunc: method is nil but Keystore.SupportsUnifiedAccounts was just called")
+// SupportsEIP1559 calls SupportsEIP1559Func.
+func (mock *KeystoreMock) SupportsEIP1559() bool {
+	if mock.SupportsEIP1559Func == nil {
+		panic("KeystoreMock.SupportsEIP1559Func: method is nil but Keystore.SupportsEIP1559 was just called")
 	}
 	callInfo := struct {
 	}{}
-	lockKeystoreMockSupportsUnifiedAccounts.Lock()
-	mock.calls.SupportsUnifiedAccounts = append(mock.calls.SupportsUnifiedAccounts, callInfo)
-	lockKeystoreMockSupportsUnifiedAccounts.Unlock()
-	return mock.SupportsUnifiedAccountsFunc()
+	mock.lockSupportsEIP1559.Lock()
+	mock.calls.SupportsEIP1559 = append(mock.calls.SupportsEIP1559, callInfo)
+	mock.lockSupportsEIP1559.Unlock()
+	return mock.SupportsEIP1559Func()
 }
 
-// SupportsUnifiedAccountsCalls gets all the calls that were made to SupportsUnifiedAccounts.
+// SupportsEIP1559Calls gets all the calls that were made to SupportsEIP1559.
 // Check the length with:
-//     len(mockedKeystore.SupportsUnifiedAccountsCalls())
-func (mock *KeystoreMock) SupportsUnifiedAccountsCalls() []struct {
+//
+//	len(mockedKeystore.SupportsEIP1559Calls())
+func (mock *KeystoreMock) SupportsEIP1559Calls() []struct {
 } {
 	var calls []struct {
 	}
-	lockKeystoreMockSupportsUnifiedAccounts.RLock()
-	calls = mock.calls.SupportsUnifiedAccounts
-	lockKeystoreMockSupportsUnifiedAccounts.RUnlock()
+	mock.lockSupportsEIP1559.RLock()
+	calls = mock.calls.SupportsEIP1559
+	mock.lockSupportsEIP1559.RUnlock()
+	return calls
+}
+
+// SupportsFeature calls SupportsFeatureFunc.
+func (mock *KeystoreMock) SupportsFeature(feature keystore.Feature) error {
+	if mock.SupportsFeatureFunc == nil {
+		panic("KeystoreMock.SupportsFeatureFunc: method is nil but Keystore.SupportsFeature was just called")
+	}
+	callInfo := struct {
+		Feature keystore.Feature
+	}{
+		Feature: feature,
+	}
+	mock.lockSupportsFeature.Lock()
+	mock.calls.SupportsFeature = append(mock.calls.SupportsFeature, callInfo)
+	mock.lockSupportsFeature.Unlock()
+	return mock.SupportsFeatureFunc(feature)
+}
+
+// SupportsFeatureCalls gets all the calls that were made to SupportsFeature.
+// Check the length with:
+//
+//	len(mockedKeystore.SupportsFeatureCalls())
+func (mock *KeystoreMock) SupportsFeatureCalls() []struct {
+	Feature keystore.Feature
+} {
+	var calls []struct {
+		Feature keystore.Feature
+	}
+	mock.lockSupportsFeature.RLock()
+	calls = mock.calls.SupportsFeature
+	mock.lockSupportsFeature.RUnlock()
 	return calls
 }
 
@@ -599,91 +943,134 @@ func (mock *KeystoreMock) Type() keystore.Type {
 	}
 	callInfo := struct {
 	}{}
-	lockKeystoreMockType.Lock()
+	mock.lockType.Lock()
 	mock.calls.Type = append(mock.calls.Type, callInfo)
-	lockKeystoreMockType.Unlock()
+	mock.lockType.Unlock()
 	return mock.TypeFunc()
 }
 
 // TypeCalls gets all the calls that were made to Type.
 // Check the length with:
-//     len(mockedKeystore.TypeCalls())
+//
+//	len(mockedKeystore.TypeCalls())
 func (mock *KeystoreMock) TypeCalls() []struct {
 } {
 	var calls []struct {
 	}
-	lockKeystoreMockType.RLock()
+	mock.lockType.RLock()
 	calls = mock.calls.Type
-	lockKeystoreMockType.RUnlock()
+	mock.lockType.RUnlock()
 	return calls
 }
 
-// VerifyAddress calls VerifyAddressFunc.
-func (mock *KeystoreMock) VerifyAddress(in1 *signing.Configuration, in2 coin.Coin) error {
-	if mock.VerifyAddressFunc == nil {
-		panic("KeystoreMock.VerifyAddressFunc: method is nil but Keystore.VerifyAddress was just called")
+// VerifyAddressBTC calls VerifyAddressBTCFunc.
+func (mock *KeystoreMock) VerifyAddressBTC(accountConfiguration *signing.Configuration, derivation btctypes.Derivation, coinMoqParam coin.Coin) error {
+	if mock.VerifyAddressBTCFunc == nil {
+		panic("KeystoreMock.VerifyAddressBTCFunc: method is nil but Keystore.VerifyAddressBTC was just called")
 	}
 	callInfo := struct {
-		In1 *signing.Configuration
-		In2 coin.Coin
+		AccountConfiguration *signing.Configuration
+		Derivation           btctypes.Derivation
+		CoinMoqParam         coin.Coin
 	}{
-		In1: in1,
-		In2: in2,
+		AccountConfiguration: accountConfiguration,
+		Derivation:           derivation,
+		CoinMoqParam:         coinMoqParam,
 	}
-	lockKeystoreMockVerifyAddress.Lock()
-	mock.calls.VerifyAddress = append(mock.calls.VerifyAddress, callInfo)
-	lockKeystoreMockVerifyAddress.Unlock()
-	return mock.VerifyAddressFunc(in1, in2)
+	mock.lockVerifyAddressBTC.Lock()
+	mock.calls.VerifyAddressBTC = append(mock.calls.VerifyAddressBTC, callInfo)
+	mock.lockVerifyAddressBTC.Unlock()
+	return mock.VerifyAddressBTCFunc(accountConfiguration, derivation, coinMoqParam)
 }
 
-// VerifyAddressCalls gets all the calls that were made to VerifyAddress.
+// VerifyAddressBTCCalls gets all the calls that were made to VerifyAddressBTC.
 // Check the length with:
-//     len(mockedKeystore.VerifyAddressCalls())
-func (mock *KeystoreMock) VerifyAddressCalls() []struct {
-	In1 *signing.Configuration
-	In2 coin.Coin
+//
+//	len(mockedKeystore.VerifyAddressBTCCalls())
+func (mock *KeystoreMock) VerifyAddressBTCCalls() []struct {
+	AccountConfiguration *signing.Configuration
+	Derivation           btctypes.Derivation
+	CoinMoqParam         coin.Coin
 } {
 	var calls []struct {
-		In1 *signing.Configuration
-		In2 coin.Coin
+		AccountConfiguration *signing.Configuration
+		Derivation           btctypes.Derivation
+		CoinMoqParam         coin.Coin
 	}
-	lockKeystoreMockVerifyAddress.RLock()
-	calls = mock.calls.VerifyAddress
-	lockKeystoreMockVerifyAddress.RUnlock()
+	mock.lockVerifyAddressBTC.RLock()
+	calls = mock.calls.VerifyAddressBTC
+	mock.lockVerifyAddressBTC.RUnlock()
+	return calls
+}
+
+// VerifyAddressETH calls VerifyAddressETHFunc.
+func (mock *KeystoreMock) VerifyAddressETH(configuration *signing.Configuration, coinMoqParam coin.Coin) error {
+	if mock.VerifyAddressETHFunc == nil {
+		panic("KeystoreMock.VerifyAddressETHFunc: method is nil but Keystore.VerifyAddressETH was just called")
+	}
+	callInfo := struct {
+		Configuration *signing.Configuration
+		CoinMoqParam  coin.Coin
+	}{
+		Configuration: configuration,
+		CoinMoqParam:  coinMoqParam,
+	}
+	mock.lockVerifyAddressETH.Lock()
+	mock.calls.VerifyAddressETH = append(mock.calls.VerifyAddressETH, callInfo)
+	mock.lockVerifyAddressETH.Unlock()
+	return mock.VerifyAddressETHFunc(configuration, coinMoqParam)
+}
+
+// VerifyAddressETHCalls gets all the calls that were made to VerifyAddressETH.
+// Check the length with:
+//
+//	len(mockedKeystore.VerifyAddressETHCalls())
+func (mock *KeystoreMock) VerifyAddressETHCalls() []struct {
+	Configuration *signing.Configuration
+	CoinMoqParam  coin.Coin
+} {
+	var calls []struct {
+		Configuration *signing.Configuration
+		CoinMoqParam  coin.Coin
+	}
+	mock.lockVerifyAddressETH.RLock()
+	calls = mock.calls.VerifyAddressETH
+	mock.lockVerifyAddressETH.RUnlock()
 	return calls
 }
 
 // VerifyExtendedPublicKey calls VerifyExtendedPublicKeyFunc.
-func (mock *KeystoreMock) VerifyExtendedPublicKey(in1 coin.Coin, in2 *signing.Configuration) error {
+func (mock *KeystoreMock) VerifyExtendedPublicKey(coinMoqParam coin.Coin, configuration *signing.Configuration) error {
 	if mock.VerifyExtendedPublicKeyFunc == nil {
 		panic("KeystoreMock.VerifyExtendedPublicKeyFunc: method is nil but Keystore.VerifyExtendedPublicKey was just called")
 	}
 	callInfo := struct {
-		In1 coin.Coin
-		In2 *signing.Configuration
+		CoinMoqParam  coin.Coin
+		Configuration *signing.Configuration
 	}{
-		In1: in1,
-		In2: in2,
+		CoinMoqParam:  coinMoqParam,
+		Configuration: configuration,
 	}
-	lockKeystoreMockVerifyExtendedPublicKey.Lock()
+	mock.lockVerifyExtendedPublicKey.Lock()
 	mock.calls.VerifyExtendedPublicKey = append(mock.calls.VerifyExtendedPublicKey, callInfo)
-	lockKeystoreMockVerifyExtendedPublicKey.Unlock()
-	return mock.VerifyExtendedPublicKeyFunc(in1, in2)
+	mock.lockVerifyExtendedPublicKey.Unlock()
+	return mock.VerifyExtendedPublicKeyFunc(coinMoqParam, configuration)
 }
 
 // VerifyExtendedPublicKeyCalls gets all the calls that were made to VerifyExtendedPublicKey.
 // Check the length with:
-//     len(mockedKeystore.VerifyExtendedPublicKeyCalls())
+//
+//	len(mockedKeystore.VerifyExtendedPublicKeyCalls())
 func (mock *KeystoreMock) VerifyExtendedPublicKeyCalls() []struct {
-	In1 coin.Coin
-	In2 *signing.Configuration
+	CoinMoqParam  coin.Coin
+	Configuration *signing.Configuration
 } {
 	var calls []struct {
-		In1 coin.Coin
-		In2 *signing.Configuration
+		CoinMoqParam  coin.Coin
+		Configuration *signing.Configuration
 	}
-	lockKeystoreMockVerifyExtendedPublicKey.RLock()
+	mock.lockVerifyExtendedPublicKey.RLock()
 	calls = mock.calls.VerifyExtendedPublicKey
-	lockKeystoreMockVerifyExtendedPublicKey.RUnlock()
+	mock.lockVerifyExtendedPublicKey.RUnlock()
 	return calls
 }

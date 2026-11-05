@@ -1,104 +1,53 @@
+// SPDX-License-Identifier: Apache-2.0
 
-/**
- * Copyright 2018  Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useMountedRef } from '@/hooks/mount';
+import { CoinCode } from '@/api/account';
+import { subscribeCoinHeaders } from '@/api/coins';
+import { useSubscribe } from '@/hooks/api';
+import { AsciiSpinner } from '@/components/spinner/ascii';
+import style from './headerssync.module.css';
 
-import { Component, h, RenderableProps } from 'preact';
-import { CoinCode } from '../../api/account';
-import { subscribe } from '../../decorators/subscribe';
-import { translate, TranslateProps } from '../../decorators/translate';
-import Spinner from '../spinner/ascii';
-import * as style from './headerssync.module.css';
+export type TProps = {
+  coinCode: CoinCode;
+};
 
-interface IHeadersSyncProps {
-    coinCode: CoinCode;
-}
+export const HeadersSync = ({ coinCode }: TProps) => {
+  const { i18n, t } = useTranslation();
+  const status = useSubscribe(subscribeCoinHeaders(coinCode));
+  const [hidden, setHidden] = useState<boolean>(false);
+  const mounted = useMountedRef();
 
-interface IStatus {
-    targetHeight: number;
-    tip: number;
-    tipAtInitTime: number;
-    tipHashHex: string;
-}
-
-interface ISubscribedHeadersSyncProps {
-    status?: IStatus;
-}
-
-interface IState {
-    show: number;
-}
-
-type Props = ISubscribedHeadersSyncProps & IHeadersSyncProps & TranslateProps;
-
-class HeadersSync extends Component<Props, IState> {
-    public readonly state: IState = {
-        show: 0,
+  useEffect(() => {
+    if (mounted.current && status?.success && (status.status.tip === status.status.targetHeight)) {
+      setTimeout(() => setHidden(true), 4000);
     }
+  }, [mounted, status]);
 
-    componentDidUpdate(prevProps) {
-        const { status } = this.props;
-        if (status && prevProps.status && status.tip !== prevProps.status.tip) {
-            this.setState({ show: status.tip });
-            if (status.tip === status.targetHeight) {
-                // hide component after 4s when tip reached targetHeight
-                setTimeout(() => this.setState(state => state.show === status.tip ? { show: 0 } : null), 4000);
-            }
-        }
-    }
+  if (!status || !status.success || hidden) {
+    return null;
+  }
 
-    render({
-        t,
-        status,
-    }: RenderableProps<Props>, {
-        show,
-    }: IState) {
-        if (!status || !show) {
-            return null;
-        }
-        const total = status.targetHeight - status.tipAtInitTime;
-        const value = 100 * (status.tip - status.tipAtInitTime) / total;
-        const loaded = !total || value >= 100;
-        let formatted = status.tip.toString();
-        let position = formatted.length - 3;
-        while (position > 0) {
-            formatted = formatted.slice(0, position) + "'" + formatted.slice(position);
-            position = position - 3;
-        }
+  const headersStatus = status.status;
+  const total = headersStatus.targetHeight - headersStatus.tipAtInitTime;
+  const value = 100 * (headersStatus.tip - headersStatus.tipAtInitTime) / total;
+  const loaded = !total || value >= 100;
+  const formatted = new Intl.NumberFormat(i18n.language).format(headersStatus.tip);
 
-        return (
-            <div class={style.syncContainer}>
-                <div class={style.syncMessage}>
-                    <div class={style.syncText}>
-                        {t('headerssync.blocksSynced', { blocks: formatted })}
-                        { !loaded && `(${Math.ceil(value)}%)` }
-                    </div>
-                    { !loaded ? (<Spinner />) : null }
-                </div>
-                <div class={style.progressBar}>
-                    <div class={style.progressValue} style={{ width: `${value}%` }}></div>
-                </div>
-            </div>
-        );
-    }
-}
-
-const subscribeHOC = subscribe<ISubscribedHeadersSyncProps, IHeadersSyncProps & TranslateProps>(({ coinCode }) => ({
-    status: `coins/${coinCode}/headers/status`,
-}), false, true)(HeadersSync);
-
-const HOC = translate<IHeadersSyncProps>()(subscribeHOC);
-export { HOC as HeadersSync };
+  return (
+    <div className={style.syncContainer}>
+      <div className={style.syncMessage}>
+        <div className={style.syncText}>
+          {t('headerssync.blocksSynced', { blocks: formatted })}
+          {' '}
+          { !loaded && `(${Math.ceil(value)}%)` }
+        </div>
+        { !loaded ? (<AsciiSpinner />) : null }
+      </div>
+      <div data-testid="progress-bar" className={style.progressBar}>
+        <div className={style.progressValue} style={{ width: `${value}%` }}></div>
+      </div>
+    </div>
+  );
+};

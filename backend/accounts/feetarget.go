@@ -1,21 +1,10 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package accounts
 
 import (
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/btcsuite/btcd/btcutil/v2"
 )
 
 // FeeTarget interface has priority codes.
@@ -39,6 +28,9 @@ func NewFeeTargetCode(code string) (FeeTargetCode, error) {
 	case string(FeeTargetCodeNormal):
 	case string(FeeTargetCodeHigh):
 	case string(FeeTargetCodeCustom):
+	case string(FeeTargetCodeMempoolFastest):
+	case string(FeeTargetCodeMempoolHalfHour):
+	case string(FeeTargetCodeMempoolHour):
 	default:
 		return "", errp.WithStack(errp.Newf("Unrecognized fee target code %s", code))
 	}
@@ -58,10 +50,45 @@ const (
 	// FeeTargetCodeHigh is the high priority fee target.
 	FeeTargetCodeHigh FeeTargetCode = "high"
 
+	// FeeTargetCodeMempoolFastest is the mempool highest priority fee target.
+	FeeTargetCodeMempoolFastest FeeTargetCode = "mFastest"
+
+	// FeeTargetCodeMempoolHalfHour is the mempool half hour fee target.
+	FeeTargetCodeMempoolHalfHour FeeTargetCode = "mHalfHour"
+
+	// FeeTargetCodeMempoolHour is the mempool hour fee target.
+	FeeTargetCodeMempoolHour FeeTargetCode = "mHour"
+
 	// FeeTargetCodeCustom means that the actual feerate is supplied separately instead of being
 	// estimated automatically.
 	FeeTargetCodeCustom FeeTargetCode = "custom"
 
-	// DefaultFeeTarget is the default fee target
+	// DefaultMempoolFeeTarget is the default fee target for mempool fees.
+	DefaultMempoolFeeTarget = FeeTargetCodeMempoolHalfHour
+
+	// DefaultFeeTarget is the default fee target.
 	DefaultFeeTarget = FeeTargetCodeNormal
 )
+
+// MempoolSpaceFees contains mempool.space recommended fees API response
+// (https://mempool.space/docs/api/rest#get-recommended-fees)
+type MempoolSpaceFees struct {
+	FastestFee  int64 `json:"fastestFee"`
+	HalfHourFee int64 `json:"halfHourFee"`
+	HourFee     int64 `json:"hourFee"`
+	MinimumFee  int64 `json:"minimumFee"`
+}
+
+// GetFeeRate returns the btcutil.Amount of the fee for the given FeeTargetCode.
+func (fees MempoolSpaceFees) GetFeeRate(code FeeTargetCode) btcutil.Amount {
+	var feeRatePerByte int64
+	switch code {
+	case FeeTargetCodeMempoolFastest:
+		feeRatePerByte = fees.FastestFee
+	case FeeTargetCodeMempoolHalfHour:
+		feeRatePerByte = fees.HalfHourFee
+	case FeeTargetCodeMempoolHour:
+		feeRatePerByte = fees.HourFee
+	}
+	return btcutil.Amount(feeRatePerByte * 1000)
+}

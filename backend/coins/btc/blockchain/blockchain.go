@@ -1,16 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package blockchain
 
@@ -20,10 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/block-client-go/electrum/types"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 )
 
 // TXHash wraps chainhash.Hash for json deserialization.
@@ -59,7 +48,6 @@ type TxInfo struct {
 	// transaction with an unconfirmed parent transaction.
 	Height int    `json:"height"`
 	TXHash TXHash `json:"tx_hash"`
-	Fee    *int64 `json:"fee"`
 }
 
 // TxHistory is returned by ScriptHashGetHistory.
@@ -74,7 +62,7 @@ func (history TxHistory) Status() string {
 	}
 	status := bytes.Buffer{}
 	for _, tx := range history {
-		status.WriteString(fmt.Sprintf("%s:%d:", tx.TXHash.Hash().String(), tx.Height))
+		fmt.Fprintf(&status, "%s:%d:", tx.TXHash.Hash().String(), tx.Height)
 	}
 	return hex.EncodeToString(chainhash.HashB(status.Bytes()))
 }
@@ -87,25 +75,36 @@ func NewScriptHashHex(pkScript []byte) ScriptHashHex {
 	return ScriptHashHex(chainhash.HashH(pkScript).String())
 }
 
-// Header is returned by HeadersSubscribe().
-type Header struct {
-	BlockHeight int
+// HeadersResult is returned by Headers().
+type HeadersResult struct {
+	// Headers are the returned headers.
+	Headers []*wire.BlockHeader
+	// Max is the maximum number of headers the server will return in a single request.
+	Max int
+}
+
+// GetMerkleResult is returned by GetMerkle().
+type GetMerkleResult struct {
+	Merkle []TXHash
+	Pos    int
 }
 
 // Interface is the interface to a blockchain index backend. Currently geared to Electrum, though
 // other backends can implement the same interface.
+//
 //go:generate mockery --name Interface
 type Interface interface {
-	ScriptHashGetHistory(ScriptHashHex, func(TxHistory), func(error))
-	TransactionGet(chainhash.Hash, func(*wire.MsgTx), func(error))
-	ScriptHashSubscribe(func() func(error), ScriptHashHex, func(string))
-	HeadersSubscribe(func() func(error), func(*Header))
+	ScriptHashGetHistory(ScriptHashHex) (TxHistory, error)
+	TransactionGet(chainhash.Hash) (*wire.MsgTx, error)
+	ScriptHashSubscribe(func() func(), ScriptHashHex, func(string))
+	HeadersSubscribe(func(*types.Header))
 	TransactionBroadcast(*wire.MsgTx) error
-	RelayFee(func(btcutil.Amount), func(error))
-	EstimateFee(int, func(*btcutil.Amount), func(error))
-	Headers(int, int, func([]*wire.BlockHeader, int))
-	GetMerkle(chainhash.Hash, int, func(merkle []TXHash, pos int), func(error))
+	RelayFee() (btcutil.Amount, error)
+	EstimateFee(int) (btcutil.Amount, error)
+	Headers(int, int) (*HeadersResult, error)
+	GetMerkle(chainhash.Hash, int) (*GetMerkleResult, error)
 	Close()
 	ConnectionError() error
 	RegisterOnConnectionErrorChangedEvent(func(error))
+	ManualReconnect()
 }

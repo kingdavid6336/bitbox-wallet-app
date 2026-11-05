@@ -1,16 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package util
 
@@ -18,9 +6,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/ltc"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	addresspkg "github.com/btcsuite/btcd/address/v2"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
+	"github.com/btcsuite/btcd/txscript/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 )
 
 // ParseOutPoint parses <txID>:<index> into an outpoint.
@@ -38,4 +30,29 @@ func ParseOutPoint(outPointBytes []byte) (*wire.OutPoint, error) {
 		return nil, errp.WithStack(err)
 	}
 	return wire.NewOutPoint(txHash, uint32(index)), nil
+}
+
+// PkScriptFromAddress decodes an address into the pubKeyScript that can be used in a transaction
+// output.
+func PkScriptFromAddress(address addresspkg.Address) ([]byte, error) {
+	pkScript, err := txscript.PayToAddrScript(address)
+	if err != nil {
+		return nil, errp.WithStack(err)
+	}
+	return pkScript, nil
+}
+
+// AddressFromPkScript decodes a pkScript into an Address instance.
+func AddressFromPkScript(pkScript []byte, net *chaincfg.Params) (addresspkg.Address, error) {
+	scriptClass, addresses, _, err := txscript.ExtractPkScriptAddrs(pkScript, net)
+	if err != nil {
+		return nil, errp.WithStack(err)
+	}
+	if len(addresses) != 1 {
+		return nil, errp.New("couldn't parse pkScript")
+	}
+	if scriptClass == txscript.WitnessV1TaprootTy && (net.Net == ltc.MainNet || net.Net == ltc.TestNet4) {
+		return nil, errp.New("Taproot not supported on Litecoin")
+	}
+	return addresses[0], nil
 }

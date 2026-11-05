@@ -1,112 +1,37 @@
-.container {
-    margin-top: calc(var(--space-default) * 1.5);
-}
-
-.input {
-    padding: var(--spacing-default);
-    border-radius: 2px;
-    border: solid 1px var(--color-mediumgray);
-    font-size: var(--size-medium);
-}
-
-.input:focus {
-    outline: none;
-}
-
-.labelHalf {
-    width: 49%;
-}
-
-.labelHalf:first-child {
-    margin-right: 2%;
-}
-
-.inputHalf {
-    width: 49%;
-}
-
-.inputFull {
-    width: 100%;
-}
-
-.notAllowed {
-    cursor: not-allowed;
-}
-
-.confirmationValue {
-    font-size: var(--size-default);
-    font-weight: 400;
-    line-height: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    direction: rtl;
-}
-
-.maxAmount label {
-    display: block !important;
-    margin-right: 0 !important;
-}
-
-.maxAmount label::before {
-    top: -2px !important;
-}
-
-.maxAmount label::after {
-    margin-top: -3px !important;
-}
-
-.action {
-    color: var(--color-blue);
-    font-size: var(--size-small);
-    font-weight: 400;
-    line-height: 1;
-    cursor: pointer;
-    user-select: none;
-}
-
-.inputWithIcon {
-    position: relative;
-}
-
-.inputWithIcon input {
-    padding-right: calc(var(--spacing-default) * 2 + 18px);
-}
-
-.qrButton {
-    border: none;
-    background-color: var(--color-white);
-    width: 18px;
-    height: 18px;
-    padding: 0;
-    position: absolute;
-    top: 50%;
-    right: var(--spacing-default);
-    cursor: pointer;
-}
-
-.qrButton img {
-    width: 100%;
-    height: 100%;
-}
-
-.qrVideo {
-    width: 100%;
-    margin-bottom: var(--spacing-default);
-}
-
-.confirmItem p {
-    margin-top: var(--space-quarter);
-    word-break: break-all;
-}
-
-.total p {
-    font-size: var(--size-subheader) !important;
+.sendHeader {
+    align-content: baseline;
+    color: var(--color-secondary);
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    font-size: var(--size-subheader);
+    gap: var(--space-half);
+    justify-content: space-between;
     margin-bottom: var(--space-quarter);
 }
 
-.labelDescription {
-    color: var(--color-secondary);
-    font-size: var(--size-small);
-    font-weight: 400;
+.subTitle {
+    margin-bottom: var(--space-quarter);
     margin-top: 0;
+}
+
+@media (min-width: 769px) {
+    .sendHeader {
+        margin-top: 0;
+    }
+}
+
+.availableBalance {
+    flex-basis: 100%;
+    margin-bottom: var(--size-default);
+    max-width: 100%;
+}
+
+.unit {
+    color: var(--color-secondary);
+    font-size: var(--size-default);
+}
+
+.sendForm {
+    --grid-min-height: 100px;
 }

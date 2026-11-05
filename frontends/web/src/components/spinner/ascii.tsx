@@ -1,26 +1,11 @@
-/**
- * Copyright 2020 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { h } from 'preact';
-import * as style from './ascii.module.css';
+import style from './ascii.module.css';
 
-export default function AsciiSpinner() {
-    return (
-        <div class={style.spinnerContainer}>
-            <div class={style.spinner}></div>
-        </div>
-    );
-}
+export const AsciiSpinner = () => {
+  return (
+    <div className={style.spinnerContainer}>
+      <div className={style.spinner}></div>
+    </div>
+  );
+};

@@ -1,124 +1,78 @@
-/**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import { apiGet, apiPost } from '../../utils/request';
-import * as style from './status.module.css';
+import { ReactNode } from 'react';
+import type { TConfigFrontendDismissibleKey } from '@/api/config';
+import { useConfig } from '@/contexts/ConfigProvider';
+import { CloseXDark, CloseXWhite } from '@/components/icon';
+import { useDarkmode } from '@/hooks/darkmode';
+import { Message } from '@/components/message/message';
+import { TMessageTypes } from '@/utils/types';
+import style from './status.module.css';
 
-interface State {
-    show: boolean;
-}
+type TProps = {
+  hidden?: boolean;
+  type?: TMessageTypes;
+  noIcon?: boolean;
+  // used as keyName in the config if dismissing the status should be persisted, so it is not
+  // shown again. Use an empty string if it should be dismissible without storing it in the
+  // config, so the status will be shown again the next time.
+  dismissibleKey: TConfigFrontendDismissibleKey | '';
+  className?: string;
+  children: ReactNode;
+};
 
-interface StatusProps {
-    hidden?: boolean;
-    type?: 'success' | 'warning' | 'info';
-    // used as keyName in the config if dismissing the status should be persisted, so it is not
-    // shown again. Use an empty string if it should be dismissable without storing it in the
-    // config, so the status will be shown again the next time.
-    dismissable?: string;
-    className?: string;
-}
+export const Status = ({
+  hidden,
+  type = 'warning',
+  noIcon = false,
+  dismissibleKey,
+  className = '',
+  children,
+}: TProps) => {
+  const { config, setConfig } = useConfig();
+  const { isDarkMode } = useDarkmode();
 
-type Props = StatusProps;
+  // note: dismissibleKey can be falsy i.e. empty string ''
+  const show = (
+    hidden
+      ? false
+      : dismissibleKey
+        ? (config ? !config.frontend[dismissibleKey] : true)
+        : true
+  );
 
-export default class Status extends Component<Props, State> {
-    public readonly state: State = {
-        show: true,
-    };
-
-    public componentDidMount() {
-        this.checkConfig();
+  const dismiss = async () => {
+    if (!dismissibleKey) {
+      return;
     }
+    setConfig({
+      frontend: {
+        [dismissibleKey]: true,
+      }
+    });
+  };
 
-    public componentDidUpdate(prevProps) {
-        if (this.props.dismissable !== prevProps.dismissable) {
-            this.checkConfig();
-        }
-    }
+  if (!show) {
+    return null;
+  }
 
-    private checkConfig() {
-        if (this.props.dismissable) {
-            apiGet('config').then(({ frontend }) => {
-                if (!this.props.dismissable) {
-                    return;
-                }
-                this.setState({
-                    show: !frontend ? true : !frontend[this.props.dismissable],
-                });
-            });
-        }
-    }
+  return (
+    <div className={className}>
+      <Message noIcon={noIcon} type={type}>
+        <div className={style.container}>
+          <div className={style.content}>
+            {children}
+          </div>
+          <button
+            hidden={!dismissibleKey}
+            className={style.closeButton}
+            onClick={dismiss}
+          >
+            {isDarkMode ? <CloseXWhite /> : <CloseXDark />}
+          </button>
+        </div>
+      </Message>
+    </div>
+  );
+};
 
-    private dismiss = () => {
-        apiGet('config').then(config => {
-            if (!this.props.dismissable) {
-                return;
-            }
-            const newConf = {
-                ...config,
-                frontend: {
-                    ...config.frontend,
-                    [this.props.dismissable]: true,
-                },
-            };
-            apiPost('config', newConf);
-        });
-        this.setState({
-            show: false,
-        });
-    }
-
-    public render({
-        children,
-        className,
-        dismissable,
-        hidden,
-        type = 'warning',
-    }: RenderableProps<Props>,
-    {
-        show,
-    }: State) {
-        if (hidden || !show) {
-            return null;
-        }
-        return (
-            <div className={[style.container, style[type], className ? className : ''].join(' ')}>
-                <div className={style.status}>
-                    {children}
-                    <button
-                        hidden={!dismissable}
-                        className={`${style.close} ${style[`close-${type}`]}`}
-                        onClick={this.dismiss}>
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        );
-    }
-}

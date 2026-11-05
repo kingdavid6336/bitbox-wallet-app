@@ -1,71 +1,79 @@
-// Copyright 2019 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package rpcclient
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"math/big"
+	"time"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth/erc20"
+	ethtypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth/types"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // Interface can be implemented to provide an Ethereum rpc client.
+//
 //go:generate moq -pkg mocks -out mocks/rpcclient.go . Interface
 type Interface interface {
 	TransactionReceiptWithBlockNumber(
-		ctx context.Context, hash common.Hash) (*RPCTransactionReceipt, error)
-	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
+		ctx context.Context, hash common.Hash) (*types.Receipt, error)
+	// BlockNumber returns the current latest block number.
+	BlockNumber(ctx context.Context) (*big.Int, error)
 	TransactionByHash(ctx context.Context, hash common.Hash) (tx *types.Transaction, isPending bool, err error)
-	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
-	bind.ContractBackend
+	// Balance returns the balance at blockNumber.
+	Balance(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
+	// HistoricalBalanceAt returns the balance at the latest block whose timestamp does not
+	// exceed the requested time. A nil erc20Token selects the native balance; otherwise it
+	// selects the ERC20 token balance.
+	HistoricalBalanceAt(ctx context.Context, account common.Address, at time.Time, erc20Token *erc20.Token) (*big.Int, error)
+	// ERC20Balance returns the token balance at blockNumber, or the latest if nil.
+	ERC20Balance(account common.Address, erc20Token *erc20.Token, blockNumber *big.Int) (*big.Int, error)
+	// SendTransaction injects the transaction into the pending pool for execution.
+	SendTransaction(ctx context.Context, tx *types.Transaction) error
+	// PendingNonceAt retrieves the current pending nonce associated with an account.
+	PendingNonceAt(ctx context.Context, account common.Address) (uint64, error)
+	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
+	// EstimateGas tries to estimate the gas needed to execute a specific
+	// transaction based on the current pending state of the backend blockchain.
+	// There is no guarantee that this is the true gas limit requirement as other
+	// transactions may be added or removed by miners, but it should provide a basis
+	// for setting a reasonable default.
+	EstimateGas(ctx context.Context, call ethereum.CallMsg) (gas uint64, err error)
+	// SuggestGasPrice retrieves the currently suggested gas price to allow a timely
+	// execution of a transaction.
+	SuggestGasPrice(ctx context.Context) (*big.Int, error)
+	// FeeTargets returns EIP-1559 compatible priorities (maxFeePerGas + baseFee)
+	FeeTargets(ctx context.Context) ([]*ethtypes.FeeTarget, error)
 }
 
-// RPCClient wraps the high level ethclient, extending it with more functions. Implements Interface.
-type RPCClient struct {
-	*ethclient.Client
-	c *rpc.Client
+// ErrRequestRejected marks a request refused before transaction submission.
+var ErrRequestRejected = errors.New("request rejected")
+
+// RPCError is a JSON-RPC error returned by the provider.
+type RPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
 
-// Interface sanity check: we currently do not instantiate ethclient.Client anywhere (a direct node
-// RPC client), but we might use it again in the future.
-var _ Interface = &RPCClient{}
+func (err RPCError) Error() string { return err.Message }
 
-// RPCDial connects to a backend.
-func RPCDial(url string) (*RPCClient, error) {
-	c, err := rpc.DialContext(context.Background(), url)
-	if err != nil {
-		return nil, errp.WithStack(err)
+// Rejected classifies Etherscan broadcast errors using Geth's error codes.
+// Server failures, including timeouts, leave the outcome of a broadcast unresolved.
+func (err RPCError) Rejected() bool {
+	switch err.Code {
+	case -32700, -32600, -32601, -32602: // Invalid JSON, request, method, or parameters.
+		return true
+	case -32000:
+		// Geth uses its default code for send rejections. We rely on Etherscan
+		// preserving that distinction from request timeouts (-32002).
+		return true
+	default:
+		return false
 	}
-
-	return &RPCClient{
-		Client: ethclient.NewClient(c),
-		c:      c,
-	}, nil
-}
-
-// RPCTransactionReceipt is a receipt extended with the block number.
-type RPCTransactionReceipt struct {
-	types.Receipt
-	BlockNumber uint64
 }
 
 // RPCTransaction is a transaction extended with additional fields populated by the
@@ -73,28 +81,4 @@ type RPCTransactionReceipt struct {
 type RPCTransaction struct {
 	types.Transaction
 	BlockNumber *string `json:"blockNumber,omitempty"`
-}
-
-// UnmarshalJSON implements json.Unmarshaler.
-func (rpcTR *RPCTransactionReceipt) UnmarshalJSON(msg []byte) error {
-	if err := json.Unmarshal(msg, &rpcTR.Receipt); err != nil {
-		return err
-	}
-	bn := struct {
-		BlockNumber hexutil.Uint64 `json:"blockNumber"`
-	}{}
-	if err := json.Unmarshal(msg, &bn); err != nil {
-		return err
-	}
-	rpcTR.BlockNumber = uint64(bn.BlockNumber)
-	return nil
-}
-
-// TransactionReceiptWithBlockNumber is like rpc.TransactionReceipt, but exposes the block number as
-// well. If no receipt was found, `nil, nil` is returned.
-func (rpc *RPCClient) TransactionReceiptWithBlockNumber(
-	ctx context.Context, hash common.Hash) (*RPCTransactionReceipt, error) {
-	var r *RPCTransactionReceipt
-	err := rpc.c.CallContext(ctx, &r, "eth_getTransactionReceipt", hash)
-	return r, err
 }

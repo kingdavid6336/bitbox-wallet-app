@@ -1,0 +1,90 @@
+.text {
+  font-size: var(--size-default);
+  margin: 0;
+}
+
+.accountName {
+  font-weight: 600;
+  margin-right: calc(var(--space-default) + var(--space-quarter));
+}
+
+.accountsContainer {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-default);
+}
+
+.button {
+  font-size: var(--size-default);
+  padding: 0 24px;
+}
+
+.button span {
+  font-size: 2rem;
+  margin-bottom: 2px;
+  margin-right: var(--space-quarter);
+}
+
+.externalLink {
+  align-items: baseline;
+  display: flex;
+}
+
+.externalLink img {
+  max-height: var(--size-default);
+  max-width: var(--size-default);
+}
+
+.coverageContainer {
+  margin: var(--space-half) 0;
+}
+
+.headerContainer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.link {
+  text-decoration: none;
+}
+
+.row {
+  background-color: var(--background-secondary);
+  padding: calc(var(--space-half) + var(--space-eight));
+  margin-bottom: var(--space-half);
+}
+
+.statusContainer {
+  display: flex;
+}
+
+.subtle {
+  color: var(--color-tertiary);
+}
+
+.title {
+  font-size: var(--size-subheader);
+  font-weight: 400;
+  margin: 0;
+}
+
+.keystore {
+  font-size: var(--size-subheader);
+  margin-bottom: var(--space-quarter);
+}
+
+.keystore > span {
+  font-size: var(--size-smaller);
+}
+
+@media (max-width: 768px) {
+  .headerContainer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .row {
+    padding: var(--space-half);
+  }
+}

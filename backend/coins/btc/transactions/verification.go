@@ -1,25 +1,11 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package transactions
 
 import (
-	"fmt"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/blockchain"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/headers"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/blockchain"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/headers"
+	"github.com/btcsuite/btcd/chainhash/v2"
 )
 
 func (transactions *Transactions) onHeadersEvent(event headers.Event) {
@@ -33,29 +19,30 @@ func (transactions *Transactions) onHeadersEvent(event headers.Event) {
 	}
 }
 
-func (transactions *Transactions) unverifiedTransactions() map[chainhash.Hash]int {
-	defer transactions.RLock()()
-	dbTx, err := transactions.db.Begin()
-	if err != nil {
-		// TODO
-		panic(err)
-	}
-	defer dbTx.Rollback()
-	unverifiedTransactions, err := dbTx.UnverifiedTransactions()
-	if err != nil {
-		// TODO
-		panic(err)
-	}
-	result := map[chainhash.Hash]int{}
-	for _, txHash := range unverifiedTransactions {
-		txInfo, err := dbTx.TxInfo(txHash)
+func (transactions *Transactions) unverifiedTransactions() (map[chainhash.Hash]int, error) {
+	return DBView(transactions.db, func(dbTx DBTxInterface) (map[chainhash.Hash]int, error) {
+		unverifiedTransactions, err := dbTx.UnverifiedTransactions()
 		if err != nil {
-			// TODO
-			panic(err)
+			return nil, err
 		}
-		result[txHash] = txInfo.Height
-	}
-	return result
+		result := map[chainhash.Hash]int{}
+		for _, txHash := range unverifiedTransactions {
+			txInfo, err := dbTx.TxInfo(txHash)
+			if err != nil {
+				return nil, err
+			}
+			if txInfo.Tx == nil {
+				transactions.log.Warning("Transaction body missing")
+				continue
+			}
+			if txInfo.Tx.TxHash() != txHash {
+				transactions.handleTxInclusionVerificationFailed(txHash, "Transaction hash verification failed")
+				continue
+			}
+			result[txHash] = txInfo.Height
+		}
+		return result, nil
+	})
 }
 
 func hashMerkleRoot(merkle []blockchain.TXHash, start chainhash.Hash, pos int) chainhash.Hash {
@@ -69,11 +56,19 @@ func hashMerkleRoot(merkle []blockchain.TXHash, start chainhash.Hash, pos int) c
 	return start
 }
 
+func (transactions *Transactions) handleTxInclusionVerificationFailed(txHash chainhash.Hash, reason string) {
+	transactions.log.WithField("txHash", txHash.String()).Warning(reason)
+}
+
 func (transactions *Transactions) verifyTransactions() {
-	unverifiedTransactions := transactions.unverifiedTransactions()
+	unverifiedTransactions, err := transactions.unverifiedTransactions()
+	if err != nil {
+		transactions.log.WithError(err).Error("unverifiedTransactions")
+		return
+	}
 	transactions.log.Debugf("verifying %d transactions", len(unverifiedTransactions))
 	for txHash, height := range unverifiedTransactions {
-		transactions.verifyTransaction(txHash, height)
+		go transactions.verifyTransaction(txHash, height)
 	}
 }
 
@@ -84,42 +79,34 @@ func (transactions *Transactions) verifyTransaction(txHash chainhash.Hash, heigh
 	header, err := transactions.headers.VerifiedHeaderByHeight(height)
 	if err != nil {
 		// TODO
-		panic(err)
+		transactions.log.WithError(err).Error("VerifiedHeaderByHeight")
+		return
 	}
 	if header == nil {
 		transactions.log.Warningf("Header not yet synced to %d, couldn't verify tx", height)
 		return
 	}
-	done := transactions.synchronizer.IncRequestsCounter()
-	transactions.blockchain.GetMerkle(
-		txHash, height,
-		func(merkle []blockchain.TXHash, pos int) {
-			expectedMerkleRoot := hashMerkleRoot(merkle, txHash, pos)
-			if expectedMerkleRoot != header.MerkleRoot {
-				transactions.log.Warning(
-					fmt.Sprintf("Merkle root verification failed for %s", txHash))
-				return
-			}
-			transactions.log.Debugf("Merkle root verification succeeded for %s", txHash)
 
-			defer transactions.Lock()()
-			dbTx, err := transactions.db.Begin()
-			if err != nil {
-				// TODO
-				panic(err)
-			}
-			defer dbTx.Rollback()
-			if err := dbTx.MarkTxVerified(txHash, header.Timestamp); err != nil {
-				transactions.log.WithError(err).Panic("MarkTxVerified")
-			}
-			if err := dbTx.Commit(); err != nil {
-				transactions.log.WithError(err).Panic("GetMerkle Commit")
-			}
-		},
-		func(err error) {
-			done()
-			if err != nil {
-				panic(err)
-			}
-		})
+	done := transactions.synchronizer.IncRequestsCounter()
+	defer done()
+
+	merkle, err := transactions.blockchain.GetMerkle(txHash, height)
+	if err != nil {
+		// TODO
+		transactions.log.WithError(err).Error("GetMerkle")
+		return
+	}
+	expectedMerkleRoot := hashMerkleRoot(merkle.Merkle, txHash, merkle.Pos)
+	if expectedMerkleRoot != header.MerkleRoot {
+		transactions.handleTxInclusionVerificationFailed(txHash, "Merkle root verification failed")
+		return
+	}
+	transactions.log.Debugf("Merkle root verification succeeded")
+
+	err = DBUpdate(transactions.db, func(dbTx DBTxInterface) error {
+		return dbTx.MarkTxVerified(txHash, header.Timestamp)
+	})
+	if err != nil {
+		transactions.log.WithError(err).Error("MarkTXVerified")
+	}
 }

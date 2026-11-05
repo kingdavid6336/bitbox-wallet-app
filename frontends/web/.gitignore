@@ -1,0 +1,14 @@
+/.eslintcache
+/build/
+/coverage/
+/node_modules/
+**/*/output.log
+/yarn-error.log
+/npm-debug.log
+/size-plugin.json
+
+### VSCode & Jetbrains ###
+.vscode/
+
+.DS_Store
+.idea

@@ -1,26 +1,15 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package transactions
 
 import (
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/blockchain"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/blockchain"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/btcsuite/btcd/chainhash/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 )
 
 // DBTxInfo contains data stored for a wallet transaction.
@@ -31,6 +20,11 @@ type DBTxInfo struct {
 	Verified         *bool           `json:"Verified"`
 	HeaderTimestamp  *time.Time      `json:"ts"`
 	CreatedTimestamp *time.Time      `json:"created"`
+
+	// TxHash is the same as Tx.TxHash(), but since we already have this value in the database, it
+	// is faster to access it this way than to recompute it.  It is not serialized and stored in the
+	// database.
+	TxHash chainhash.Hash `json:"-"`
 }
 
 // DBTxInterface needs to be implemented to persist all wallet/transaction related data.
@@ -44,10 +38,10 @@ type DBTxInterface interface {
 
 	// PutTx stores a transaction and it's height (according to
 	// https://github.com/kyuupichan/electrumx/blob/46f245891cb62845f9eec0f9549526a7e569eb03/docs/protocol-basics.rst#status).
-	PutTx(txHash chainhash.Hash, tx *wire.MsgTx, height int) error
+	PutTx(txHash chainhash.Hash, tx *wire.MsgTx, height int, headerTimestamp *time.Time) error
 
 	// DeleteTx deletes a transaction (nothing happens if not found).
-	DeleteTx(txHash chainhash.Hash)
+	DeleteTx(txHash chainhash.Hash) error
 
 	// AddAddressToTx adds an address associated with a transaction. Retrieve them with `TxInfo()`.
 	AddAddressToTx(chainhash.Hash, blockchain.ScriptHashHex) error
@@ -75,7 +69,7 @@ type DBTxInterface interface {
 	Input(wire.OutPoint) (*chainhash.Hash, error)
 
 	// DeleteInput deletes an input (nothing happens if not found).
-	DeleteInput(wire.OutPoint)
+	DeleteInput(wire.OutPoint) error
 
 	// PutOutput stores an Output.
 	PutOutput(wire.OutPoint, *wire.TxOut) error
@@ -85,7 +79,7 @@ type DBTxInterface interface {
 	Outputs() (map[wire.OutPoint]*wire.TxOut, error)
 
 	// DeleteOutput deletes an output (nothing happens if not found).
-	DeleteOutput(wire.OutPoint)
+	DeleteOutput(wire.OutPoint) error
 
 	// PutAddressHistory stores an address history.
 	PutAddressHistory(blockchain.ScriptHashHex, blockchain.TxHistory) error
@@ -104,7 +98,37 @@ type DBTxInterface interface {
 // DBInterface can be implemented by database backends to open database transactions.
 type DBInterface interface {
 	// Begin starts a DB transaction. Apply `defer tx.Rollback()` in any case after. Use
-	// `tx.Commit()` to commit the write operations.
-	Begin() (DBTxInterface, error)
+	// `tx.Commit()` to commit the write operations.  If `writable` is true, write-operations are
+	// permitted, and concurrent write- or read-transactions are serialized by blocking. If
+	// `writable` is false, concurrent read-transactions are performed without blocking, unless
+	// there is an ongoing write-transaction.
+	Begin(writable bool) (DBTxInterface, error)
 	Close() error
+}
+
+// DBUpdate updates the database. All changes are rolled back on error. The transaction is committed
+// if the callback does not return an error.
+func DBUpdate(db DBInterface, f func(DBTxInterface) error) error {
+	dbTx, err := db.Begin(true)
+	if err != nil {
+		return err
+	}
+	defer dbTx.Rollback()
+	if err := f(dbTx); err != nil {
+		return err
+	}
+	return dbTx.Commit()
+}
+
+// DBView reads from the database. Any write-operations on the database transaction will result in
+// an error. The return value of the callback is passed as the return value of the whole function
+// for ease of use.
+func DBView[R any](db DBInterface, f func(DBTxInterface) (R, error)) (R, error) {
+	dbTx, err := db.Begin(false)
+	if err != nil {
+		var empty R
+		return empty, errp.WithStack(err)
+	}
+	defer dbTx.Rollback()
+	return f(dbTx)
 }

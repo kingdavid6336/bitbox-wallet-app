@@ -1,399 +1,321 @@
-/**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import * as accountApi from '../../api/account';
-import { Input } from '../../components/forms';
-import { translate, TranslateProps } from '../../decorators/translate';
-import A from '../anchor/anchor';
-import { Dialog } from '../dialog/dialog';
-import { CopyableInput } from '../copy/Copy';
-import { ExpandIcon } from '../icon/icon';
-import { ProgressRing } from '../progressRing/progressRing';
-import { FiatConversion } from '../rates/rates';
-import { ArrowIn, ArrowOut, ArrowSelf, Edit, Save } from './components/icons';
-import * as style from './transaction.module.css';
-import * as parentStyle from './transactions.module.css';
+import { Trans, useTranslation } from 'react-i18next';
+import type { TAmountWithConversions, TTransactionStatus, TTransactionType, TTransaction } from '@/api/account';
+import { useMediaQuery } from '@/hooks/mediaquery';
+import { Loupe } from '@/components/icon/icon';
+import { parseTimeLong, parseTimeShort } from '@/utils/date';
+import { ProgressRing } from '@/components/progressRing/progressRing';
+import { AmountWithUnit } from '../amount/amount-with-unit';
+import { ConversionAmount } from '@/components/amount/conversion-amount';
+import { Arrow } from './components/arrows';
+import { getTxSign } from '@/utils/transaction';
+import styles from './transaction.module.css';
 
-interface State {
-    transactionDialog: boolean;
-    newNote: string;
-    editMode: boolean;
-}
+type TTransactionProps = TTransaction & {
+  onShowDetail: (internalID: TTransaction['internalID']) => void;
+  statusProgress?: number;
+  statusText?: string;
+  statusTextShort?: string;
+};
 
-interface TransactionProps extends accountApi.ITransaction {
-    accountCode: string;
-    index: number;
-    explorerURL: string;
-}
+export const Transaction = ({
+  addresses,
+  amountAtTime,
+  deductedAmountAtTime,
+  onShowDetail,
+  internalID,
+  note,
+  numConfirmations,
+  numConfirmationsComplete,
+  status,
+  statusProgress,
+  statusText,
+  statusTextShort,
+  time,
+  type,
+}: TTransactionProps) => {
+  const isMobile = useMediaQuery('(max-width: 768px)');
 
-type Props = TransactionProps & TranslateProps;
-
-class Transaction extends Component<Props, State> {
-    private input!: HTMLInputElement;
-    private editButton!: HTMLButtonElement;
-
-    public readonly state: State = {
-        transactionDialog: false,
-        newNote: this.props.note,
-        editMode: !this.props.note,
-    };
-
-    private parseTimeShort = time => {
-        const options = {
-            year: 'numeric',
-            month: 'numeric',
-            day: 'numeric',
-        };
-        return new Date(Date.parse(time)).toLocaleString(this.context.i18n.language, options);
-    }
-
-    private showDetails = () => {
-        this.setState({
-            transactionDialog: true,
-            newNote: this.props.note,
-            editMode: !this.props.note,
-        });
-    }
-
-    private hideDetails = () => {
-        this.setState({ transactionDialog: false });
-    }
-
-    private handleNoteInput = (e: Event) => {
-        const target = e.target as HTMLInputElement;
-        this.setState({ newNote: target.value });
-    }
-
-    private handleEdit = (e: Event) => {
-        e.preventDefault();
-        if (this.state.editMode && this.props.note !== this.state.newNote) {
-            accountApi.postNotesTx(this.props.accountCode, {
-                internalTxID: this.props.internalID,
-                note: this.state.newNote,
-            })
-            .catch(console.error);
+  return (
+    <section className={styles.tx}
+      onClick={() => {
+        if (isMobile) {
+          onShowDetail(internalID);
         }
-        this.focusEdit();
-        this.setState(
-            ({ editMode }) => ({ editMode: !editMode }),
-            this.focusEdit,
-        );
-    }
+      }}
+    >
+      <div className={styles.txContent} data-testid="transaction" data-tx-type={type}>
+        <span className={styles.txIcon}>
+          <Arrow status={status} type={type} />
+        </span>
+        <Status
+          addresses={addresses}
+          amount={amountAtTime}
+          note={note}
+          numConfirmations={numConfirmations}
+          numConfirmationsComplete={numConfirmationsComplete}
+          status={status}
+          statusProgress={statusProgress}
+          statusText={statusText}
+          statusTextShort={statusTextShort}
+          time={time}
+          type={type}
+        />
+        <Amounts
+          amount={amountAtTime}
+          deductedAmount={deductedAmountAtTime}
+          type={type}
+        />
+        <button
+          className={styles.txShowDetailBtn}
+          onClick={() => !isMobile && onShowDetail(internalID)}
+          type="button"
+          data-testid="tx-details-button">
+          <Loupe className={styles.iconLoupe} data-testid="tx-details"/>
+        </button>
+      </div>
+    </section>
+  );
+};
 
-    private focusEdit = () => {
-        if (this.editButton) {
-            this.editButton.blur();
-        }
-        if (this.state.editMode && this.input) {
-            this.input.scrollLeft = this.input.scrollWidth;
-            this.input.focus();
-        }
-    }
+type TStatus = {
+  addresses: string[];
+  amount: TAmountWithConversions;
+  note?: TTransaction['note'];
+  numConfirmations: number;
+  numConfirmationsComplete: number;
+  status: TTransactionStatus;
+  statusProgress?: number;
+  statusText?: string;
+  statusTextShort?: string;
+  time?: string | null;
+  type: TTransactionType;
+};
 
-    private setInputRef = input => {
-        this.input = input;
-    }
+const Status = ({
+  addresses,
+  amount,
+  note,
+  numConfirmations,
+  numConfirmationsComplete,
+  status,
+  statusProgress,
+  statusText,
+  statusTextShort,
+  time,
+  type,
+}: TStatus) => {
+  const { t } = useTranslation();
+  const customStatus = statusText !== undefined;
+  const defaultProgress = numConfirmations < numConfirmationsComplete ? (numConfirmations / numConfirmationsComplete) * 100 : 100;
+  const progress = statusProgress ?? defaultProgress;
+  const isFailed = status === 'failed';
+  const isComplete = (
+    customStatus
+      ? status === 'complete'
+      : numConfirmations >= numConfirmationsComplete
+  );
+  const showStatus = (
+    customStatus
+    || isFailed
+    || !isComplete
+    || numConfirmations < numConfirmationsComplete
+  );
+  const showProgressRing = !isFailed && (!customStatus || statusProgress !== undefined);
 
-    private setEditButtonRef = button => {
-        this.editButton = button;
-    }
-
-    public render({
-        t,
-        index,
-        explorerURL,
-        type,
-        txID,
-        amount,
-        fee,
-        feeRatePerKb,
-        gas,
-        nonce,
-        vsize,
-        size,
-        weight,
-        numConfirmations,
-        numConfirmationsComplete,
-        time,
-        addresses,
-        status,
-        note = '',
-    }: RenderableProps<Props>,
-                  {
-        transactionDialog,
-        newNote,
-        editMode,
-    }: State) {
-        const arrow = type === 'receive' ? (
-            <ArrowIn />
-        ) : type === 'send' ? (
-            <ArrowOut />
+  return (
+    <span className={styles.txInfoColumn}>
+      <span className={styles.txNote}>
+        {note ? (
+          <span className={styles.txNoteText}>
+            {note}
+          </span>
         ) : (
-            <ArrowSelf />
-        );
-        const sign = ((type === 'send') && '−') || ((type === 'receive') && '+') || null;
-        const typeClassName = (type === 'send' && style.send) || (type === 'receive' && style.receive) || '';
-        const sDate = time ? this.parseTimeShort(time) : '---';
-        const statusText = {
-            complete: t('transaction.status.complete'),
-            pending: t('transaction.status.pending'),
-            failed: t('transaction.status.failed'),
-        }[status];
-        const progress = numConfirmations < numConfirmationsComplete ? (numConfirmations / numConfirmationsComplete) * 100 : 100;
-        return (
-            <div className={[style.container, index === 0 ? style.first : ''].join(' ')}>
-                <div className={[parentStyle.columns, style.row].join(' ')}>
-                    <div className={parentStyle.columnGroup}>
-                        <div className={parentStyle.type}>{arrow}</div>
-                        <div className={parentStyle.date}>
-                            <span className={style.columnLabel}>
-                                {t('transaction.details.date')}:
-                            </span>
-                            <span className={style.date}>{sDate}</span>
-                        </div>
-                        { note ? (
-                            <div className={parentStyle.activity}>
-                                <span className={style.address}>
-                                    {note}
-                                </span>
-                            </div>
-                        ) : (
-                            <div className={parentStyle.activity}>
-                                <span className={style.label}>
-                                    {t(type === 'receive' ? 'transaction.tx.received' : 'transaction.tx.sent')}
-                                </span>
-                                <span className={style.address}>
-                                    {addresses[0]}
-                                    {addresses.length > 1 && (
-                                        <span className={style.badge}>
-                                            (+{addresses.length - 1})
-                                        </span>
-                                    )}
-                                </span>
-                            </div>
-                        )}
-                        <div className={[parentStyle.action, parentStyle.hideOnMedium].join(' ')}>
-                            <button type="button" className={style.action} onClick={this.showDetails}>
-                                <ExpandIcon expand={!transactionDialog} />
-                            </button>
-                        </div>
-                    </div>
-                    <div className={parentStyle.columnGroup}>
-                        <div className={parentStyle.status}>
-                            <span className={style.columnLabel}>
-                                {t('transaction.details.status')}:
-                            </span>
-                            <ProgressRing
-                                className="m-right-quarter"
-                                width={14}
-                                value={progress}
-                                isComplete={numConfirmations >= numConfirmationsComplete}
-                            />
-                            <span className={style.status}>{statusText}</span>
-                        </div>
-                        <div className={parentStyle.fiat}>
-                            <span className={`${style.fiat} ${typeClassName}`}>
-                                <FiatConversion amount={amount} noAction>{sign}</FiatConversion>
-                            </span>
-                        </div>
-                        <div className={parentStyle.currency}>
-                            <span className={`${style.currency} ${typeClassName}`}>
-                                {sign}{amount.amount}
-                                {' '}
-                                <span className={style.currencyUnit}>{amount.unit}</span>
-                            </span>
-                        </div>
-                        <div className={[parentStyle.action, parentStyle.showOnMedium].join(' ')}>
-                            <button type="button" className={style.action} onClick={this.showDetails}>
-                                <ExpandIcon expand={!transactionDialog} />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                {
-                    transactionDialog && (
-                        <Dialog title="Transaction Details" onClose={this.hideDetails} slim medium>
-                            <form onSubmit={this.handleEdit} className={style.detailInput}>
-                                <label for="note">{t('note.title')}</label>
-                                <Input
-                                    align="right"
-                                    autoFocus={!editMode ? 'false' : 'true'}
-                                    className={style.textOnlyInput}
-                                    readOnly={!editMode}
-                                    type="text"
-                                    id="note"
-                                    transparent
-                                    placeholder={t('note.input.placeholder')}
-                                    value={newNote}
-                                    maxLength={256}
-                                    onInput={this.handleNoteInput}
-                                    getRef={this.setInputRef}/>
-                                <button
-                                    className={style.editButton}
-                                    onClick={this.handleEdit}
-                                    title={t(`transaction.note.${editMode ? 'save' : 'edit'}`)}
-                                    type="button"
-                                    ref={this.setEditButtonRef}>
-                                        {editMode ? <Save /> : <Edit />}
-                                </button>
-                            </form>
-                            <div className={style.detail}>
-                                <label>{t('transaction.details.type')}</label>
-                                <p>{arrow}</p>
-                            </div>
-                            <div className={style.detail}>
-                                <label>{t('transaction.confirmation')}</label>
-                                <p>{numConfirmations}</p>
-                            </div>
-                            <div className={style.detail}>
-                                <label>{t('transaction.details.status')}</label>
-                                <p className="flex flex-items-center">
-                                    <ProgressRing
-                                        className="m-right-quarter"
-                                        width={14}
-                                        value={progress}
-                                        isComplete={numConfirmations >= numConfirmationsComplete}
-                                    />
-                                    <span className={style.status}>
-                                        {statusText} {
-                                            status === 'pending' && (
-                                                <span>({numConfirmations}/{numConfirmationsComplete})</span>
-                                            )
-                                        }
-                                    </span>
-                                </p>
-                            </div>
-                            <div className={style.detail}>
-                                <label>{t('transaction.details.date')}</label>
-                                <p>{sDate}</p>
-                            </div>
-                            <div className={style.detail}>
-                                <label>{t('transaction.details.fiat')}</label>
-                                <p>
-                                    <span className={`${style.fiat} ${typeClassName}`}>
-                                        <FiatConversion amount={amount} noAction>{sign}</FiatConversion>
-                                    </span>
-                                </p>
-                            </div>
-                            <div className={style.detail}>
-                                <label>{t('transaction.details.amount')}</label>
-                                <p>
-                                    <span className={`${style.currency} ${typeClassName}`}>
-                                        {sign}{amount.amount}
-                                        {' '}
-                                        <span className={style.currencyUnit}>{amount.unit}</span>
-                                    </span>
-                                </p>
-                            </div>
-                            <div className={style.detail}>
-                                <label>{t('transaction.fee')}</label>
-                                {
-                                    fee && fee.amount ? (
-                                        <p title={feeRatePerKb.amount ? feeRatePerKb.amount + ' ' + feeRatePerKb.unit + '/Kb' : ''}>
-                                            {fee.amount}
-                                            {' '}
-                                            <span className={style.currencyUnit}>{fee.unit}</span>
-                                        </p>
-                                    ) : (
-                                        <p>---</p>
-                                    )
-                                }
-                            </div>
-                            <div className={[style.detail, style.addresses].join(' ')}>
-                                <label>{t('transaction.details.address')}</label>
-                                <div className={style.detailAddresses}>
-                                    { addresses.map((address) => (
-                                        <CopyableInput
-                                            key={address}
-                                            alignRight
-                                            borderLess
-                                            flexibleHeight
-                                            className={style.detailAddress}
-                                            value={address} />
-                                    )) }
-                                </div>
-                            </div>
-                            {
-                                gas ? (
-                                    <div className={style.detail}>
-                                        <label>{t('transaction.gas')}</label>
-                                        <p>{gas}</p>
-                                    </div>
-                                ) : null
-                            }
-                            {
-                                nonce !== null ? (
-                                    <div className={style.detail}>
-                                        <label>Nonce</label>
-                                        <p>{nonce}</p>
-                                    </div>
-                                ) : null
-                            }
-                            {
-                                weight ? (
-                                    <div className={style.detail}>
-                                        <label>{t('transaction.weight')}</label>
-                                        <p>
-                                            {weight}
-                                            {' '}
-                                            <span className={style.currencyUnit}>WU</span>
-                                        </p>
-                                    </div>
-                                ) : null
-                            }
-                            {
-                                vsize ? (
-                                    <div className={style.detail}>
-                                        <label>{t('transaction.vsize')}</label>
-                                        <p>
-                                            {vsize}
-                                            {' '}
-                                            <span className={style.currencyUnit}>b</span>
-                                        </p>
-                                    </div>
-                                ) : null
-                            }
-                            {
-                                size ? (
-                                    <div className={style.detail}>
-                                        <label>{t('transaction.size')}</label>
-                                        <p>
-                                            {size}
-                                            {' '}
-                                            <span className={style.currencyUnit}>b</span>
-                                        </p>
-                                    </div>
-                                ) : null
-                            }
-                            <div className={style.detail}>
-                                <label>{t('transaction.explorer')}</label>
-                                <p className="text-break">
-                                    <A className={style.externalLink} href={ explorerURL + txID } title={t('transaction.explorerTitle')}>{txID}</A>
-                                </p>
-                            </div>
-                        </Dialog>
-                    )
-                }
-            </div>
-        );
+          <Addresses
+            addresses={addresses}
+            amount={amount}
+            status={status}
+            type={type}
+          />
+        )}
+      </span>
+      {showStatus && (
+        <span className={styles.txProgress}>
+          <span className={styles.txProgressTextLong}>
+            {statusText ?? t(`transaction.status.${status}`, {
+              context: type
+            })}
+          </span>
+          <span className={styles.txProgressTextShort}>
+            {statusTextShort ?? t(`transaction.statusShort.${status}`, {
+              context: type
+            })}
+          </span>
+          {showProgressRing && (
+            <ProgressRing
+              className={styles.iconProgress}
+              width={18}
+              value={progress}
+              isComplete={isComplete}
+            />
+          )}
+        </span>
+      )}
+      {' '}
+      {isComplete && !showStatus && time && (
+        <Date time={time} />
+      )}
+    </span>
+  );
+};
+
+type TAmountsProps = {
+  amount: TAmountWithConversions;
+  deductedAmount: TAmountWithConversions;
+  type: TTransactionType;
+};
+
+const Amounts = ({
+  amount,
+  deductedAmount,
+  type,
+}: TAmountsProps) => {
+  const txTypeClass = `txAmount-${type}`;
+  const recv = type === 'receive';
+  const displayAmount = recv ? amount : deductedAmount;
+
+  return (
+    <span
+      className={`
+      ${styles.txAmountsColumn || ''}
+      ${styles[txTypeClass] || ''}
+    `}
+      data-testid="tx-amounts"
+    >
+      <span className={styles.txAmount}>
+        {displayAmount.amount !== '0' && getTxSign(type)}
+        <AmountWithUnit
+          amount={displayAmount}
+          maxDecimals={9}
+          unitClassName={styles.txUnit}
+        />
+      </span>
+      <ConversionAmount amount={amount} deductedAmount={deductedAmount} type={type} />
+    </span>
+  );
+};
+
+type TDateProps = {
+  time: string | null;
+};
+
+type TAddressListProps = {
+  values: string[];
+};
+
+const AddressList = ({ values }: TAddressListProps) => (
+  <span className={styles.addresses}>
+    {values[0]}
+    {values.length > 1 && (
+      <span>
+        {' '}
+        (+{values.length - 1})
+      </span>
+    )}
+  </span>
+);
+
+const Date = ({
+  time,
+}: TDateProps) => {
+  const { i18n } = useTranslation();
+  if (!time) {
+    return '---';
+  }
+  return (
+    <span className={styles.txDate}>
+      <span className={styles.txDateShort}>
+        {parseTimeShort(time, i18n.language)}
+      </span>
+      <span className={styles.txDateLong}>
+        {parseTimeLong(time, i18n.language)}
+      </span>
+    </span>
+  );
+};
+
+type TAddresses = {
+  addresses: TTransaction['addresses'];
+  amount: TAmountWithConversions;
+  status: TTransactionStatus;
+  type: TTransactionType;
+};
+
+const Addresses = ({
+  addresses,
+  amount,
+  status,
+  type,
+}: TAddresses) => {
+  const { t } = useTranslation();
+  const isMobile = useMediaQuery('(max-width: 768px)');
+
+  if (type === 'send_to_self') {
+    if (isMobile) {
+      return (
+        <span className={styles.txNoteWithAddress}>
+          <span className={styles.txType}>
+            {t('generic.sent')}
+          </span>
+          {' '}
+          <AddressList values={addresses} />
+        </span>
+      );
     }
-}
+    const labelKey = (
+      status === 'failed'
+        ? 'transaction.tx.send_to_self_failed'
+        : 'transaction.tx.send_to_self'
+    );
+    return (
+      <span className={styles.txNoteWithAddress}>
+        <span className={styles.txType}>
+          <Trans
+            i18nKey={labelKey}
+            components={{
+              amount: (
+                <AmountWithUnit
+                  amount={amount}
+                  maxDecimals={9}
+                  unitClassName={styles.txUnit}
+                />
+              ),
+            }}
+          />
+        </span>
+        {' '}
+        <AddressList values={addresses} />
+      </span>
+    );
+  }
 
-const HOC = translate<TransactionProps>()(Transaction);
+  const label = (
+    isMobile
+      ? (type === 'receive' ? t('generic.received') : t('generic.sent'))
+      : (type === 'receive'
+        ? t('transaction.tx.receive', { context: status })
+        : t('transaction.tx.send', { context: status })
+      )
+  );
 
-export { HOC as Transaction };
+  return (
+    <span className={styles.txNoteWithAddress}>
+      <span className={styles.txType}>
+        {label}
+      </span>
+      {' '}
+      <AddressList values={addresses} />
+    </span>
+  );
+};

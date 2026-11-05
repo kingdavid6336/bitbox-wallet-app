@@ -1,16 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package config_test
 
@@ -21,8 +9,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/util/config"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/test"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/config"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/test"
 )
 
 // TestAppDir runs itself in a child process for each test case.
@@ -80,5 +68,87 @@ func TestAppDir(t *testing.T) {
 	}
 	if failed {
 		t.Fail()
+	}
+}
+
+func TestEnsurePrivateDirRestrictsExistingDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file mode checks are not meaningful on windows")
+	}
+
+	dir := test.TstTempDir("test_private_dir")
+	defer func() { _ = os.RemoveAll(dir) }()
+
+	if err := os.Chmod(dir, 0755); err != nil {
+		t.Fatalf("os.Chmod: %v", err)
+	}
+	if err := config.EnsurePrivateDir(dir); err != nil {
+		t.Fatalf("EnsurePrivateDir: %v", err)
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("os.Stat: %v", err)
+	}
+	if mode := info.Mode().Perm(); mode != config.PrivateDirMode {
+		t.Fatalf("mode: %o; want %o", mode, config.PrivateDirMode)
+	}
+}
+
+func TestEnsurePrivateDirIgnoresSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink permissions require elevated privileges on windows")
+	}
+
+	parent := test.TstTempDir("test_private_dir_symlink")
+	defer func() { _ = os.RemoveAll(parent) }()
+	target := parent + "/target"
+	if err := os.Mkdir(target, 0755); err != nil {
+		t.Fatalf("os.Mkdir: %v", err)
+	}
+	link := parent + "/link"
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatalf("os.Symlink: %v", err)
+	}
+
+	if err := config.EnsurePrivateDir(link); err != nil {
+		t.Fatalf("EnsurePrivateDir: %v", err)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("os.Stat: %v", err)
+	}
+	if mode := info.Mode().Perm(); mode != 0755 {
+		t.Fatalf("target mode: %o; want %o", mode, 0755)
+	}
+}
+
+func TestEnsurePrivateFileIgnoresSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink permissions require elevated privileges on windows")
+	}
+
+	parent := test.TstTempDir("test_private_file_symlink")
+	defer func() { _ = os.RemoveAll(parent) }()
+	target := parent + "/target"
+	if err := os.WriteFile(target, []byte("{}"), 0644); err != nil {
+		t.Fatalf("os.WriteFile: %v", err)
+	}
+	link := parent + "/link"
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatalf("os.Symlink: %v", err)
+	}
+
+	if err := config.EnsurePrivateFile(link); err != nil {
+		t.Fatalf("EnsurePrivateFile: %v", err)
+	}
+	if err := config.EnsurePrivateFileIfExists(link); err != nil {
+		t.Fatalf("EnsurePrivateFileIfExists: %v", err)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("os.Stat: %v", err)
+	}
+	if mode := info.Mode().Perm(); mode != 0644 {
+		t.Fatalf("target mode: %o; want %o", mode, 0644)
 	}
 }

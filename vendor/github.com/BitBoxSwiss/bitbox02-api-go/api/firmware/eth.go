@@ -1,0 +1,918 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package firmware
+
+import (
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"math/big"
+	"strconv"
+	"strings"
+
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
+)
+
+// ethStreamingThreshold is the firmware limit above which ETH data/bytes values
+// must be streamed instead of sent inline. Typed-message strings larger than
+// this limit are rejected instead of streamed.
+const ethStreamingThreshold = 6144
+
+const ethTypedMessageStringType = "string"
+
+// nonAtomicQueryETH is like nonAtomicQuery, but nested one level deeper for Ethereum.
+func (device *Device) nonAtomicQueryETH(request *messages.ETHRequest) (*messages.ETHResponse, error) {
+	response, err := device.nonAtomicQuery(&messages.Request{
+		Request: &messages.Request_Eth{
+			Eth: request,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	ethResponse, ok := response.Response.(*messages.Response_Eth)
+	if !ok {
+		return nil, errp.New("unexpected reply")
+	}
+	return ethResponse.Eth, nil
+}
+
+// queryETH is like query, but nested one level deeper for Ethereum.
+func (device *Device) queryETH(request *messages.ETHRequest) (*messages.ETHResponse, error) {
+	return atomicQueriesValue(device, func() (*messages.ETHResponse, error) {
+		return device.nonAtomicQueryETH(request)
+	})
+}
+
+// ethCoin the deprecated `coin` enum value for a given chain_id. Only ETH, Ropsten and Rinkeby are
+// converted, as these were the only supported networks up to v9.10.0. With v9.10.0, the chain ID is
+// passed directly, and the `coin` field is ignored.
+func (device *Device) ethCoin(chainID uint64) (messages.ETHCoin, error) {
+	if !device.version.AtLeast(semver.NewSemVer(9, 10, 0)) {
+		switch chainID {
+		case 1:
+			return messages.ETHCoin_ETH, nil
+		case 3:
+			return messages.ETHCoin_RopstenETH, nil
+		case 4:
+			return messages.ETHCoin_RinkebyETH, nil
+		default:
+			return 0, errp.New("unsupported chain ID")
+		}
+	}
+	return messages.ETHCoin_ETH, nil
+}
+
+// ETHPub queries the device for an ethereum address or publickey.
+func (device *Device) ETHPub(
+	chainID uint64,
+	keypath []uint32,
+	outputType messages.ETHPubRequest_OutputType,
+	display bool,
+	contractAddress []byte,
+) (string, error) {
+	coin, err := device.ethCoin(chainID)
+	if err != nil {
+		return "", err
+	}
+	request := &messages.ETHRequest{
+		Request: &messages.ETHRequest_Pub{
+			Pub: &messages.ETHPubRequest{
+				Coin:            coin,
+				ChainId:         chainID,
+				Keypath:         keypath,
+				OutputType:      outputType,
+				Display:         display,
+				ContractAddress: contractAddress,
+			},
+		},
+	}
+	response, err := device.queryETH(request)
+	if err != nil {
+		return "", err
+	}
+	pubResponse, ok := response.Response.(*messages.ETHResponse_Pub)
+	if !ok {
+		return "", errp.New("unexpected response")
+	}
+	return pubResponse.Pub.Pub, nil
+}
+
+func handleHostNonceCommitment() (*messages.AntiKleptoHostNonceCommitment, []byte, error) {
+	hostNonce, err := generateHostNonce()
+	if err != nil {
+		return nil, nil, err
+	}
+	hostNonceCommitment := &messages.AntiKleptoHostNonceCommitment{
+		Commitment: antikleptoHostCommit(hostNonce),
+	}
+
+	return hostNonceCommitment, hostNonce, nil
+}
+
+func (device *Device) nonAtomicHandleSignerNonceCommitment(
+	response *messages.ETHResponse,
+	hostNonce []byte,
+) ([]byte, error) {
+	signerCommitment, ok := response.Response.(*messages.ETHResponse_AntikleptoSignerCommitment)
+	if !ok {
+		return nil, errp.New("unexpected response")
+	}
+	response, err := device.nonAtomicQueryETH(&messages.ETHRequest{
+		Request: &messages.ETHRequest_AntikleptoSignature{
+			AntikleptoSignature: &messages.AntiKleptoSignatureRequest{
+				HostNonce: hostNonce,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	signResponse, ok := response.Response.(*messages.ETHResponse_Sign)
+	if !ok {
+		return nil, errp.New("unexpected response")
+	}
+	signature := signResponse.Sign.Signature
+	err = antikleptoVerifyRecoverable(
+		hostNonce,
+		signerCommitment.AntikleptoSignerCommitment.Commitment,
+		signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return signature, nil
+}
+
+func (device *Device) nonAtomicHandleETHDataStreaming(
+	data []byte,
+	response *messages.ETHResponse,
+) (*messages.ETHResponse, error) {
+	for {
+		chunkRequest, ok := response.Response.(*messages.ETHResponse_DataRequestChunk)
+		if !ok {
+			return response, nil
+		}
+		offset := int(chunkRequest.DataRequestChunk.Offset)
+		length := int(chunkRequest.DataRequestChunk.Length)
+		if offset < 0 || length < 0 || offset+length > len(data) {
+			return nil, errp.New("unexpected response")
+		}
+		var err error
+		response, err = device.nonAtomicQueryETH(&messages.ETHRequest{
+			Request: &messages.ETHRequest_DataResponseChunk{
+				DataResponseChunk: &messages.ETHSignDataResponseChunkRequest{
+					Chunk: data[offset : offset+length],
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+}
+
+// ETHIdentifyCase identifies the case of the recipient address given as hexadecimal string.
+// This function exists as a convenience to potentially help clients to determine the case of the
+// recipient address. The output of the function goes to ETHSign and ETHSignEIP1559 as the
+// recipientAddressCase parameter, which is forwarded to BitBox02 device to reconstruct the address
+// in the correct case(the one that the user enters).
+func ETHIdentifyCase(recipientAddress string) messages.ETHAddressCase {
+	switch {
+	case strings.ToUpper(recipientAddress) == recipientAddress:
+		return messages.ETHAddressCase_ETH_ADDRESS_CASE_UPPER
+	case strings.ToLower(recipientAddress) == recipientAddress:
+		return messages.ETHAddressCase_ETH_ADDRESS_CASE_LOWER
+	default:
+		return messages.ETHAddressCase_ETH_ADDRESS_CASE_MIXED
+	}
+}
+
+// ETHSign signs an ethereum transaction. It returns a 65 byte signature (R, S,
+// and 1 byte recID). Firmware v9.5.0 or newer is required to ensure anti-klepto protection. If
+// len(data) > 6144, firmware v9.26.0 or newer is required.
+func (device *Device) ETHSign(
+	chainID uint64,
+	keypath []uint32,
+	nonce uint64,
+	gasPrice *big.Int,
+	gasLimit uint64,
+	recipient [20]byte,
+	value *big.Int,
+	data []byte,
+	recipientAddressCase messages.ETHAddressCase) ([]byte, error) {
+	return atomicQueriesValue(device, func() ([]byte, error) {
+		return device.nonAtomicETHSign(
+			chainID,
+			keypath,
+			nonce,
+			gasPrice,
+			gasLimit,
+			recipient,
+			value,
+			data,
+			recipientAddressCase,
+		)
+	})
+}
+
+func (device *Device) nonAtomicETHSign(
+	chainID uint64,
+	keypath []uint32,
+	nonce uint64,
+	gasPrice *big.Int,
+	gasLimit uint64,
+	recipient [20]byte,
+	value *big.Int,
+	data []byte,
+	recipientAddressCase messages.ETHAddressCase,
+) ([]byte, error) {
+	if !device.version.AtLeast(semver.NewSemVer(9, 5, 0)) {
+		return nil, UnsupportedError("9.5.0")
+	}
+	useStreaming := len(data) > ethStreamingThreshold
+	if useStreaming && !device.version.AtLeast(semver.NewSemVer(9, 26, 0)) {
+		return nil, UnsupportedError("9.26.0")
+	}
+
+	hostNonceCommitment, hostNonce, err := handleHostNonceCommitment()
+	if err != nil {
+		return nil, err
+	}
+
+	coin, err := device.ethCoin(chainID)
+	if err != nil {
+		return nil, err
+	}
+
+	signReq := &messages.ETHSignRequest{
+		Coin:                coin,
+		ChainId:             chainID,
+		Keypath:             keypath,
+		Nonce:               new(big.Int).SetUint64(nonce).Bytes(),
+		GasPrice:            gasPrice.Bytes(),
+		GasLimit:            new(big.Int).SetUint64(gasLimit).Bytes(),
+		Recipient:           recipient[:],
+		Value:               value.Bytes(),
+		Data:                data,
+		HostNonceCommitment: hostNonceCommitment,
+		AddressCase:         recipientAddressCase,
+	}
+	if useStreaming {
+		signReq.Data = nil
+		signReq.DataLength = uint32(len(data))
+	}
+
+	request := &messages.ETHRequest{
+		Request: &messages.ETHRequest_Sign{
+			Sign: signReq,
+		},
+	}
+	response, err := device.nonAtomicQueryETH(request)
+	if err != nil {
+		return nil, err
+	}
+	if useStreaming {
+		response, err = device.nonAtomicHandleETHDataStreaming(data, response)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return device.nonAtomicHandleSignerNonceCommitment(response, hostNonce)
+}
+
+// ETHSignEIP1559 signs an ethereum EIP1559 transaction. It returns a 65 byte
+// signature (R, S, and 1 byte recID). If paymentRequest is provided or
+// len(data) > 6144, firmware v9.26.0 or newer is required.
+func (device *Device) ETHSignEIP1559(
+	chainID uint64,
+	keypath []uint32,
+	nonce uint64,
+	maxPriorityFeePerGas *big.Int,
+	maxFeePerGas *big.Int,
+	gasLimit uint64,
+	recipient [20]byte,
+	value *big.Int,
+	data []byte,
+	recipientAddressCase messages.ETHAddressCase,
+	paymentRequest *messages.BTCPaymentRequestRequest,
+) ([]byte, error) {
+	return atomicQueriesValue(device, func() ([]byte, error) {
+		return device.nonAtomicETHSignEIP1559(
+			chainID,
+			keypath,
+			nonce,
+			maxPriorityFeePerGas,
+			maxFeePerGas,
+			gasLimit,
+			recipient,
+			value,
+			data,
+			recipientAddressCase,
+			paymentRequest,
+		)
+	})
+}
+
+func (device *Device) nonAtomicETHSignEIP1559(
+	chainID uint64,
+	keypath []uint32,
+	nonce uint64,
+	maxPriorityFeePerGas *big.Int,
+	maxFeePerGas *big.Int,
+	gasLimit uint64,
+	recipient [20]byte,
+	value *big.Int,
+	data []byte,
+	recipientAddressCase messages.ETHAddressCase,
+	paymentRequest *messages.BTCPaymentRequestRequest,
+) ([]byte, error) {
+	if !device.version.AtLeast(semver.NewSemVer(9, 16, 0)) {
+		return nil, UnsupportedError("9.16.0")
+	}
+	useStreaming := len(data) > ethStreamingThreshold
+	if (paymentRequest != nil || useStreaming) && !device.version.AtLeast(semver.NewSemVer(9, 26, 0)) {
+		return nil, UnsupportedError("9.26.0")
+	}
+
+	hostNonceCommitment, hostNonce, err := handleHostNonceCommitment()
+	if err != nil {
+		return nil, err
+	}
+
+	signEIP1559Req := &messages.ETHSignEIP1559Request{
+		ChainId:              chainID,
+		Keypath:              keypath,
+		Nonce:                new(big.Int).SetUint64(nonce).Bytes(),
+		MaxPriorityFeePerGas: maxPriorityFeePerGas.Bytes(),
+		MaxFeePerGas:         maxFeePerGas.Bytes(),
+		GasLimit:             new(big.Int).SetUint64(gasLimit).Bytes(),
+		Recipient:            recipient[:],
+		Value:                value.Bytes(),
+		Data:                 data,
+		HostNonceCommitment:  hostNonceCommitment,
+		AddressCase:          recipientAddressCase,
+		PaymentRequest:       paymentRequest,
+	}
+	if useStreaming {
+		signEIP1559Req.Data = nil
+		signEIP1559Req.DataLength = uint32(len(data))
+	}
+
+	request := &messages.ETHRequest{
+		Request: &messages.ETHRequest_SignEip1559{
+			SignEip1559: signEIP1559Req,
+		},
+	}
+	response, err := device.nonAtomicQueryETH(request)
+	if err != nil {
+		return nil, err
+	}
+	if useStreaming {
+		response, err = device.nonAtomicHandleETHDataStreaming(data, response)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return device.nonAtomicHandleSignerNonceCommitment(response, hostNonce)
+}
+
+// ETHSignMessage signs an Ethereum message. The provided msg will be prefixed with "\x19Ethereum
+// Signed Message\n" + len(msg) in the hardware, e.g. "\x19Ethereum Signed dMessage\n5hello" (yes, the len prefix is the
+// ascii representation with no fixed size or delimiter, WTF).
+// 27 is added to the recID to denote an uncompressed pubkey. Firmware v9.5.0 or newer is required
+// to ensure anti-klepto protection.
+func (device *Device) ETHSignMessage(
+	chainID uint64,
+	keypath []uint32,
+	msg []byte,
+) ([]byte, error) {
+	return atomicQueriesValue(device, func() ([]byte, error) {
+		return device.nonAtomicETHSignMessage(chainID, keypath, msg)
+	})
+}
+
+func (device *Device) nonAtomicETHSignMessage(
+	chainID uint64,
+	keypath []uint32,
+	msg []byte,
+) ([]byte, error) {
+	if len(msg) > 1024 {
+		return nil, errp.New("message too large")
+	}
+	if !device.version.AtLeast(semver.NewSemVer(9, 5, 0)) {
+		return nil, UnsupportedError("9.5.0")
+	}
+
+	hostNonce, err := generateHostNonce()
+	if err != nil {
+		return nil, err
+	}
+	hostNonceCommitment := &messages.AntiKleptoHostNonceCommitment{
+		Commitment: antikleptoHostCommit(hostNonce),
+	}
+
+	coin, err := device.ethCoin(chainID)
+	if err != nil {
+		return nil, err
+	}
+	request := &messages.ETHRequest{
+		Request: &messages.ETHRequest_SignMsg{
+			SignMsg: &messages.ETHSignMessageRequest{
+				Coin:                coin,
+				ChainId:             chainID,
+				Keypath:             keypath,
+				Msg:                 msg,
+				HostNonceCommitment: hostNonceCommitment,
+			},
+		},
+	}
+	response, err := device.nonAtomicQueryETH(request)
+	if err != nil {
+		return nil, err
+	}
+
+	signature, err := device.nonAtomicHandleSignerNonceCommitment(response, hostNonce)
+	if err != nil {
+		return nil, err
+	}
+	// 27 is the magic constant to add to the recoverable ID to denote an uncompressed pubkey.
+	signature[64] += 27
+	return signature, nil
+}
+
+type ethTypedMessageMember struct {
+	Name string
+	Type string
+}
+
+type ethTypedMessage struct {
+	Types       map[string][]ethTypedMessageMember
+	PrimaryType string
+	Domain      map[string]interface{}
+	Message     map[string]interface{}
+}
+
+func parseType(typ string, types map[string][]ethTypedMessageMember) (*messages.ETHSignTypedMessageRequest_MemberType, error) {
+	if strings.HasSuffix(typ, "]") {
+		index := strings.LastIndexByte(typ, '[')
+		if index < 0 {
+			return nil, errp.Newf("invalid array type: %s", typ)
+		}
+		rest, size := typ[:index], typ[index+1:len(typ)-1]
+		var sizeInt uint32
+		if size != "" {
+			i, err := strconv.ParseUint(size, 10, 32)
+			if err != nil {
+				return nil, errp.WithStack(err)
+			}
+			sizeInt = uint32(i)
+		}
+		arrayType, err := parseType(rest, types)
+		if err != nil {
+			return nil, err
+		}
+		return &messages.ETHSignTypedMessageRequest_MemberType{
+			Type:      messages.ETHSignTypedMessageRequest_ARRAY,
+			Size:      sizeInt,
+			ArrayType: arrayType,
+		}, nil
+	}
+	if strings.HasPrefix(typ, "bytes") {
+		size := typ[5:]
+		var sizeInt uint32
+		if size != "" {
+			i, err := strconv.ParseUint(size, 10, 32)
+			if err != nil {
+				return nil, errp.WithStack(err)
+			}
+			sizeInt = uint32(i)
+		}
+		return &messages.ETHSignTypedMessageRequest_MemberType{
+			Type: messages.ETHSignTypedMessageRequest_BYTES,
+			Size: sizeInt,
+		}, nil
+	}
+
+	if strings.HasPrefix(typ, "uint") {
+		size := typ[4:]
+		if size == "" {
+			return nil, errp.New("uint must be sized")
+		}
+		sizeInt, err := strconv.ParseUint(size, 10, 32)
+		if err != nil {
+			return nil, errp.WithStack(err)
+		}
+		return &messages.ETHSignTypedMessageRequest_MemberType{
+			Type: messages.ETHSignTypedMessageRequest_UINT,
+			Size: uint32(sizeInt) / 8,
+		}, nil
+	}
+	if strings.HasPrefix(typ, "int") {
+		size := typ[3:]
+		if size == "" {
+			return nil, errp.New("int must be sized")
+		}
+		sizeInt, err := strconv.ParseUint(size, 10, 32)
+		if err != nil {
+			return nil, errp.WithStack(err)
+		}
+		return &messages.ETHSignTypedMessageRequest_MemberType{
+			Type: messages.ETHSignTypedMessageRequest_INT,
+			Size: uint32(sizeInt) / 8,
+		}, nil
+	}
+	if typ == "bool" {
+		return &messages.ETHSignTypedMessageRequest_MemberType{
+			Type: messages.ETHSignTypedMessageRequest_BOOL,
+		}, nil
+	}
+	if typ == "address" {
+		return &messages.ETHSignTypedMessageRequest_MemberType{
+			Type: messages.ETHSignTypedMessageRequest_ADDRESS,
+		}, nil
+	}
+	if typ == ethTypedMessageStringType {
+		return &messages.ETHSignTypedMessageRequest_MemberType{
+			Type: messages.ETHSignTypedMessageRequest_STRING,
+		}, nil
+	}
+	if _, ok := types[typ]; ok {
+		return &messages.ETHSignTypedMessageRequest_MemberType{
+			Type:       messages.ETHSignTypedMessageRequest_STRUCT,
+			StructName: typ,
+		}, nil
+	}
+	return nil, errp.Newf("Can't recognize type: %s", typ)
+}
+
+func parseTypedMessage(jsonMsg []byte) (*ethTypedMessage, []*messages.ETHSignTypedMessageRequest_StructType, error) {
+	var rawMsg map[string]interface{}
+	if err := json.Unmarshal(jsonMsg, &rawMsg); err != nil {
+		return nil, nil, errp.WithStack(err)
+	}
+
+	rawTypes, typesOK := rawMsg["types"].(map[string]interface{})
+	primaryType, primaryTypeOK := rawMsg["primaryType"].(string)
+	domain, domainOK := rawMsg["domain"].(map[string]interface{})
+	message, messageOK := rawMsg["message"].(map[string]interface{})
+	if !typesOK || !primaryTypeOK || !domainOK || !messageOK {
+		return nil, nil, errp.New("typed data has missing or invalid required fields")
+	}
+
+	msg := &ethTypedMessage{
+		Types:       make(map[string][]ethTypedMessageMember, len(rawTypes)),
+		PrimaryType: primaryType,
+		Domain:      domain,
+		Message:     message,
+	}
+	for name, rawTypeMembers := range rawTypes {
+		typeMembers, ok := rawTypeMembers.([]interface{})
+		if !ok {
+			return nil, nil, errp.New("typed data type members must be an array")
+		}
+		members := make([]ethTypedMessageMember, 0, len(typeMembers))
+		for _, rawMember := range typeMembers {
+			member, ok := rawMember.(map[string]interface{})
+			if !ok {
+				return nil, nil, errp.New("typed data type member must be an object")
+			}
+			memberName, ok := member["name"].(string)
+			if !ok {
+				return nil, nil, errp.New("typed data type member is missing or has invalid name")
+			}
+			memberType, ok := member["type"].(string)
+			if !ok {
+				return nil, nil, errp.New("typed data type member is missing or has invalid type")
+			}
+			members = append(members, ethTypedMessageMember{
+				Name: memberName,
+				Type: memberType,
+			})
+		}
+		msg.Types[name] = members
+	}
+
+	parsedTypes := make([]*messages.ETHSignTypedMessageRequest_StructType, 0, len(msg.Types))
+	for name, typeMembers := range msg.Types {
+		members := make([]*messages.ETHSignTypedMessageRequest_Member, 0, len(typeMembers))
+		for _, member := range typeMembers {
+			parsedType, err := parseType(member.Type, msg.Types)
+			if err != nil {
+				return nil, nil, err
+			}
+			members = append(members, &messages.ETHSignTypedMessageRequest_Member{
+				Name: member.Name,
+				Type: parsedType,
+			})
+		}
+		parsedTypes = append(parsedTypes, &messages.ETHSignTypedMessageRequest_StructType{
+			Name:    name,
+			Members: members,
+		})
+	}
+	return msg, parsedTypes, nil
+}
+
+// Golang's stdlib doesn't support serializing signed integers in big endian (two's complement).
+// -x = ~x+1.
+// Return the shortest encoding that includes a sign bit, including one byte for zero.
+func bigendianInt(integer *big.Int) []byte {
+	if integer.Sign() >= 0 {
+		bytes := integer.Bytes()
+		if len(bytes) == 0 || bytes[0]&0x80 != 0 {
+			return append([]byte{0}, bytes...)
+		}
+		return bytes
+	}
+	bytes := append([]byte{0}, integer.Bytes()...)
+	for i, v := range bytes {
+		bytes[i] = ^v
+	}
+	bytes = new(big.Int).Add(new(big.Int).SetBytes(bytes), big.NewInt(1)).Bytes()
+	// Drop redundant sign extension, e.g. ff80 -> 80 for -128.
+	if len(bytes) > 1 && bytes[0] == 0xff && bytes[1]&0x80 != 0 {
+		bytes = bytes[1:]
+	}
+	return bytes
+}
+
+// encodeValue encodes a json decoded typed data value to send to the BitBox02 as part of the
+// SignTypedData signing process. There is no strict error checking (e.g. that the size is correct
+// according to the type) as the BitBox02 checks for bad input.
+func encodeValue(typ *messages.ETHSignTypedMessageRequest_MemberType, value interface{}) ([]byte, error) {
+	switch typ.Type {
+	case messages.ETHSignTypedMessageRequest_BYTES:
+		v, ok := value.(string)
+		if !ok {
+			return nil, errp.Newf("expected bytes value to be a string, got %T", value)
+		}
+		if strings.HasPrefix(v, "0x") || strings.HasPrefix(v, "0X") {
+			return hex.DecodeString(v[2:])
+		}
+		return []byte(v), nil
+	case messages.ETHSignTypedMessageRequest_UINT:
+		bigint := new(big.Int)
+		switch v := value.(type) {
+		case string:
+			if strings.HasPrefix(v, "0x") || strings.HasPrefix(v, "0X") {
+				_, ok := bigint.SetString(v[2:], 16)
+				if !ok {
+					return nil, errp.Newf("couldn't parse uint: %s", v)
+				}
+			} else {
+				_, ok := bigint.SetString(v, 10)
+				if !ok {
+					return nil, errp.Newf("couldn't parse uint: %s", v)
+				}
+			}
+		case float64:
+			v64 := uint64(v)
+			if float64(v64) != v {
+				return nil, errp.Newf("float64 is not an uint: %v", v)
+			}
+			bigint.SetUint64(v64)
+		default:
+			return nil, errp.New("wrong type for uint")
+		}
+		return bigint.Bytes(), nil
+	case messages.ETHSignTypedMessageRequest_INT:
+		bigint := new(big.Int)
+		switch v := value.(type) {
+		case string:
+			_, ok := bigint.SetString(v, 10)
+			if !ok {
+				return nil, errp.Newf("couldn't parse int: %s", v)
+			}
+		case float64:
+			v64 := int64(v)
+			if float64(v64) != v {
+				return nil, errp.Newf("float64 is not an int: %v", v)
+			}
+			bigint.SetInt64(v64)
+		default:
+			return nil, errp.New("wrong type for int")
+		}
+		return bigendianInt(bigint), nil
+	case messages.ETHSignTypedMessageRequest_BOOL:
+		v, ok := value.(bool)
+		if !ok {
+			return nil, errp.Newf("expected bool value, got %T", value)
+		}
+		if v {
+			return []byte{1}, nil
+		}
+		return []byte{0}, nil
+	case messages.ETHSignTypedMessageRequest_ADDRESS, messages.ETHSignTypedMessageRequest_STRING:
+		v, ok := value.(string)
+		if !ok {
+			return nil, errp.Newf("expected string value, got %T", value)
+		}
+		return []byte(v), nil
+	case messages.ETHSignTypedMessageRequest_ARRAY:
+		v, ok := value.([]interface{})
+		if !ok {
+			return nil, errp.Newf("expected array value, got %T", value)
+		}
+		size := uint32(len(v))
+		result := make([]byte, 4)
+		binary.BigEndian.PutUint32(result, size)
+		return result, nil
+	}
+
+	return nil, errp.New("couldn't encode value")
+}
+
+func getValue(
+	what *messages.ETHTypedMessageValueResponse,
+	msg *ethTypedMessage,
+) ([]byte, messages.ETHSignTypedMessageRequest_DataType, error) {
+	var value interface{}
+	var typ *messages.ETHSignTypedMessageRequest_MemberType
+
+	switch what.RootObject {
+	case messages.ETHTypedMessageValueResponse_DOMAIN:
+		value = msg.Domain
+		var err error
+		typ, err = parseType("EIP712Domain", msg.Types)
+		if err != nil {
+			return nil, messages.ETHSignTypedMessageRequest_UNKNOWN, err
+		}
+	case messages.ETHTypedMessageValueResponse_MESSAGE:
+		value = msg.Message
+		var err error
+		typ, err = parseType(msg.PrimaryType, msg.Types)
+		if err != nil {
+			return nil, messages.ETHSignTypedMessageRequest_UNKNOWN, err
+		}
+	default:
+		return nil, messages.ETHSignTypedMessageRequest_UNKNOWN, errp.Newf("unknown root: %v", what.RootObject)
+	}
+	for _, element := range what.Path {
+		switch typ.Type {
+		case messages.ETHSignTypedMessageRequest_STRUCT:
+			structMembers := msg.Types[typ.StructName]
+			if uint64(element) >= uint64(len(structMembers)) {
+				return nil, messages.ETHSignTypedMessageRequest_UNKNOWN, errp.New("struct member index out of bounds")
+			}
+			object, ok := value.(map[string]interface{})
+			if !ok {
+				return nil, messages.ETHSignTypedMessageRequest_UNKNOWN, errp.Newf("expected struct value to be an object, got %T", value)
+			}
+			structMember := structMembers[element]
+			value, ok = object[structMember.Name]
+			if !ok {
+				return nil, messages.ETHSignTypedMessageRequest_UNKNOWN, errp.Newf("typed data value %q is missing", structMember.Name)
+			}
+			var err error
+			typ, err = parseType(structMember.Type, msg.Types)
+			if err != nil {
+				return nil, messages.ETHSignTypedMessageRequest_UNKNOWN, err
+			}
+		case messages.ETHSignTypedMessageRequest_ARRAY:
+			array, ok := value.([]interface{})
+			if !ok {
+				return nil, messages.ETHSignTypedMessageRequest_UNKNOWN, errp.Newf("expected array value, got %T", value)
+			}
+			if uint64(element) >= uint64(len(array)) {
+				return nil, messages.ETHSignTypedMessageRequest_UNKNOWN, errp.New("array index out of bounds")
+			}
+			value = array[element]
+			typ = typ.ArrayType
+		default:
+			return nil, messages.ETHSignTypedMessageRequest_UNKNOWN, errp.New("path element does not point to struct or array")
+		}
+	}
+	encoded, err := encodeValue(typ, value)
+	if err != nil {
+		return nil, messages.ETHSignTypedMessageRequest_UNKNOWN, err
+	}
+	return encoded, typ.Type, nil
+}
+
+// ETHSignTypedMessage signs an Ethereum EIP-712 typed message. 27 is added to
+// the recID to denote an uncompressed pubkey. If useAntiklepto is false,
+// signing is deterministic and requires firmware >= 9.26.0. If a typed-message
+// bytes value exceeds 6144 bytes, firmware >= 9.26.0 is required to stream it.
+// Typed-message string values larger than 6144 bytes are rejected.
+func (device *Device) ETHSignTypedMessage(
+	chainID uint64,
+	keypath []uint32,
+	jsonMsg []byte,
+	useAntiklepto bool,
+) ([]byte, error) {
+	return atomicQueriesValue(device, func() ([]byte, error) {
+		return device.nonAtomicETHSignTypedMessage(chainID, keypath, jsonMsg, useAntiklepto)
+	})
+}
+
+func (device *Device) nonAtomicETHSignTypedMessage(
+	chainID uint64,
+	keypath []uint32,
+	jsonMsg []byte,
+	useAntiklepto bool,
+) ([]byte, error) {
+	if !device.version.AtLeast(semver.NewSemVer(9, 12, 0)) {
+		return nil, UnsupportedError("9.12.0")
+	}
+	if !useAntiklepto && !device.version.AtLeast(semver.NewSemVer(9, 26, 0)) {
+		return nil, UnsupportedError("9.26.0")
+	}
+
+	msg, parsedTypes, err := parseTypedMessage(jsonMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	var hostNonce []byte
+	var hostNonceCommitment *messages.AntiKleptoHostNonceCommitment
+	if useAntiklepto {
+		var err error
+		hostNonce, err = generateHostNonce()
+		if err != nil {
+			return nil, err
+		}
+		hostNonceCommitment = &messages.AntiKleptoHostNonceCommitment{
+			Commitment: antikleptoHostCommit(hostNonce),
+		}
+	}
+
+	request := &messages.ETHRequest{
+		Request: &messages.ETHRequest_SignTypedMsg{
+			SignTypedMsg: &messages.ETHSignTypedMessageRequest{
+				ChainId:             chainID,
+				Keypath:             keypath,
+				Types:               parsedTypes,
+				PrimaryType:         msg.PrimaryType,
+				HostNonceCommitment: hostNonceCommitment,
+			},
+		},
+	}
+	response, err := device.nonAtomicQueryETH(request)
+	if err != nil {
+		return nil, err
+	}
+
+	typedMsgValueResponse, ok := response.Response.(*messages.ETHResponse_TypedMsgValue)
+	for ok {
+		value, dataType, err := getValue(typedMsgValueResponse.TypedMsgValue, msg)
+		if err != nil {
+			return nil, err
+		}
+		useStreaming := len(value) > ethStreamingThreshold
+		if dataType == messages.ETHSignTypedMessageRequest_STRING && useStreaming {
+			return nil, errp.New("string value exceeds maximum size")
+		}
+		if useStreaming && !device.version.AtLeast(semver.NewSemVer(9, 26, 0)) {
+			return nil, UnsupportedError("9.26.0")
+		}
+		valueRequest := &messages.ETHTypedMessageValueRequest{
+			Value: value,
+		}
+		if useStreaming {
+			valueRequest.Value = nil
+			valueRequest.DataLength = uint32(len(value))
+		}
+		response, err = device.nonAtomicQueryETH(&messages.ETHRequest{
+			Request: &messages.ETHRequest_TypedMsgValue{
+				TypedMsgValue: valueRequest,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		if useStreaming {
+			response, err = device.nonAtomicHandleETHDataStreaming(value, response)
+			if err != nil {
+				return nil, err
+			}
+		}
+		typedMsgValueResponse, ok = response.Response.(*messages.ETHResponse_TypedMsgValue)
+	}
+
+	if useAntiklepto {
+		signature, err := device.nonAtomicHandleSignerNonceCommitment(response, hostNonce)
+		if err != nil {
+			return nil, err
+		}
+		// 27 is the magic constant to add to the recoverable ID to denote an uncompressed pubkey.
+		signature[64] += 27
+		return signature, nil
+	}
+
+	signResponse, ok := response.Response.(*messages.ETHResponse_Sign)
+	if !ok {
+		return nil, errp.New("unexpected response")
+	}
+	signature := signResponse.Sign.Signature
+	if err := validateRecoverableECDSASignature(signature); err != nil {
+		return nil, err
+	}
+	// 27 is the magic constant to add to the recoverable ID to denote an uncompressed pubkey.
+	signature[64] += 27
+	return signature, nil
+}

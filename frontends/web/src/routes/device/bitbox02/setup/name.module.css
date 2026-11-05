@@ -1,0 +1,19 @@
+.input {
+  margin-bottom: 0;
+}
+
+.inputFieldError,
+.inputFieldError:focus-within {
+  border-color: var(--color-danger);
+}
+
+.errorMessage {
+  color: var(--color-danger);
+  display: block;
+  font-size: var(--size-default);
+  padding-top: var(--space-quarter);
+}
+
+.errorMessage[hidden] {
+  display: none;
+}

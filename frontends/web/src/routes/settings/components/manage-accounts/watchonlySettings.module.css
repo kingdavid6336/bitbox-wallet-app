@@ -1,0 +1,18 @@
+.label {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.label * {
+  margin-left: auto;
+}
+
+.labelText {
+  display: inline-block;
+  font-size: var(--size-small);
+  line-height: 1;
+  margin-top: 2px;
+  text-align: right;
+}

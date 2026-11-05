@@ -4,51 +4,70 @@
     "exportTransactions": "İşlemleri İndirilenler Klasörüne CSV Dosyası Olarak Dışa Aktar",
     "fatalError": "Beklenmeyen bir hata oluştu.",
     "incoming": "Gelen",
-    "info": {
-      "btc-p2pkh": "Bu eski bir Bitcoin hesabıdır. Ağ ücretlerini düşürdüğü için Segwit Bitcoin hesabını kullanmanız önerilir.",
-      "btc-p2wpkh": "Bu Yerel Segwit Bitcoin hesabı, bech32 adres formatı aracılığıyla daha düşük ağ ücretlerine olanak sağlıyor. Son teknolojiyi kullanıyor ancak henüz desteklenmiyor.",
-      "btc-p2wpkh-p2sh": "Bu bir Segwit Bitcoin hesabıdır ve daha düşük ağ ücretleri için önerilir. Önceki uygulamadan yeni yükselttiyseniz, fonlarınızı ayarlarda etkinleştirebileceğiniz Bitcoin Legacy hesabında bulabilirsiniz. En son teknolojiyi denemek ve daha fazla ağ ücreti kazanmak istiyorsanız, Ayarlar'a gidin ve Bech32 adres biçimini kullanan bir Yerel Segwit Bitcoin hesabını etkinleştirin.",
-      "tbtc-p2pkh": "$t(account.info.btc-p2pkh)",
-      "tbtc-p2wpkh": "$t(account.info.btc-p2wpkh)",
-      "tbtc-p2wpkh-p2sh": "$t(account.info.btc-p2wpkh-p2sh)"
-    },
     "initializing": "Blockchain'den bilgi alınıyor…",
-    "openFile": "Dosyayı aç",
-    "reconnecting": "Bağlantı koptu, yeniden bağlantı kuruluyor..."
+    "insuranceExpired": "<strong>Hesap artık sigortalı değil</strong>\n\nBu hesabın sigorta planı değiştirildi.\nAyrıntılar için lütfen sigorta sayfasını kontrol edin.",
+    "insured": "Sigortalı hesap",
+    "maybeProxyError": "Tor proxy'si etkinleştirildi. Tor proxy'nizin düzgün çalıştığından emin olun veya proxy ayarını devre dışı bırakın.",
+    "reconnecting": "Bağlantı koptu, yeniden bağlantı kuruluyor...",
+    "syncedAddressesCount": "{{count}} adres tarandı",
+    "uncoveredFundsLink": "Paralarınızı nasıl taşıyacağınızla ilgili bu kılavuzu takip edin.",
+    "warning": "Uyarı!"
   },
   "accountInfo": {
     "address": "Adres",
+    "buyCTA": {
+      "information": {
+        "looksEmpty": "Görünüşe göre bu cüzdan boş.",
+        "start": "Cüzdanınıza biraz para yatırarak veya doğrudan BitBoxApp'te satın alarak başlayın."
+      }
+    },
     "extendedPublicKey": "Genişletilmiş Genel Anahtar",
     "label": "Hesap bilgileri",
     "title": "Hesap Bilgileri",
-    "verify": "Bu cihazda doğrula"
+    "verify": "Bu cihazda doğrula",
+    "xpubTypeChangeBtn": {
+      "p2tr": "Taproot görüntüle",
+      "p2wpkh": "Native Segwit görüntüle"
+    }
   },
   "accountSummary": {
+    "availableBalance": "Mevcut bakiye",
     "balance": "Bakiye",
-    "exportSummary": "Hesap Özetini İndirilenler Klasörüne CSV Dosyası Olarak Dışa Aktar",
-    "fiatBalance": "Fiat Bakiyesi",
     "name": "Hesap adı",
     "noAccount": "Gösterilecek hesap yok.",
-    "synchronizing": "Blockchain'le senkronize edilen hesaplar:",
-    "title": "Hesap Özeti",
-    "total": "Toplam"
+    "title": "Portföyüm",
+    "total": "Toplam",
+    "transactionHistory": "İşlem geçmişi"
   },
   "addAccount": {
-    "accountName": "Hesap Adı",
-    "address": "Adres",
-    "coin": "Coin",
-    "error": {
-      "alreadyExists": "Böyle bir hesap zaten var.",
-      "invalidAddress": "Lütfen geçerli bir adres girin",
-      "xprivEntered": "UYARI: Genişletilmiş bir özel anahtar girdiniz. Lütfen genişletilmiş bir ortak anahtar girin ve özel anahtarlarınızı güvende tutun.",
-      "xpubInvalid": "Genişletilmiş Genel Anahtar hatalı biçimlendirilmiş."
+    "chooseName": {
+      "nextButton": "Hesap ekle",
+      "step": "Hesap İsmi",
+      "title": "Hesabı İsimlendir"
     },
-    "extendedPublicKey": "Genişletilmiş Genel Anahtar",
-    "scriptType": "Komut dosyası türü",
-    "submit": "Hesap Ekle",
-    "title": "Hesap Ekle",
-    "warning": {
-      "xpubWrongNet": "Dikkat: Genişletilmiş ortak anahtar formatı, seçilen hesap türü için geçerli olmayabilir. Beklenen işlemleri göremezseniz, genişletilmiş ortak anahtarı başka bir hesap türüyle bağlamaya çalışın."
+    "selectCoin": {
+      "nextButton": "Sonraki",
+      "step": "Coin Seç"
+    },
+    "success": {
+      "addAnotherAccount": "Başka bir hesap ekle",
+      "message": "<strong>{{accountName}}</strong> artık hesaplarınıza eklendi.",
+      "nextButton": "Bitti",
+      "step": "Tamamlandı",
+      "title": "Hesap eklendi"
+    },
+    "title": "Hesap Ekle"
+  },
+  "aopp": {
+    "addressRequest": "{{host}} alıcı adresi istiyor.",
+    "addressRequestWithLogo": "alıcı adresi istiyor.",
+    "banner": "Adres isteği işleniyor. Devam etmek için lütfen cihazınızı bağlayın.",
+    "errorTitle": "Adres isteği sırasında hata",
+    "labelAddress": "Adres",
+    "labelMessage": "Mesaj",
+    "reverifyInfoText": "Adresi Doğrula",
+    "success": {
+      "title": "Adres başarıyla gönderildi."
     }
   },
   "app": {
@@ -103,11 +122,7 @@
       "title": "Geri Yükle",
       "understand": "Yanlış kurtarma şifresinin farklı bir cüzdan yaratacağını onaylıyorum"
     },
-    "restoreFromMnemonic": {
-      "confirmTitle": "BIP39 anımsatıcısından geri yükle"
-    },
     "showMnemonic": {
-      "description": "Cüzdanınızın yedeğini oluşturan 24 kelimeyi size sunacağız. Onları kağıda yazın.\n\n<strong>Bunları dijital olarak saklamayın veya fotoğraflarını çekmeyin.</strong>\n\n<strong>Kelimeleri yüksek sesle söyleme.</strong>\n\n<strong>Bu yedekleme şifre korumalı değildir.</strong>\n\nSonrasında, her bir kelimeyi tek tek onaylamanız istenecektir.",
       "title": "BIP39 Anımsatıcısını Göster"
     },
     "title": "Yedeklemeleri Yönet"
@@ -120,14 +135,13 @@
     },
     "flipscreen": "Ekran çevir",
     "orientation": "Cihaz yanlış yöne mi yöneldi?",
-    "success": "Yükseltme başarılı!  {{rebootSeconds}} saniye içerisinde devam edecek..."
+    "success": "Yükseltme başarılı!  "
   },
   "bitbox": {
     "error": {
       "e10000": "Geçerli cihaz şifresi yanlış.",
       "e10001": "Cihazın şifresini değiştirme başarısız",
-      "e102": "Şifre en az 4 karakterden oluşmalıdır.",
-      "e112": "Gizli cihaz şifresi, ana cihaz şifresi ile aynı olamaz."
+      "e102": "Şifre en az 4 karakterden oluşmalıdır."
     }
   },
   "bitbox02Interact": {
@@ -138,17 +152,10 @@
       "current": "Geçerli cihaz adı",
       "input": "BitBox02 Adı",
       "title": "BitBox02 cihazınızı isimlendirin"
-    },
-    "mnemonicPassphrase": {
-      "description": "Bu, BitBox02 cihazınızın kilidini açtıktan sonra hatırlatıcı bir parola girmenizi sağlar.\n\n<strong>NOT:</strong> herhangi bir anımsatıcı parola yeni bir ayrı cüzdan oluşturur.\nAnımsatıcı parolanızı <strong>güvenli</strong> bir şekilde saklayın.\n<strong>Bir hatırlatıcı parola kaybı, kurtarılamaz.</strong>",
-      "disable": "Kurtarma Anahtarını Devre Dışı Bırak",
-      "enable": "Kurtarma Anahtarını Etkinleştir",
-      "successDisable": "Kurtarma Anahtarı başarıyla devredışı bırakıldı",
-      "successEnable": "Kurtarma Anahtarı başarıyla etkinleştirildi.\n\nArtık BitBox 02 cihazınızın kilidini açtıktan sonra bir parola ekleyebilirsiniz.\n\nKurtarma anahtarının ne olduğunu bilmiyorsanız, lütfen bu seçeneği devre dışı bırakın. Bu seçenek gelişmiş kullanıcılar içindir. \n\n\n<strong>Uyarı:</strong> Her parola geçerli bir cüzdan oluşturur.\nBu nedenle parolanızı <strong>güvende tuttuğunuzdan ve onu kaybetmediğinizden</strong> emin olmanız gerekir.\n\n<strong>Parolanızı kaybederseniz cüzdanınıza bir daha erişemezsiniz. Bu da kripto paralarınızın kaybolacağı anlamına gelir.</strong>"
     }
   },
   "bitbox02Wizard": {
-    "attestationFailed": "Cihaz onayı başarısız oldu. BitBox'ınız sahte veya tehlikede olabilir. BitBox02 üzerindeki paralar kaybolma riski altında olabilir. Lütfen acilen support@shiftcrypto.ch ile iletişime geçin.",
+    "attestationFailed": "Cihaz onayı başarısız oldu. BitBox'ınız sahte veya tehlikede olabilir. BitBox02 üzerindeki paralar kaybolma riski altında olabilir. Lütfen acilen support@bitbox.swiss ile iletişime geçin.",
     "backup": {
       "point1": "MicroSD karttan bir yedek seçin",
       "point2": "Cihazınız için bir şifre belirleyin",
@@ -171,24 +178,16 @@
       "text": "Tamam, hadi yeni bir cüzdan yaratalım!"
     },
     "initialize": {
-      "passwordText": "Şimdi cihazınız için bir şifre ayarlayalım. Bir şifre girmek ve bir şifre seçmek için BitBox'ınızdaki kontrolleri kullanın.",
-      "passwordTitle": "BitBox'ınız için bir şifre belirleyin",
-      "text": "BitBox02 cihazınız başarıyla eşleştirildi! Şimdi cihazınızı başlatalım. Yeni bir cüzdan oluşturmayı veya cüzdanı mevcut bir yedekten geri yüklemeyi seçerek başlayın. <strong>Lütfen BitBox02 cihazınıza takılı bir microSD kartın olduğundan emin olun.</strong>",
-      "tip": "Başlamadan önce, işlemlere güvenli bir ortamda devam etmeniz şiddetle tavsiye edilir.",
-      "title": "BitBox'ınızı başlatın"
+      "tip": "Başlamadan önce, işlemlere güvenli bir ortamda devam etmeniz şiddetle tavsiye edilir."
     },
-    "insertSDCard": "<strong>Lütfen BitBox02 cihazınıza takılı bir microSD kartın olduğundan emin olun.</strong>",
     "pairing": {
-      "confirmButton": "Devam et",
       "failed": "Onaylanmamış eşleştirme. Lütfen BitBox02'nizi değiştirin.",
       "paired": "Cihazınızda kodun eşleştiğini onayladınız. Bu doğruysa, aşağıdaki düğmeye tıklayarak devam edebilirsiniz.",
       "title": "Eşleştirme Kodunu Doğrulayın",
       "unpaired": "Yeni bir BitBox02 tespit edildi. Lütfen aşağıdaki kodun cihazınızda gösterilenlerle eşleştiğini doğrulayın. Kod eşleşirse, BitBox02 üzerindeki onay işaretinin altındaki simgeye dokunun ve devam etmek için aşağıdaki düğmeye tıklayın."
     },
     "restoreFromMnemonic": {
-      "failed": "BIP39 anımsatıcısından geri yükleme başarısız oldu, lütfen tekrar deneyin.",
-      "point1": "Kelimeleri girin",
-      "point2": "$t(bitbox02Wizard.backup.point2)\n"
+      "failed": "BIP39 anımsatıcısından geri yükleme başarısız oldu, lütfen tekrar deneyin."
     },
     "stepBackup": {
       "beforeProceed": "Devam etmeden önce, lütfen şu önemli güvenlik hususlarını okuyun:",
@@ -202,8 +201,6 @@
       "unlock": "Kilidi açmak için BitBox02 şifresini girin."
     },
     "stepCreate": {
-      "buttonBack": "Geri dön",
-      "buttonContinue": "Devam et",
       "nameLabel": "BitBox02 adı",
       "namePlaceholder": "Benim BitBox02 cüzdanım",
       "title": "BitBox02 adını seçin",
@@ -224,217 +221,16 @@
       "restoreMnemonic": "Anımsatıcıdan geri yükle",
       "title": "BitBox02 cihazınızı kurun"
     },
-    "stepUnpaired": {
-      "verify": "Lütfen eşleme kodunun BitBox02’de gösterilenlerle eşleştiğini doğrulayın."
-    },
     "success": {
-      "text": "Yaşasın! BitBox02'niz artık kullanıma hazır.\n\nBitBox Uygulaması'nın nasıl kullanılacağı hakkında daha fazla bilgi için, lütfen sağ üst köşedeki soru işaretini tıklayarak uygulama içi kılavuzunu kullanın.",
       "title": "Başlamaya hazırsın!"
     }
-  },
-  "bitboxBase": {
-    "connect": "Bağlantı Merkezi",
-    "connectedBases": "Bağlı cihazlar",
-    "detectedBases": "Ağınızdaki aşağıdaki cihazları tespit ettik:",
-    "detectedBasesEmpty": "Hiçbir cihaz bulunamadı",
-    "manualInput": "BitBox Merkezi'ni göremiyor musunuz? Aşağıdan manuel bağlayın:",
-    "manualInputInvalid": "Geçersiz IP adresi",
-    "manualInputLabel": "IP adresi: port",
-    "new": "Yeni BitBoxBase",
-    "settings": {
-      "advanced": {
-        "confirmSystemPassword": "Bu, kullanmak için BitBoxBase sistem şifresini ayarlar. <strong>ssh kimlik doğrulaması ve sudo erişimi.</strong>\n$t(generic.confirmToContinue)",
-        "connectElectrum": "Electrum'a bağlan",
-        "ipAddress": "IP adresi",
-        "manual": "Manuel güncelleme",
-        "port": "Port",
-        "reset": "Fabrika ayarlarına sıfırla",
-        "sshAccess": {
-          "button": "SSH şifresi girişi",
-          "confirm": " {{toggle}} SSH şifre doğrulama ile şifre doğrulamak ister misiniz?",
-          "inProgress": "SSH şifresi kimlik doğrulamasını değiştirme",
-          "success": "SSH şifre doğrulaması {{enabled}}",
-          "title": "SSH erişimi"
-        },
-        "subheaders": {
-          "bitcoin": "Bitcoin Core",
-          "electrs": "Electrs",
-          "lightning": "Lightning",
-          "networking": "Ağ"
-        },
-        "syncOptions": "Senkronize seçenekleri",
-        "systemPassword": "Sistem şifresini ayarla",
-        "systemPasswordSuccess": "BitBoxBase sistem şifresi başarıyla ayarlandı",
-        "title": "Gelişmiş Ayarlar"
-      },
-      "backups": {
-        "confirmBackup": "Yeni bir yedekleme oluşturmak ister misiniz?",
-        "create": "Yedek oluştur",
-        "created": "Yedekleme başarıyla oluşturuldu.",
-        "creating": "Yedek oluşturuluyor...",
-        "manage": "Yedekleri yönet",
-        "restore": "Yedeklemeyi geri yükle",
-        "title": "Yedekler"
-      },
-      "node": {
-        "bitcoinRestarting": "Temel hizmetler yeniden başlatılıyor ...",
-        "changeName": "İsmini değiştir",
-        "changeNameTitle": "BitBoxBase hostname'ini değiştir",
-        "confirmTorEnabled": {
-          "false": "Tor'u <strong>etkinleştirmek</strong> istediğinize emin misiniz?\n $t(bitboxBase.settings.node.warning)",
-          "true": "Tor'u <strong>devre dışı</strong> bırakmak istediğine emin misin?\n Bunun mahremiyetle ilgili ciddi ve geri dönüşü olmayan etkileri olabilir ve önerilmemektedir.\n $t(bitboxBase.settings.node.warning)"
-        },
-        "disconnect": "Bağlantı koptu",
-        "newName": "Yeni ana bilgisayar adı girin",
-        "password": "Şifre değiştir",
-        "title": "Node",
-        "tor": "Tor",
-        "warning": "Lütfen değişikliklerin geçerli olması için 1-2 dakika bekleyin."
-      },
-      "system": {
-        "confirmRestart": "BitBoxBase'iniz şimdi <strong>yeniden başlatılacak</strong> Hazır olduğunuzda tekrar bağlanmanız gerekecektir.\n $t(generic.confirmToContinue)",
-        "confirmShutdown": "BitBoxBase'iniz şimdi <strong>kapatılacak</strong> ve manuel olarak tekrar açmak zorunda kalacaksınız.\n $t(generic.confirmToContinue)",
-        "confirmUpdate": "BitBoxBase'inizi {{current}} sürümünden {{newVersion}}sürümüne güncellemek ister misiniz?",
-        "restart": "Tekrar başlat",
-        "shutdown": "Kapat",
-        "title": "Sistem",
-        "upToDate": "BitBoxBase'iniz güncel",
-        "update": "Güncelleştirme",
-        "updateProgress": {
-          "updateApplying": "Güncelleştirmeler yükleniyor...",
-          "updateDownloading": "Güncelleme dosyaları indiriliyor ...",
-          "updateFailed": "Güncelleştirme başarısız",
-          "updateNotInProgress": "Güncelleme bilgileri alınıyor...",
-          "updateRebooting": "Yeniden başlatılıyor...",
-          "warning": "Tamamlandığında, Ağın bağlantısı otomatik olarak kesilecek ve yeniden başlatılacaktır."
-        },
-        "updateSeverity": "Severity",
-        "updateTitle": "BitBoxBase'i Güncelle"
-      },
-      "title": "<strong>BITBOX</strong>Ayarları"
-    },
-    "title": "BitBoxBase"
-  },
-  "bitboxBaseUnlock": {
-    "placeholder": "Kilidi açmak için BitBoxBase şifrenizi girin"
-  },
-  "bitboxBaseWizard": {
-    "backups": {
-      "created": "Yedeklemeniz <strong>USB flash sürücüsü</strong>'nde oluşturuldu",
-      "createdTitle": "Konfigürasyonlar yükleniyor",
-      "finalizing": "BitBoxBase kurulumu şimdi tamamlıyor. Bu işlem sadece birkaç saniye sürecek.",
-      "insert": "Cüzdanınızı yedeklemek için BitBoxBase'e bir USB bellek yerleştirin.",
-      "list": {
-        "point1": "Bu yedekleme hassas bilgiler içeriyor.",
-        "point2": "BitBoxBase yönetim şifresini sıfırlamanıza izin verir.",
-        "point3": "Lütfen <strong>flash belleğinizi çıkarın</strong> şimdi ve güvenli bir yerde saklayın."
-      },
-      "title": "Cüzdan yedekleme"
-    },
-    "bitcoin": {
-      "presync": "Pre-synced'i kullanın",
-      "presyncInfo": {
-        "con1": "Sağlanan verilere güven",
-        "con2": "Bitcoin işlem geçmişinin bağımsız doğrulaması yok",
-        "label": "Başlamanın en hızlı yolu",
-        "pro1": "BitBoxBase dakikalar içinde hazır olacak",
-        "pro2": "İlk indirme veya doğrulama gerekmez"
-      },
-      "reindex": "Reindex",
-      "reindexInfo": {
-        "con1": "BitBoxBase'in hazır olması yaklaşık 1 gün sürer",
-        "label": "Blockchain'in tamamını doğrula",
-        "pro1": "Önceden senkronize edilmiş Bitcoin Blockchain'inin tam validasyonu",
-        "warning": "Bu işlem yaklaşık 1 gün sürer. Devam etmek istediğine emin misin?"
-      },
-      "resync": "Yeniden senkronize et",
-      "resyncInfo": {
-        "con1": "BitBoxBase'in hazır olması 2 gün sürebilir",
-        "con2": "Bitcoin ve Tor ağlarını yükler",
-        "label": "Blockchain'in tamamını indirin ve doğrulayın",
-        "pro1": "Bağımsız olarak indirilen Bitcoin Blockchain'in tam doğrulaması",
-        "warning": "İnternet bağlantınıza bağlı olarak bu işlem 2 gün sürebilir. Devam etmek istediğine emin misin?"
-      },
-      "title": "Senkronizasyon tercihinizi seçin"
-    },
-    "errors": {
-      "networkSetting": "Ağ ayarı bulunamadı"
-    },
-    "hostname": {
-      "label": "Hostadı",
-      "placeholder": "Geçerli ana bilgisayar adı örn. 'Mybitboxbase'",
-      "title": "Bir isim seç",
-      "tooltip": "Geçerli ana bilgisayar adı 2-64 karakter arasındadır; küçük harf a-z; basamak 0-9; ve ilk ve son karakterleri hariç olmak üzere"
-    },
-    "networks": {
-      "clearnet": {
-        "con1": "Tedbirsiz kullanıldıysa, evin IP adresini ve coğrafi konumunu sızdırır",
-        "con2": "ISP, Bitcoin düğümünü algılayabilir",
-        "label": "Tüm bağlantılar için clearnet kullanın; tavsiye edilmez.",
-        "pro1": "En hızlı",
-        "pro2": "Daha az gecikme",
-        "pro3": "VPN kullanımına izin verir",
-        "select": "Clearnet'i seçin",
-        "title": "Clearnet"
-      },
-      "clearnetThenTor": {
-        "con1": "Tor ağını yükler",
-        "label": "İlk bloğu indirmek için clearnet kullanın (IBD), ardından Tor'a geçin",
-        "pro1": "Daha hızlı indir",
-        "pro2": "IBD sırasında Tor ağı yüklenmez",
-        "select": "Clearnet + Tor'u seçin",
-        "title": "Clearnet sonrasında Tor"
-      },
-      "title": "Ağ seç",
-      "tor": {
-        "con1": "Tor ağını yükler",
-        "con2": "Totaliter yargı alanlarında muhtemelen şüpheli",
-        "label1": "Tüm bağlantılar için Tor kullanın; tavsiye edilen.",
-        "label2": "Tüm bağlantılar için Tor kullanın",
-        "pro1": "Özel",
-        "pro2": "Fiziksel konumun izlenmesini zorlaştır",
-        "pro3": "Uzaktan erişime izin verir",
-        "select": "Tor seç",
-        "title": "Tor"
-      }
-    },
-    "pairing": {
-      "failed": "Onaylanmamış eşleştirme. Lütfen bağlantıyı kesmeyi ve BitBox Base'e tekrar bağlanmayı deneyin.",
-      "paired": "BitBox Base’inizde kodun eşleştiğini onayladınız.",
-      "title": "Eşleştirme Kodunu Doğrulayın",
-      "unpaired": "Yeni bir BitBox Base bağlandı. Lütfen aşağıdaki kodun BitBox Base'de gösterilenlerle eşleştiğini doğrulayın. Kod eşleşirse, BitBox Base'inizdeki onay işaretinin altındaki simgesine dokunun ve devam etmek için aşağıdaki düğmeye tıklayın."
-    },
-    "setPassword": "Bir şifre belirle",
-    "setup": {
-      "custom": {
-        "point1": "Senkronizasyon seçenekleri",
-        "point2": "Ağ seçenekleri",
-        "point3": "Özel hostname",
-        "select": "Özel seçim",
-        "title": "Özel"
-      },
-      "quick": {
-        "point1": "Önceden senkronize edilmiş Blockchain",
-        "point2": "Varsayılan olarak Tor",
-        "point3": "Varsayılan hostname",
-        "select": "Hızlı tercih",
-        "title": "Hızlı başlangıç"
-      },
-      "title": "Kurulumu seç"
-    },
-    "success": {
-      "button": "Kontrol paneline git",
-      "text": "Tüm gösterge paneli bilgilerinin güncel tutulması bir veya iki dakika sürebilir.",
-      "title": "Başlamaya hazırsın!"
-    },
-    "welcome": "BitBoxBase'inize hoş geldiniz"
   },
   "blink": {
     "button": "Göz ardı et"
   },
   "bootloader": {
     "button": "Donanım yazılımını şimdi yükselt",
-    "progress": "Yükseltme: {{ilerleme}}%",
+    "progress": "Yükseltme",
     "success": "Yükseltme başarılı! Lütfen cihazı tekrar takın. Bu kez, düğmeye dokunmayın."
   },
   "button": {
@@ -446,14 +242,11 @@
     "copy": "Kopyala",
     "create": "Oluştur",
     "download": "İndir",
-    "hiddenwallet": "Gizli Cüzdan Oluştur",
     "next": "Sonraki",
     "ok": "Tamam",
     "previous": "Önceki",
-    "receive": "Alınan",
     "restore": "Geri Yükle",
     "select": "Seç",
-    "send": "Gönder",
     "unlock": "Kilidini aç",
     "update": "Güncelleştirme",
     "upgrade": "Yükselt"
@@ -465,24 +258,11 @@
   "checkSDcard": "Mikro SD kart kontrol ediliyor",
   "clickHere": "Buraya tıklayın.",
   "confirm": {
-    "abortInfo": "Dokunun",
-    "abortInfoRedText": "İptal et",
-    "approveInfo": "Şu tuşa 4 saniye basılı tut ",
-    "approveInfoGreenText": "doğrula",
-    "info": "BitBox'ınızda",
-    "infoWhenPaired": "Önce telefonla sonrasında Bitbox'la eşleştirin"
+    "info": "BitBox'ınızda"
   },
   "confirmOnDevice": "Lütfen cihazınızda onaylayın.",
   "device": {
     "appUpradeRequired": "BitBox'ınız bu masaüstü uygulaması ile uyumlu değil. Lütfen en son sürümü indirin ve yükleyin."
-  },
-  "deviceLock": {
-    "button": "Two Factor Authorization (2FA) Etkinleştirme",
-    "condition1": "Bir yedeğin var mı?",
-    "condition2": "Mobil uygulama doğrulama çalışıyor mu?",
-    "condition3": "2FA yedekleri ve mobil uygulama eşleştirmesini DEVRE DIŞI bırakır. 2FA'dan çıkmak için cihazın SIFIRLANMASI olması gerekir!",
-    "confirm": "Two Factor Authorization (2FA) Etkinleştirme",
-    "title": "Two Factor Authorization (2FA) Etkinleştirme"
   },
   "deviceSettings": {
     "firmware": {
@@ -504,24 +284,6 @@
       "title": "Donanım"
     },
     "loading": "Cihaz bilgisi alınıyor…",
-    "pairing": {
-      "lock": {
-        "false": "Devre dışı",
-        "label": "Two Factor Authorization (2FA)",
-        "true": "Etkinleştir"
-      },
-      "mobile": {
-        "false": "Kapalı",
-        "label": "Mobil Uygulama",
-        "true": "Aç"
-      },
-      "status": {
-        "false": "Eşleştirilmemiş",
-        "label": "Durum",
-        "true": "Eşleştirilmiş"
-      },
-      "title": "Eşleştirme"
-    },
     "secrets": {
       "manageBackups": "Yedekleri Yönet",
       "title": "Secrets"
@@ -539,11 +301,6 @@
   },
   "footer": {
     "appVersion": "Uygulama Sürümü:"
-  },
-  "generic": {
-    "applying": "Yapılandırma uygulanıyor",
-    "confirmToContinue": "Lütfen devam etmek için onaylayın.",
-    "description": "Açıklama"
   },
   "genericError": "Bir hata oluştu. Herhangi bir sorunla karşılaşırsanız, lütfen uygulamayı yeniden başlatın.",
   "goal": {
@@ -595,15 +352,7 @@
         "title": "Genişletilmiş genel anahtar nedir?"
       }
     },
-    "accountLegacyConvert": {
-      "text": "Bitcoin hesabına gidin, adresi seçin ve adresi kopyalayın. Eski hesabınıza geri dönün, gönder düğmesine tıklayın, kopyalanan adresi yapıştırın ve tümünü gönder seçeneğini işaretleyin. Ardından tüm paralarınızı tek bir işlemde taşımak için imzalayın ve gönderin.",
-      "title": "Paralarımı Legacy hesabından nasıl çıkarabilirim?"
-    },
     "accountRates": {
-      "link": {
-        "text": "www.coingecko.com",
-        "url": "https://www.coingecko.com/"
-      },
       "text": "Kripto para kurlarını her dakika CoinGecko'dan güncelliyoruz.",
       "title": "Hangi döviz kurları uygulanıyor?"
     },
@@ -614,9 +363,6 @@
     "accountSendDisabled": {
       "text": "Bakiyeniz sıfırdan fazla olduğunda \"Gönder\" butonu etkinleşir.",
       "title": "Neden hiçbir şey gönderemiyorum {{unit}}?"
-    },
-    "accountTransactionAttributesBTC": {
-      "title": ""
     },
     "accountTransactionAttributesGeneric": {
       "text": "Onaylar: İlk işlem yayınınız, bir madenci bir bloğa dahil edinceye kadar onaylanmaz, ardından bir onay verilir. Ağda yayınlanan her blok, işleminize başka bir onay ekler. Genel olarak, tüccarlar ve diğer ağ aktörler üç ila altı onay aldığında işlemleri gerçekleştirir.\nİşlem Kimliği: Bir blok gezgininde bir işlem aramanıza izin veren benzersiz bir kimlik numarası.\nÜcret: Madencilere, işlemleri onaylamalarını teşvik etmek için işlem ücreti ödenir. Daha fazla bilgi için, gönder düğmesine tıklayın.",
@@ -635,7 +381,6 @@
       "title": "Ne zaman görüntülenir?"
     },
     "appendix": {
-      "href": "https://shiftcrypto.ch/contact",
       "link": "Bizimle iletişime geçin!",
       "text": "Başka bir soru?"
     },
@@ -672,33 +417,12 @@
       }
     },
     "bitbox": {
-      "2FA": {
-        "text": "2FA etkinleştirildiğinde, para harcamak için tüm işlemlerin eşleştirilmiş cep telefonunda onaylanması gerekir. Böylece şiifreli bir tek kullanımlık numara mobil uygulamaya gönderilir, orada şifresi çözülür ve Kabul Et düğmesine basıldığında BitBox'a geri döndürülür. Cihazla bu iletişim, cep telefonu ile eşleştirme sırasında kurulan bu masaüstü uygulaması arasındaki kanal üzerinden yapılır.\n\n2FA'yı etkinleştirmeden önce cüzdanınızı yedeklediğinizden ve mobil uygulamayı eşleştirdiğinizden emin olun. Once enabled, the micro SD slot and mobile app pairing are disabled. They can be re-enabled by resetting the BitBox, which erases the device.",
-        "title": "İki faktörlü doğrulama (2FA) nasıl çalışır?"
-      },
-      "disable2FA": {
-        "text": "2FA'yı devre dışı bırakmak için, BitBox'ınızı sıfırlamanız ve ardından cüzdanı yedekten geri yüklemeniz gerekir. Yedeklemeye sahip microSD kartın hala olduğundan ve kurtarma şifresini hala hatırladığınızdan emin olun. Ardından 'Cihazı sıfırla' tuşuna basın. Yeni bir cihaz şifresi belirleyin ve 'Veya yedeği geri yükle'yi seçin. Cüzdanda oluşturduğunuz yedeklemeyi seçin, 'Geri Yükle'yi tıklayın ve cüzdanı oluştururken kullandığınız kurtarma şifresini girin.",
-        "title": "İki faktörlü doğrulamayı (2FA) nasıl devre dışı bırakabilirim?"
-      },
       "ejectBitbox": {
-        "text": "",
         "title": "BitBox'ı nasıl çıkarabilirim?"
       },
       "ejectSD": {
         "text": "MicroSD kartı BitBox'tan istediğiniz zaman yedekleme oluşturma veya geri yükleme işlemi yapmadığınız sürece kaldırabilirsiniz.",
         "title": "MicroSD kartı nasıl çıkarabilirim?"
-      },
-      "hiddenWallet": {
-        "text": "Aynı cihazda, makul bir reddedilebilirlik için kullanabileceğiniz farklı bir cihaz şifresi ve kurtarma şifresiyle korunan ikinci bir cüzdandır. Aynı yedek send hem normal, hem de gizli cüzdanınız için kullanılır, bu nedenle ek bir yedekleme gerekmez.",
-        "title": "Gizli cüzdan nedir?"
-      },
-      "legacyHiddenWallet": {
-        "text": "Önce aşağıdaki düğmeyi tıklayın (BitBox ana cihaz şifresiyle açılmışsa ve 2FA devre dışı bırakılmışsa kullanılabilir), ardından Bitbox'ınızı yeniden takıp kilidini gizli cihaz şifrenizle açın.",
-        "title": "Eski gizli cüzdanıma nasıl erişirim?"
-      },
-      "pairing": {
-        "text": "Mobil uygulamamızı iOS veya Android için indirdikten sonra, mobil uygulama ile bu uygulama arasında güvenli bir kanal kuran görüntülenen QR kodunu tararsınız. Tarandıktan sonra mobil uygulamadaki talimatları izleyin.",
-        "title": "Telefonumla güvenli bir şekilde nasıl eşleştirilir"
       }
     },
     "receive": {
@@ -715,7 +439,6 @@
         "title": "Bir adresi güvenli bir şekilde nasıl doğrulayabilirim?"
       },
       "why20": {
-        "text": "",
         "title": "Neden sadece 20 adres?"
       },
       "whyMany": {
@@ -745,44 +468,16 @@
         "title": "Neden ağ ücreti var?"
       }
     },
+    "settings": {
+      "servers": {
+        "text": "Bu uygulama, güncellemeleri kontrol etmek, işlemleri yüklemek ve eşleştirilmiş mobil uygulamalara bilgi göndermek için Shift Crypto sunucuları ile iletişim kurar.\nBu uygulama aynı zamanda CoinGecko'den en son döviz kurlarını alıyor. Tüm dönüşümler yerel olarak hesaplanır, bu işleminizin miktarı ile ilgili hiçbir veri iletilmediği anlamına gelir.\nNot: Ethereum ve ERC20 Tokens için Etherscan.io API'lerini kullanıyoruz.",
+        "title": "Bu uygulama hangi sunucularla konuşuyor?"
+      }
+    },
     "settings-electrum": {
       "what": {
         "text": "Shift sunucularını kullanmak yerine cüzdanınıza kendi tam node'larınızla güç vermek mümkündür.",
         "title": "Bu nedir?"
-      }
-    },
-    "settings": {
-      "btc-p2pkh": {
-        "text": "Eski bir işlem formatı kullanan ve artık Segwit adresi ve işlem formatları tarafından değiştirilen bir hesap. BitBox'ı eski masaüstü uygulamasıyla kullandıysanız, bu hesap paralarınızı içerecektir. İşlem ücretlerinden tasarruf etmek için paralarınızı bir Bitcoin veya Bitcoin bech32 hesabına aktarmanızı öneririz.",
-        "title": "Bitcoin Legacy nedir?"
-      },
-      "btc-p2sh": {
-        "link": {
-          "text": "SegWit'in Faydaları",
-          "url": "https://bitcoincore.org/en/2016/01/26/segwit-benefits/\n"
-        },
-        "text": "Bu geriye dönük uyumlu bir segwit hesabıdır (p2sh-p2wpkh). Size ağ ücretlerinden tasarruf sağlayan yeni bir işlem biçimi kullanır. Adres formatı eskilere benzer ve mevcut tüm Bitcoin cüzdan/ borsa/servislerle birlikte kullanılabilir.",
-        "title": "Bitcoin hesabı nedir?"
-      },
-      "btc-p2wpkh": {
-        "link": {
-          "text": "Bech32 adaptasyonu",
-          "url": "https://en.bitcoin.it/wiki/Bech32_adoption\n\n"
-        },
-        "text": "Segwit'in daha ucuz ağ ücretlerinden tam olarak yararlanmak için yeni Bitcoin Bech32 adres biçimini kullanın. Bu formatın henüz her yerde kabul edilmediğini unutmayın.",
-        "title": "Bitcoin bech32 nedir?"
-      },
-      "moreCoins": {
-        "text": "Gelecek birkaç sürümde, Litecoin dışında daha fazla altcoin ekleyeceğiz. Belirli bir madeni para için arıyorsanız, bize aşağıdan bir öneri bırakın.",
-        "title": "Daha fazla para ekleyebilir misin?"
-      },
-      "servers": {
-        "text": "Bu uygulama, güncellemeleri kontrol etmek, işlemleri yüklemek ve eşleştirilmiş mobil uygulamalara bilgi göndermek için Shift Crypto sunucuları ile iletişim kurar.\nBu uygulama aynı zamanda CoinGecko'den en son döviz kurlarını alıyor. Tüm dönüşümler yerel olarak hesaplanır, bu işleminizin miktarı ile ilgili hiçbir veri iletilmediği anlamına gelir.\nNot: Ethereum ve ERC20 Tokens için Etherscan.io API'lerini kullanıyoruz.",
-        "title": "Bu uygulama hangi sunucularla konuşuyor?"
-      },
-      "whyMultipleAccounts": {
-        "text": "Bazı kripto para birimlerinin çoklu adres ve işlem biçimleri vardır. Bu adresler ekstra hesaplara ayrılmıştır.",
-        "title": "$t(settings.expert.splitAccounts)"
       }
     },
     "title": "Kılavuz",
@@ -801,14 +496,9 @@
       }
     },
     "waiting": {
-      "deviceNotRecognized": {
-        "text": "Cihaz yerleştirildiğinde bir kez yanıp sönmelidir. Etrafına doğru yerleştirildiğinden emin olun. Eğer sorun yaşıyorsanız, lütfen aşağıdaki bağlantıdan bize ulaşın.",
-        "title": "BitBox01 tanınmıyor"
-      },
       "getDevice": {
         "link": {
-          "text": "Bir BitBox siparişi verin",
-          "url": "https://shiftcrypto.shop/"
+          "text": "Bir BitBox siparişi verin"
         },
         "text": "Online mağazamızda bir BitBox satın alabilirsiniz:",
         "title": "Nasıl bir cihazı nasıl alabilirim?"
@@ -819,8 +509,7 @@
       },
       "lostDevice": {
         "link": {
-          "text": "Yedekleme merkezi",
-          "url": "https://shiftcrypto.ch/backup\n"
+          "text": "Yedekleme merkezi"
         },
         "text": "Hesaplarınızı yeni bir BitBox'la veya yedekleme merkezimizde kurtarabilirsiniz.",
         "title": "Cihazımı kaybettim. Şimdi ne olacak?"
@@ -838,16 +527,6 @@
   "headerssync": {
     "blocksSynced": "{{blocks}} blok senkronize edildi"
   },
-  "hiddenWallet": {
-    "info1HTML": "",
-    "info2HTML": "Aşağıdaki gizli cüzdanınızla ilişkilendirmek istediğiniz cihaz şifresini ve kurtarma şifresini tanımlayın. Cihaz şifresi ve kurtarma şifresi <strong>farklı</strong> birincil cüzdanınız için tanımladığınızdan emin olun",
-    "passwordLabel": "Gizli kurtarma şifresi",
-    "passwordPlaceholder": "Lütfen gizli kurtarma şifresini onaylayın",
-    "pinLabel": "Gizli cihaz şifresi",
-    "pinRepeatLabel": "Gizli cihaz şifresini tekrarla",
-    "pinRepeatPlaceholder": "Lütfen gizli cihaz şifresini onayla",
-    "success": "Gizli cüzdan başarıyla oluşturuldu. Kilidini açmak için BitBox'ınızı değiştirin."
-  },
   "initialize": {
     "create": "Cihaz şifresini ayarla",
     "creating": "Cihaz şifresini ayarla",
@@ -855,7 +534,6 @@
       "e102": "Cihaz şifresi en az 4 karakterden oluşmalıdır."
     },
     "info": {
-      "button": "Devam et",
       "description1": "Cihaz şifrenizi seçin. Bu, BitBox'ınızın kilidini açmak için kullanılacaktır.",
       "description2": "Sayıları, harfleri ve sembolleri kullanabilirsiniz. Daha uzun şifreler daha yüksek güvenlik sunar.",
       "description3": "Cihaz şifresini kaybederseniz, cihazınızı sıfırlamanız ve cüzdan yedeklemenizi geri yüklemeniz gerekir.",
@@ -872,54 +550,10 @@
   "language": {
     "title": "Dil Seçin"
   },
-  "legacyhiddenwallet": {
-    "disable": "Eski gizli cüzdanı devre dışı bırak",
-    "enable": "Eski gizli cüzdanı etkinleştir",
-    "successDisable": "Eski gizli cüzdanı başarıyla devre dışı bıraktınız.",
-    "successEnable": "Eski gizli cüzdanı başarıyla etkinleştirdi. Eski gizli cüzdanınıza erişmek için BitBox'ınızı değiştirin ve gizli cihaz şifresini girin."
-  },
   "loading": "Yükleniyor…",
   "notification": {
-    "newTxs": " {{accountName}}'da yeni işlem",
-    "newTxs_plural": "{{count}} Yeni işlem: {{accountName}}"
-  },
-  "pairing": {
-    "aborted": {
-      "text": "Eşleştirme işlemi mobil uygulamadan kaldırıldı.",
-      "title": "Kaldırıldı"
-    },
-    "button": "Mobil Uygulamayla Eşleştir",
-    "confirm": "BitBox'ınızı eşleştirmek istediğinizden emin misiniz? Sonradan, cep telefonunun bir işlem gerçekleştirmesi gerektiğini unutmayın.",
-    "connectOnly": {
-      "button": "Mobil Uygulamayı Bağla",
-      "title": "'Yeni masaüstü uygulamasına bağlan' öğesini seçerek mobil uygulamamız ile tarayın"
-    },
-    "error": {
-      "text": "Bir şeyler yanlış gitti. Lütfen tekrar başla.",
-      "title": "Hata"
-    },
-    "reconnectOnly": {
-      "button": "Mobil Uygulamayı Yeniden Bağla"
-    },
-    "start": {
-      "hideAppQRCode": "QR Kodunu Gizle",
-      "revealAppQRCode": "QR Kodunu Göster",
-      "step1": "Mobil uygulamanız yoksa, sahip olduğunuz telefona bağlı olarak Apple App Store veya Google Play Store için QR kodunu tarayabilirsiniz.",
-      "step2": "İOS ve Android uygulama mağazalarında 'Digital Bitbox 2FA' adı altında bulabileceğiniz mobil uygulamamız ile tarayın:"
-    },
-    "started": {
-      "text": "Şimdi mobil uygulamadaki talimatları izleyin.",
-      "title": "Harika"
-    },
-    "success": {
-      "text": "Tebrikler, BitBox'ınızı mobil uygulamayla başarıyla eşleştirdiniz!",
-      "title": "Başarılı"
-    },
-    "timeout": {
-      "text": "Eşleştirme iki dakikanın ardından zaman aşımına uğradı. Mobil uygulamayı hala eşleştirmek istiyorsanız tekrar başlayın.",
-      "title": "Zaman aşımı"
-    },
-    "title": "Mobil Eşleştirme"
+    "newTxs_one": "{{accountName}}'da yeni işlem",
+    "newTxs_other": "{{count}} Yeni işlem: {{accountName}}"
   },
   "password": {
     "show": "Göster {{label}}",
@@ -928,25 +562,16 @@
       "paste": "Metni yapıştırmak için \"GÖSTER\" butonunu etkinleştirin {{label}}\""
     }
   },
-  "random": {
-    "button": "Rastgele Sayı Üret",
-    "description": "BitBox'ınız aşağıdaki {{bits}}-bit random sayıları üretti:"
-  },
   "receive": {
     "label": "Sizin adresiniz",
     "onlyThisCoin": {
       "description": "Başka token'ları almak için, onları ayarlardan etkinleştirin. Diğer token'ları yatırırsanız, erişilebilir olmayabilir.",
       "warning": "Sadece bu adresle  {{coinName}} almak istediğinize emin olun"
     },
-    "showFull": "Cihazdaki tam adresi göster ve doğrula",
     "title": "{{accountName}} Al",
     "verify": "Adresi güvenli bir şekilde doğrulayın",
-    "verifyBitBox01": "Mobil uygulamadaki adresi doğrula",
     "verifyBitBox02": "BitBox02'deki adresi doğrulayın",
-    "verifyInstruction": "Lütfen aşağıdaki adresin cihazınızda görüntülenen adresiyle eşleştiğini doğrulayın.",
-    "warning": {
-      "secureOutput": "Güvenli adres doğrulamasını etkinleştirmek için lütfen BitBox'ınızı mobil cihazınızla eşleştirin ve kenar çubuğundaki 'Cihazı Yönet' seçeneğine tıklayın."
-    }
+    "verifyInstruction": "Lütfen aşağıdaki adresin cihazınızda görüntülenen adresiyle eşleştiğini doğrulayın."
   },
   "reset": {
     "description": "Cihazdaki tüm veriler silinecek. Buna Özel Anahtarınız da dahil!",
@@ -957,7 +582,6 @@
   },
   "securityInformation": {
     "create": {
-      "button": "Devam et",
       "description1": "Cihazınızı kurmadan önce bunu güvenli bir ortamda yapmanız önerilir.",
       "description2": "Sizden iki şifre oluşturmanız istenecektir.",
       "description3": "İlki <strong>cihaz parolası</strong>. Bu şifre BitBox cihazınızın kilidini açar ve daha sonra değiştirilebilir.",
@@ -966,7 +590,6 @@
       "title": "Güvenlik Uyarısı"
     },
     "restore": {
-      "button": "Devam et",
       "description1": "Yedeklemenizi saklamak için kullandığınız mikro SD kartı takmanız istenecektir.",
       "description2": "Cihazınızı geri yüklemek için kurtarma şifrenizin olması gerekir. ",
       "description3": "Lütfen kurtarma şifresini girerken dikkatli olun. Girdiğiniz herhangi bir şifre geçerli bir cüzdan yaratacaktır. Yanlış şifre girerseniz, beklemediğiniz bir cüzdan bakiyesi gösterilebilir.",
@@ -1007,7 +630,6 @@
       "e200": "Bir cüzdanı yedekten geri yüklemek için mikro SD kart gerekir."
     },
     "info": {
-      "button": "Devam et",
       "description1": "Mikro SD kartı BitBox'a takın ve \"Devam Et\" öğesine tıklayın",
       "description2": "Bir yedekleme seçin ve \"Geri Yükle\" öğesini seçin",
       "description3": "Kurtarma şifresini girin",
@@ -1027,7 +649,6 @@
     },
     "button": "İmzala ve Gönder",
     "coincontrol": {
-      "address": "Adres",
       "outpoint": "Çıktı",
       "title": "Çıktıdan Gönder"
     },
@@ -1035,14 +656,6 @@
       "selected-coins": "Seçilmiş Kripto Paralar",
       "title": "İşlemi Onayla",
       "total": "Toplam"
-    },
-    "customFee": {
-      "label": "Dönüştürülen Ücret",
-      "placeholder": "Dönüştürülen Ücret"
-    },
-    "data": {
-      "label": "İsteğe bağlı veri",
-      "placeholder": "ondalık verileri girin"
     },
     "error": {
       "insufficientFunds": "yetersiz bakiye",
@@ -1073,18 +686,11 @@
     },
     "maximum": "Hepsini gönder",
     "scanQR": "QR Kodunu Tara",
-    "signprogress": {
-      "description": "Bu, çok fazla veri içeren bir işlemdir. İşlemi tamamen imzalamak için  {{steps}} defa onaylamanız istenir.",
-      "label": "İlerleme"
-    },
     "success": "İşlem imzalandı ve gönderildi.",
     "title": "Gönder {{accountName}}",
     "toggleCoinControl": "Kripto para kontrolünü aç"
   },
   "settings": {
-    "accounts": {
-      "title": "Aktif hesaplar"
-    },
     "electrum": {
       "add": "Bir sunucu ekle",
       "add-server": "Ekle",
@@ -1112,7 +718,6 @@
       "title-tltc": "Litecoin Testnet Electrum Sunucuları"
     },
     "expert": {
-      "base": "BitBoxBase Yönetimi",
       "coinControl": "Coin kontrolünü etkinleştir",
       "electrum": {
         "title": "Kendi tam node'unuza bağlayın"
@@ -1130,9 +735,6 @@
   },
   "setup": "Cihaza Kurulum Yap",
   "sidebar": {
-    "addAccount": "Hesap Ekle",
-    "bitboxBase": "BitBox Base",
-    "bitboxBaseConnect": "BitBox Base'e Bağlan",
     "device": "Cihazı Yönet",
     "leave": "Ayrıl",
     "settings": "Ayarlar"
@@ -1192,13 +794,9 @@
     "unlocked3": "LED yandığında düğmeye dokunun"
   },
   "warning": {
-    "receivePairing": "Güvenli adres doğrulamasını etkinleştirmek için lütfen BitBox'ı eşleştirin. Kenar çubuğunda 'Cihazı Yönet' seçeneğine gidin.",
-    "sdcard": "Yedeklemeleri yönetmek istemediğiniz sürece, mikro SD kartı BitBox'tan ayrı saklayın.",
-    "sendPairing": "İşlem ayrıntılarını güvenli bir şekilde doğrulamak için lütfen BitBox'ı eşleştirin. Kenar çubuğundan 'Cihazı Yönet' seçeneğine gidin."
+    "sdcard": "Yedeklemeleri yönetmek istemediğiniz sürece, mikro SD kartı BitBox'tan ayrı saklayın."
   },
   "welcome": {
-    "insertBitBox02": "Devam etmek için lütfen cihaza dokunun.",
-    "insertDevice": "Başlamak için lütfen cihazınızı bağlayın",
     "title": "Hoşgeldiniz"
   }
 }

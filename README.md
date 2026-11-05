@@ -1,5 +1,7 @@
 # BitBoxApp
 
+![BitBoxApp Screenshot](./docs/assets/app-screen.png)
+
 This repo contains the source code for the BitBoxApp and related tools.
 
 Contributions are very welcome.
@@ -7,10 +9,10 @@ Please see the [contribution guidelines](CONTRIBUTING.md).
 
 ## Tech stack
 
-The wallet UI is a [preact](https://preactjs.com/) single page webapp. It sources its data from the
+The wallet UI is a [React](https://reactjs.org/) single page webapp. It sources its data from the
 backend written in Go.
 
-The Desktop app is a C++ Qt5 program containing only a `WebEngineView`, displaying the UI.
+The Desktop app is a C++ Qt program containing only a `WebEngineView`, displaying the UI.
 
 Static assets are sourced from a Qt rcc file, and the dynamic data is bridged from Go with
 WebChannels.
@@ -20,11 +22,6 @@ bridge, and one to invoke calls in the backend.
 
 Similarly to the Desktop variant, the Go library can be compiled and added to an Android Studio /
 XCode project.
-
-## Build status
-
-[![Build Status](https://travis-ci.org/digitalbitbox/bitbox-wallet-app.svg?branch=master)](https://travis-ci.org/digitalbitbox/bitbox-wallet-app)
-[![Build status](https://ci.appveyor.com/api/projects/status/4c8pc8jpa1utnj26/branch/master?svg=true)](https://ci.appveyor.com/project/benma/bitbox-wallet-app/branch/master)
 
 ## Directories (subject to change)
 
@@ -38,9 +35,9 @@ XCode project.
   backend. Manages addresses, outputs, tx creation, and everything else that a wallet needs to do.
 - `backend/`: The library that ties it all together. Uses the above packages to create a wallet
   talking Electrum using the BitBox for signing, and serve a high level HTTP API to control it.
-- `frontends/qt/`: the C++/Qt5 app which builds the wallet app for the desktop.
-- `frontends/android/`: Android target (EXPERIMENTAL / ALPHA)
-- `frontends/web/`: home of the preact UI.
+- `frontends/qt/`: the C++/Qt app which builds the wallet app for the desktop.
+- `frontends/android/`: Android target
+- `frontends/web/`: home of the React UI.
 
 ## Set up the development environment
 
@@ -48,31 +45,23 @@ The below instructions assume a unix environment.
 
 ### Requirements
 
-The following dependencies need to be installed:
+To build the app or run the development workflow, the following dependencies need to be installed:
 
-- [Go](https://golang.org/doc/install) version 1.16
-- [Node.js](https://nodejs.org/) for managing the web UI deps
-- [Qt5](https://www.qt.io) version 5.15.2
+- [Go](https://golang.org/doc/install) version 1.26.10
+- [Node.js](https://nodejs.org/) version 26.x
+- [NPM](https://docs.npmjs.com/about-npm-versions) version 11.x (bundled with Node 24)
+- [Qt](https://www.qt.io) version 6.8.2
   - install Qt for your platform, including the WebEngine component
-
-Make sure the following environment variables are set:
-- `$GOPATH`
-- `$PATH`: should include `$GOPATH/bin`, `$GOROOT/bin` and the location of `qmake` and `rcc`
-
-Clone this repository to `$GOPATH/src/github.com/digitalbitbox/bitbox-wallet-app` (`$GOPATH` is usually `~/go`) using `git clone --resursive`.
-
-To initialize the build environment and install the required go utilities (linters, ...), call
-* `make envinit`, or
-* on MacOS `make osx-init`
 
 ## Build the BitBoxApp
 
-Please consult `docs/BUILD.md` for platform specific instructions and further
-information.
+Clone this repository using `git clone --recursive`.
+
+Please consult [docs/BUILD.md](./docs/BUILD.md) for platform specific instructions and further information.
 
 ## I18N translation workflow
 
-Please consult `docs/i18n.md`.
+Please consult [docs/i18n.md](./docs/i18n.md).
 
 ## Electrum server backend
 
@@ -88,10 +77,34 @@ full node.
 
 ### Local development
 
-Run `make servewallet` and `make webdev` in seperate terminals.
+Run `make envinit` to fetch golangci-lint and some other devtools.
 
-Before the first use of `make webdev`, you also need to run `make buildweb`, to install the dev
-dependencies.
+Before the first use of `make webdev`, and after any change to the frontend dependencies, run
+`make buildweb` to install the web dev dependencies.
+
+Then run `make servewallet` (backend) and `make webdev` (frontend dev server) in separate
+terminals.
+
+#### Local development with BB02 simulator
+
+The app can be used together with a [BB02 simulator](https://github.com/BitBoxSwiss/bitbox02-firmware/tree/master/test/simulator).
+
+In order to do so:
+
+* Build the simulator (checkout https://github.com/BitBoxSwiss/bitbox02-firmware/, then from the root repo run `make dockerdev` followed by `make simulator`)
+
+* Execute the simulator.
+
+  * Use `--port` if you want it to listen to a custom port (default is 15423)
+
+  * Set the environment variable `FAKE_MEMORY_FILEPATH` to a filepath if you want the simulator to write to file rather than in memory. This allows to re-use the same seed across different executions.
+
+* Launch the BBApp in simulator mode by providing a custom flag `--simulator`.
+
+
+If the simulator is listening on a custom port, `--simulatorPort=<port>` must also be provided.
+
+Note: the simulator is currently only supported in the servewallet and in the Qt app and only when the app runs in testnet mode.
 
 #### Watch and build the UI
 
@@ -101,23 +114,24 @@ code in `frontends/web/src` are automatically detected and rebuilt.
 
 #### UI testing
 
-The tests are run using [jest](https://jestjs.io)
-and [ts-jest](https://www.npmjs.com/package/ts-jest) preprocessor.
-
-Because the app is based on [preact](https://preactjs.com),
-we use [preact-render-spy](https://www.npmjs.com/package/preact-render-spy) package
-instead of [enzyme](https://airbnb.io/enzyme/) to test app components rendering
-and their state.
+The frontend tests are run using [vitest](https://vitest.dev/) and [@testing-library/react](https://testing-library.com/).
 
 To run all test suites, execute `make webtest`.
-If you plan on spending a lot of time in `frontends/web/src` space
-or just keen on doing TDD, use jest's tests watcher:
 
-    cd frontends/web/
-    make jstest-watch
+#### E2E testing
 
-To generate coverage report, execute `make jstest-cover` from `frontends/web` dir
-and open `coverage/lcov-report/index.html` in a browser.
+Playwright is used to perform automatic test on some use cases on the webdev version.
+
+Tests are located under [`frontends/web/tests`](/frontends/web/tests) and can be run with
+
+`make webe2etest`
+
+More info can be found [here](/frontends/web/tests/README.md)
+Appium is used to perform automatic test on Android emulators.
+The test runs automatically on PRs and push to master in the Github CI.
+
+`make mobilee2etest` can be used to launch the tests; however, when ran locally, this requires an Android emulator
+to be already running. In CI, the emulator is automatically spawned from a Github Action.
 
 #### Run the HTTP API
 
@@ -145,6 +159,29 @@ Check **outdated** dependencies: `npm outdated`.
 
 **Update a specific dependency** with a fixed semver `npm install modulename@specificversion --save-exact`, and with `--save-dev` for devDependencies.
 
+Production dependencies must have approved licenses. See
+[Frontend dependency licenses](./docs/dependency-licenses.md) for the check and how to resolve failures.
+
+The `make buildweb` target checks npm dependencies for approved licenses and regenerates license-npm.json. If dependencies have changed, commit the updated license-npm.json alongside package-lock.json.
+
+#### Qt WebEngine Debugging
+
+Set the following environment variable to debug the Qt WebEngine with Chrome developer tools,
+use a port_number of your choice, launch the following command and go to `http://localhost:<port_number>`.
+
+```
+QTWEBENGINE_REMOTE_DEBUGGING=<port_number> ./frontends/qt/build/osx/BitBox.app/Contents/MacOS/BitBox
+```
+
+Or on Windows using PowerShell
+
+```
+$env:QTWEBENGINE_REMOTE_DEBUGGING=<port_number>
+Start-Process .\BitBox.exe
+```
+
+see also https://doc.qt.io/qt-6/qtwebengine-debugging.html
+
 ### CI
 
 Run `make ci` to run all static analysis tools and tests.
@@ -154,9 +191,35 @@ Run `make ci` to run all static analysis tools and tests.
 To statically compile the UI, run `make buildweb` again, which compiles the web ui into a compact
 bundle.
 
-### Base integration
-To test the BitBox Base integration, run the base-middleware on your local
-machine. Make sure you have bitcoind and c-lightning running as well.
+## Develop using a remote VM
+
+You can run the full development environment on a remote VM and forward the ports to your local
+machine. This is useful for agentic coding workflows (e.g. with Claude Code) where all code
+execution happens in an isolated VM, keeping your local machine clean and safe.
+
+### Prerequisites
+
+- SSH access to the VM (configured in `~/.ssh/config`)
+- [tmux](https://github.com/tmux/tmux) installed on the VM
+- The repository cloned on the VM with `make envinit` completed
+
+### Setup
+
+```
+cp scripts/dev_vm.conf.example scripts/dev_vm.conf
+```
+
+Edit `scripts/dev_vm.conf` with your VM's SSH host and the path to the repo on the VM.
+
+### Usage
+
+```
+./scripts/dev_vm.sh            # Start webdev + servewallet on VM, open SSH tunnel
+./scripts/dev_vm.sh logs       # Attach to tmux session on VM (Ctrl-b d to detach)
+./scripts/dev_vm.sh stop       # Stop everything
+```
+
+The frontend is available at [localhost:8080](http://localhost:8080) on your local machine.
 
 ## Develop using Docker
 
@@ -185,6 +248,6 @@ Get Bitcoin Testnet coins here: https://coinfaucet.eu/en/btc-testnet/
 
 Get Litecoin Testnet coins here: https://tltc.bitaps.com/
 
-Get Ethereum Rinkeby coins here: http://rinkeby-faucet.com/
+Get Ethereum Sepolia coins here: https://faucet.sepolia.dev/
 
-Get Ethereum Ropsten coins here: https://faucet.ropsten.be/
+In case any of the Ethereum faucets are not working, you can try others from here: https://faucetlink.to (some require account creation)

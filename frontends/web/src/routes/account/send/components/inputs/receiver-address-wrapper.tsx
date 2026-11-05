@@ -1,0 +1,244 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { ChangeEvent, useCallback, useState, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { alertUser } from '@/components/alert/Alert';
+import { TGroupedOption, TOption } from '@/components/dropdown/dropdown';
+import { InputWithDropdown } from '@/components/forms/input-with-dropdown';
+import * as accountApi from '@/api/account';
+import { getReceiveAddressList, TAccount } from '@/api/account';
+import type { TLightningContact } from '@/api/lightning';
+import { connectKeystore, getKeystoreFeatures } from '@/api/keystores';
+import { useAccountStatuses } from '@/hooks/account-status';
+import { useMountedRef } from '@/hooks/mount';
+import { useMediaQuery } from '@/hooks/mediaquery';
+import { FirmwareUpgradeRequiredDialog } from '@/components/dialog/firmware-upgrade-required-dialog';
+import { SpinnerRingAnimated } from '@/components/spinner/SpinnerAnimation';
+import { ContactDark, ContactLight, Logo } from '@/components/icon';
+import { renderKeystoreGroupHeader } from '@/components/groupedaccountselector/groupedaccountselector';
+import { getAccountsByKeystore, getDisplayAccountNumber, isAmbiguousName } from '@/routes/account/utils';
+import receiverStyles from './receiver-address-input.module.css';
+import styles from './receiver-address-wrapper.module.css';
+
+type TAccountOption = TOption<TAccount | null> & { disabled?: boolean };
+type TRecipientOption = TOption<TAccount | TLightningContact | null> & { disabled?: boolean };
+type TRecipientGroup = TGroupedOption<TAccount | TLightningContact | null, { connected: boolean; section?: string }>;
+
+type Props = {
+  option: TRecipientOption;
+  isSelectedValue: boolean;
+};
+
+type TReceiverAddressWrapperProps = {
+  accounts?: TAccount[];
+  contacts?: TLightningContact[];
+  autoFocus?: boolean;
+  classNameInputField?: string;
+  error?: string | object;
+  groupAccountsByKeystore?: boolean;
+  inputLabel?: string;
+  inputPlaceholder?: string;
+  onInputChange: (value: string) => void;
+  onAccountChange?: (account: TAccount | null) => void;
+  recipientAddress: string;
+  requireSendToSelfSupport?: boolean;
+  renderActions?: (onReset: () => void) => React.ReactNode;
+};
+
+const AccountOption = ({ option, isSelectedValue }: Props) => {
+  if (!option.value) {
+    return <span>{option.label}</span>;
+  }
+
+  return (
+    <div className={`${styles.accountOption || ''}`}>
+      {'address' in option.value ? (
+        <>
+          <ContactDark aria-hidden alt="" className={`show-in-lightmode ${styles.coinLogo || ''}`} />
+          <ContactLight aria-hidden alt="" className={`show-in-darkmode ${styles.coinLogo || ''}`} />
+        </>
+      ) : <Logo coinCode={option.value.coinCode} alt={option.value.coinName} className={styles.coinLogo} />}
+      <span className={isSelectedValue ? styles.accountName : ''}>
+        {option.label}
+      </span>
+      {option.disabled && <span className={styles.spinner}><SpinnerRingAnimated /></span>}
+    </div>
+  );
+};
+
+
+export const ReceiverAddressWrapper = ({
+  accounts,
+  contacts,
+  autoFocus,
+  classNameInputField,
+  error,
+  groupAccountsByKeystore = false,
+  inputLabel,
+  inputPlaceholder,
+  onInputChange,
+  onAccountChange,
+  recipientAddress,
+  requireSendToSelfSupport = true,
+  renderActions,
+}: TReceiverAddressWrapperProps) => {
+  const { t } = useTranslation();
+  const [showFirmwareUpgradeDialog, setShowFirmwareUpgradeDialog] = useState(false);
+  const mounted = useMountedRef();
+  const isMobile = useMediaQuery('(max-width: 768px)');
+  const [selectedAccount, setSelectedAccount] = useState<TOption<TAccount | null> | null>(null);
+  const accountSelectionRequest = useRef(0);
+  const accountCodes = useMemo(() => accounts?.map(account => account.code) ?? [], [accounts]);
+  const accountSyncStatus = useAccountStatuses(accountCodes);
+
+  const toAccountOption = (account: TAccount): TAccountOption => {
+    const accountNumber = getDisplayAccountNumber(account.accountNumber);
+
+    return {
+      label: `${account.name}${accountNumber !== undefined ? ` (Account #${accountNumber})` : ''}`,
+      value: account,
+      disabled: !accountSyncStatus[account.code]?.synced
+    };
+  };
+  const flatAccountOptions = accounts?.map(toAccountOption) ?? [];
+  const accountsByKeystore = getAccountsByKeystore(accounts ?? []);
+  const groupedAccountOptions: TGroupedOption<TAccount | null, { connected: boolean }>[] = accountsByKeystore.map(({ keystore, accounts }) => ({
+    connected: keystore.connected,
+    label: isAmbiguousName(keystore.name, accountsByKeystore)
+      ? `${keystore.name} (${keystore.rootFingerprint})`
+      : keystore.name,
+    options: accounts.map(toAccountOption),
+  }));
+  const recipientGroups: TRecipientGroup[] = groupedAccountOptions.map((group, index) => ({
+    ...group,
+    section: index === 0 ? t('lightning.contacts.myAccounts') : undefined,
+  }));
+  if (contacts?.length) {
+    recipientGroups.push({
+      label: t('lightning.contacts.title'),
+      connected: false,
+      options: contacts.map(contact => ({ label: contact.name || contact.address, value: contact })),
+    });
+  }
+  const accountOptions = contacts !== undefined ? recipientGroups : groupAccountsByKeystore ? groupedAccountOptions : flatAccountOptions;
+
+  const checkFirmwareSupport = useCallback(async (selectedAccount: accountApi.TAccount) => {
+    if (!requireSendToSelfSupport) {
+      return true;
+    }
+    const rootFingerprint = selectedAccount.keystore.rootFingerprint;
+    const connectResult = await connectKeystore(rootFingerprint);
+    if (!connectResult.success) {
+      return false;
+    }
+    const featuresResult = await getKeystoreFeatures(rootFingerprint);
+    if (!featuresResult.success) {
+      alertUser(featuresResult.errorMessage || t('genericError'));
+      return false;
+    }
+    if (!featuresResult.features?.supportsSendToSelf) {
+      setShowFirmwareUpgradeDialog(true);
+      return false;
+    }
+    return true;
+  }, [requireSendToSelfSupport, t]);
+
+  const handleSendToAccount = useCallback(async (selectedOption: TAccountOption) => {
+    if (selectedOption.value === null || selectedOption.disabled) {
+      return;
+    }
+    const selectedAccountValue = selectedOption.value;
+    const request = ++accountSelectionRequest.current;
+
+    const supported = await checkFirmwareSupport(selectedAccountValue);
+    if (!supported || !mounted.current || request !== accountSelectionRequest.current) {
+      return;
+    }
+    try {
+      const result = await getReceiveAddressList(selectedAccountValue.code)();
+      if (!mounted.current || request !== accountSelectionRequest.current) {
+        return;
+      }
+      if (!result.success) {
+        console.error(result.errorMessage);
+        return;
+      }
+      const receiveAddresses = result.addresses;
+      if (receiveAddresses.length > 0 && receiveAddresses[0].addresses.length > 0) {
+        setSelectedAccount(selectedOption);
+        const address = receiveAddresses[0].addresses[0].address;
+        onInputChange(address);
+        onAccountChange?.(selectedAccountValue);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [onInputChange, onAccountChange, checkFirmwareSupport, mounted]);
+
+  const handleReset = useCallback(() => {
+    accountSelectionRequest.current++;
+    setSelectedAccount(null);
+    if (selectedAccount !== null) {
+      onInputChange('');
+    }
+    onAccountChange?.(null);
+  }, [onInputChange, onAccountChange, selectedAccount]);
+
+  return (
+    <>
+      <InputWithDropdown
+        id="recipientAddress"
+        label={inputLabel ?? t('send.address.label')}
+        classNameInputField={classNameInputField}
+        error={error}
+        align="left"
+        placeholder={inputPlaceholder ?? t('send.address.placeholder')}
+        onInput={(e: ChangeEvent<HTMLInputElement>) => {
+          accountSelectionRequest.current++;
+          onInputChange(e.target.value);
+        }}
+        value={recipientAddress}
+        readOnly={selectedAccount !== null}
+        autoFocus={autoFocus ?? !isMobile}
+        dropdownOptions={accountOptions}
+        dropdownValue={selectedAccount}
+        onDropdownChange={(selected) => {
+          const option = selected as TRecipientOption;
+          if (option.value && !option.disabled) {
+            if ('address' in option.value) {
+              accountSelectionRequest.current++;
+              setSelectedAccount(null);
+              onInputChange(option.value.address);
+              onAccountChange?.(null);
+            } else {
+              handleSendToAccount(option as TAccountOption);
+            }
+          }
+        }}
+        dropdownPlaceholder={t('send.sendToAccount.placeholder')}
+        dropdownTitle={t(contacts !== undefined ? 'lightning.contacts.sendTo' : 'send.sendToAccount.title')}
+        renderGroupHeader={contacts !== undefined ? (group: TRecipientGroup) => (
+          <div className={styles.groupHeader}>
+            {group.section && <p className={styles.sectionTitle}>{group.section}</p>}
+            {group.options.some(option => option.value && 'address' in option.value)
+              ? <span>{group.label}</span>
+              : renderKeystoreGroupHeader(group)}
+          </div>
+        ) : groupAccountsByKeystore ? renderKeystoreGroupHeader : undefined}
+        renderOptions={(e, isSelectedValue) => <AccountOption option={e} isSelectedValue={isSelectedValue} />}
+        isOptionDisabled={(option) => (option as TAccountOption).disabled || false}
+        labelSection={selectedAccount ? (
+          <span role="button" id="sendToSelf" className={receiverStyles.action} onClick={handleReset}>
+            {t('generic.reset')}
+          </span>
+        ) : undefined}
+      >
+        {renderActions?.(handleReset)}
+      </InputWithDropdown>
+      <FirmwareUpgradeRequiredDialog
+        open={showFirmwareUpgradeDialog}
+        onClose={() => setShowFirmwareUpgradeDialog(false)}
+      />
+    </>
+  );
+};

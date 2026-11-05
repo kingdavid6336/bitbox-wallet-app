@@ -1,17 +1,4 @@
-// Copyright 2018 Shift Devices AG
-// Copyright 2020 Shift Crypto AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package btc
 
@@ -20,36 +7,42 @@ import (
 	"math/big"
 	"os"
 	"path"
-	"strings"
 	"sync"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts/errors"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/blockchain"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/db/headersdb"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/electrum"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/headers"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/config"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/observable"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/observable/action"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/socksproxy"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/errors"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/blockchain"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/db/headersdb"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/electrum"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/headers"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/util"
+	coinpkg "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/config"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/logging"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable/action"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/socksproxy"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware"
+	addresspkg "github.com/btcsuite/btcd/address/v2"
+	"github.com/btcsuite/btcd/chaincfg/v2"
 	"github.com/sirupsen/logrus"
 )
 
 // Coin models a Bitcoin-related coin.
 type Coin struct {
-	initOnce              sync.Once
-	code                  coin.Code
-	name                  string
-	unit                  string
-	net                   *chaincfg.Params
-	dbFolder              string
-	makeBlockchain        func() blockchain.Interface
-	blockExplorerTxPrefix string
+	initLock    sync.Mutex
+	initialized bool
+	code        coinpkg.Code
+	name        string
+	// unit is the main unit of the coin, e.g. 'BTC'
+	unit string
+	// formatUnit keeps track of the unit used, e.g. 'BTC' or 'sat' depening on if sat mode is enabled
+	formatUnit                 coinpkg.BtcUnit
+	net                        *chaincfg.Params
+	dbFolder                   string
+	makeBlockchain             func() blockchain.Interface
+	blockExplorerTxPrefix      string
+	blockExplorerAddressPrefix string
 
 	observable.Implementation
 
@@ -61,23 +54,27 @@ type Coin struct {
 
 // NewCoin creates a new coin with the given parameters.
 func NewCoin(
-	code coin.Code,
+	code coinpkg.Code,
 	name string,
 	unit string,
+	formatUnit coinpkg.BtcUnit,
 	net *chaincfg.Params,
 	dbFolder string,
 	servers []*config.ServerInfo,
 	blockExplorerTxPrefix string,
+	blockExplorerAddressPrefix string,
 	socksProxy socksproxy.SocksProxy,
 ) *Coin {
 	log := logging.Get().WithGroup("coin").WithField("code", code)
 	coin := &Coin{
-		code:                  code,
-		name:                  name,
-		unit:                  unit,
-		net:                   net,
-		dbFolder:              dbFolder,
-		blockExplorerTxPrefix: blockExplorerTxPrefix,
+		code:                       code,
+		name:                       name,
+		unit:                       unit,
+		formatUnit:                 formatUnit,
+		net:                        net,
+		dbFolder:                   dbFolder,
+		blockExplorerTxPrefix:      blockExplorerTxPrefix,
+		blockExplorerAddressPrefix: blockExplorerAddressPrefix,
 		makeBlockchain: func() blockchain.Interface {
 			return electrum.NewElectrumConnection(
 				servers,
@@ -90,54 +87,94 @@ func NewCoin(
 	return coin
 }
 
-// Initialize implements coin.Coin.
-func (coin *Coin) Initialize() {
-	coin.initOnce.Do(func() {
-		// Init blockchain
-		coin.blockchain = coin.makeBlockchain()
+// TstSetMakeBlockchain must only be used in unit tests to provide a mock instance for the
+// blockchain interface.
+func (coin *Coin) TstSetMakeBlockchain(f func() blockchain.Interface) {
+	coin.makeBlockchain = f
+}
 
-		// Init Headers
+// Initialize implements coinpkg.Coin.
+func (coin *Coin) Initialize() error {
+	coin.initLock.Lock()
+	defer coin.initLock.Unlock()
+	if coin.initialized {
+		return nil
+	}
 
-		// delete old db version (up to v4.10.0, bbolt was used):
-		oldDBFilename := path.Join(coin.dbFolder, fmt.Sprintf("headers-%s.db", coin.code))
-		if _, err := os.Stat(oldDBFilename); err == nil {
-			_ = os.Remove(oldDBFilename)
+	// Init blockchain
+	blockchain := coin.makeBlockchain()
+
+	// Init Headers
+
+	// delete old db version (up to v4.10.0, bbolt was used):
+	oldDBFilename := path.Join(coin.dbFolder, fmt.Sprintf("headers-%s.db", coin.code))
+	if _, err := os.Stat(oldDBFilename); err == nil {
+		_ = os.Remove(oldDBFilename)
+	}
+
+	db, err := headersdb.NewDB(
+		path.Join(coin.dbFolder, fmt.Sprintf("headers-%s.bin", coin.code)),
+		coin.log)
+	if err != nil {
+		blockchain.Close()
+		return errp.WithMessage(err, "could not open headers DB")
+	}
+	theHeaders := headers.NewHeaders(
+		coin.net,
+		db,
+		blockchain,
+		coin.log)
+	if err := theHeaders.Initialize(); err != nil {
+		if closeErr := db.Close(); closeErr != nil {
+			coin.log.WithError(closeErr).Error("could not close headers DB")
 		}
-
-		db, err := headersdb.NewDB(
-			path.Join(coin.dbFolder, fmt.Sprintf("headers-%s.bin", coin.code)))
-		if err != nil {
-			coin.log.WithError(err).Panic("Could not open headers DB")
-		}
-		coin.headers = headers.NewHeaders(
-			coin.net,
-			db,
-			coin.blockchain,
-			coin.log)
-		coin.headers.Initialize()
-		coin.headers.SubscribeEvent(func(event headers.Event) {
-			if event == headers.EventSyncing || event == headers.EventSynced {
-				status, err := coin.headers.Status()
-				if err != nil {
-					coin.log.WithError(err).Error("Could not get headers status")
-				}
+		blockchain.Close()
+		return errp.WithMessage(err, "could not initialize headers")
+	}
+	coin.blockchain = blockchain
+	coin.headers = theHeaders
+	coin.headers.SubscribeEvent(func(event headers.Event) {
+		if event == headers.EventSyncing || event == headers.EventSynced {
+			status, err := coin.headers.Status()
+			if err != nil {
+				coin.log.WithError(err).Error("Could not get headers status")
 				coin.Notify(observable.Event{
 					Subject: fmt.Sprintf("coins/%s/headers/status", coin.code),
 					Action:  action.Replace,
-					Object:  status,
+					Object: struct {
+						Success      bool   `json:"success"`
+						ErrorMessage string `json:"errorMessage,omitempty"`
+					}{
+						Success:      false,
+						ErrorMessage: err.Error(),
+					},
 				})
+				return
 			}
-		})
+			coin.Notify(observable.Event{
+				Subject: fmt.Sprintf("coins/%s/headers/status", coin.code),
+				Action:  action.Replace,
+				Object: struct {
+					Success bool            `json:"success"`
+					Status  *headers.Status `json:"status"`
+				}{
+					Success: true,
+					Status:  status,
+				},
+			})
+		}
 	})
+	coin.initialized = true
+	return nil
 }
 
-// Name implements coin.Coin.
+// Name implements coinpkg.Coin.
 func (coin *Coin) Name() string {
 	return coin.name
 }
 
-// Code implements coin.Coin.
-func (coin *Coin) Code() coin.Code {
+// Code implements coinpkg.Coin.
+func (coin *Coin) Code() coinpkg.Code {
 	return coin.code
 }
 
@@ -146,26 +183,67 @@ func (coin *Coin) Net() *chaincfg.Params {
 	return coin.net
 }
 
-// Unit implements coin.Coin.
+// Unit implements coinpkg.Coin.
 func (coin *Coin) Unit(bool) string {
 	return coin.unit
 }
 
-// Decimals implements coin.Coin.
+// SetFormatUnit implements coin.Coin.
+func (coin *Coin) SetFormatUnit(unit coinpkg.BtcUnit) {
+	coin.formatUnit = unit
+}
+
+// GetFormatUnit implements coin.Coin.
+func (coin *Coin) GetFormatUnit(bool) string {
+	if coin.formatUnit == coinpkg.BtcUnitSats {
+		switch coin.code {
+		case coinpkg.CodeBTC:
+			return "sat"
+		case coinpkg.CodeTBTC:
+			return "tsat"
+		}
+	}
+
+	return coin.unit
+}
+
+// Decimals implements coinpkg.Coin.
 func (coin *Coin) Decimals(isFee bool) uint {
 	return 8
 }
 
-// FormatAmount implements coin.Coin.
-func (coin *Coin) FormatAmount(amount coin.Amount, isFee bool) string {
-	s := new(big.Rat).SetFrac(amount.BigInt(), big.NewInt(unitSatoshi)).FloatString(8)
-	return strings.TrimRight(strings.TrimRight(s, "0"), ".")
+// FormatAmount implements coinpkg.Coin.
+func (coin *Coin) FormatAmount(amount coinpkg.Amount, isFee bool) string {
+	if coin.formatUnit == coinpkg.BtcUnitSats {
+		return amount.BigInt().String()
+	}
+	return new(big.Rat).SetFrac(amount.BigInt(), big.NewInt(unitSatoshi)).FloatString(8)
 }
 
-// ToUnit implements coin.Coin.
-func (coin *Coin) ToUnit(amount coin.Amount, isFee bool) float64 {
-	result, _ := new(big.Rat).SetFrac(amount.BigInt(), big.NewInt(unitSatoshi)).Float64()
+// ToUnit implements coinpkg.Coin.
+func (coin *Coin) ToUnit(amount coinpkg.Amount, isFee bool) float64 {
+	result, _ := coinpkg.ToUnitRat(amount, coin, isFee).Float64()
 	return result
+}
+
+// SetAmount implements coinpkg.Coin.
+func (coin *Coin) SetAmount(amount *big.Rat, isFee bool) coinpkg.Amount {
+	satsAmount := coinpkg.Btc2Sat(amount)
+	intSatsAmount, _ := new(big.Int).SetString(satsAmount.FloatString(0), 0)
+	return coinpkg.NewAmount(intSatsAmount)
+}
+
+// ParseAmount implements coinpkg.Coin.
+func (coin *Coin) ParseAmount(amount string) (coinpkg.Amount, error) {
+	amountRat, valid := new(big.Rat).SetString(amount)
+	if !valid {
+		return coinpkg.Amount{}, errp.New("Invalid amount")
+	}
+
+	if coin.formatUnit == coinpkg.BtcUnitSats {
+		amountRat = coinpkg.Sat2Btc(amountRat)
+	}
+	return coin.SetAmount(amountRat, false), nil
 }
 
 // Blockchain connects to a blockchain backend.
@@ -182,12 +260,17 @@ func (coin *Coin) String() string {
 	return string(coin.code)
 }
 
-// BlockExplorerTransactionURLPrefix implements coin.Coin.
+// BlockExplorerTransactionURLPrefix implements coinpkg.Coin.
 func (coin *Coin) BlockExplorerTransactionURLPrefix() string {
 	return coin.blockExplorerTxPrefix
 }
 
-// SmallestUnit implements coin.Coin.
+// BlockExplorerAddressURLPrefix returns the URL prefix of the block explorer for addresses.
+func (coin *Coin) BlockExplorerAddressURLPrefix() string {
+	return coin.blockExplorerAddressPrefix
+}
+
+// SmallestUnit implements coinpkg.Coin.
 func (coin *Coin) SmallestUnit() string {
 	switch coin.code {
 	case "ltc", "tltc":
@@ -197,31 +280,93 @@ func (coin *Coin) SmallestUnit() string {
 	}
 }
 
-// DecodeAddress decodes a btc/ltc address, checking that that the format matches the account coin
+// decodeAddress decodes a btc/ltc address, checking that the format matches the account coin
 // type.
-func (coin *Coin) DecodeAddress(address string) (btcutil.Address, error) {
-	btcAddress, err := btcutil.DecodeAddress(address, coin.Net())
+func (coin *Coin) decodeAddress(address string) (addresspkg.Address, error) {
+	btcAddress, err := addresspkg.DecodeAddress(address, coin.Net())
 	if err != nil {
 		return nil, errp.WithStack(errors.ErrInvalidAddress)
 	}
 	if !btcAddress.IsForNet(coin.Net()) {
 		return nil, errp.WithStack(errors.ErrInvalidAddress)
 	}
-	if _, ok := btcAddress.(*btcutil.AddressTaproot); ok {
+
+	switch btcAddress.(type) {
+	// All default address types that are commonly in use.
+	case *addresspkg.AddressPubKeyHash,
+		*addresspkg.AddressScriptHash,
+		*addresspkg.AddressWitnessPubKeyHash,
+		*addresspkg.AddressWitnessScriptHash:
+
+		// Let through common types that are supported.
+
+	// Taproot addresses are not activated on other coins.
+	case *addresspkg.AddressTaproot:
+		switch coin.code {
+		case coinpkg.CodeBTC, coinpkg.CodeTBTC, coinpkg.CodeRBTC:
+			// Taproot activated on Bitcoin.
+		default:
+			// Taproot not activated on other coins.
+			return nil, errp.WithStack(errors.ErrInvalidAddress)
+		}
+
+	// A catch-all for any address type (including potential future ones)
+	// that isn't supported. Currently, these are pay to bare public key and
+	// pay to anchor addresses (P2PK, P2A).
+	default:
 		return nil, errp.WithStack(errors.ErrInvalidAddress)
 	}
+
 	return btcAddress, nil
 }
 
-// Close implements coin.Coin.
+// AddressToPkScript decodes a btc/ltc address, checking that the format matches the account coin
+// type, returning the pubKeyScript the address represents.
+//
+// For silent payment (BIP-352) addresses, `nil` is returned, as it does not encode a pubKeyScript -
+// the pubKeyScript is derived from it later.
+func (coin *Coin) AddressToPkScript(address string) ([]byte, error) {
+	addr, err := coin.decodeAddress(address)
+	if err != nil {
+		return nil, err
+	}
+	return util.PkScriptFromAddress(addr)
+}
+
+// ValidateSilentPaymentAddress checks if the address is a valid silent payment (BIP-352) address
+// matching the account coin type.
+func (coin *Coin) ValidateSilentPaymentAddress(address string) error {
+	hrp, _, _, err := firmware.DecodeSilentPaymentAddress(address)
+	if err != nil {
+		return err
+	}
+	var expectedHrp string
+	switch coin.Net().Net {
+	case chaincfg.MainNetParams.Net:
+		expectedHrp = "sp"
+	case chaincfg.TestNet3Params.Net:
+		expectedHrp = "tsp"
+	default:
+		return errp.WithStack(errors.ErrInvalidAddress)
+	}
+
+	if hrp != expectedHrp {
+		return errp.WithStack(errors.ErrInvalidAddress)
+	}
+	return nil
+}
+
+// Close implements coinpkg.Coin.
 func (coin *Coin) Close() error {
 	coin.log.Info("closing coin")
+	if coin.blockchain != nil {
+		coin.blockchain.Close()
+	}
 	if coin.headers != nil {
 		coin.log.Info("closing headers")
 		if err := coin.headers.Close(); err != nil {
 			return err
 		}
 	}
-	// TODO: shutdown Electrum connection.
 	return nil
 }

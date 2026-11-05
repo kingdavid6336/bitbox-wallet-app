@@ -232,7 +232,7 @@ func baseType(arg reflect.Type) (reflect.Type, int) {
 // assignField is the main workhorse for the NewCmd function which handles
 // assigning the provided source value to the destination field.  It supports
 // direct type assignments, indirection, conversion of numeric types, and
-// unmarshaling of strings into arrays, slices, structs, and maps via
+// unmarshalling of strings into arrays, slices, structs, and maps via
 // json.Unmarshal.
 func assignField(paramNum int, fieldName string, dest reflect.Value, src reflect.Value) error {
 	// Just error now when the types have no chance of being compatible.
@@ -451,7 +451,7 @@ func assignField(paramNum int, fieldName string, dest reflect.Value, src reflect
 
 		// String -> float of varying size.
 		case reflect.Float32, reflect.Float64:
-			srcFloat, err := strconv.ParseFloat(src.String(), 0)
+			srcFloat, err := strconv.ParseFloat(src.String(), 64)
 			if err != nil {
 				str := fmt.Sprintf("parameter #%d '%s' must "+
 					"parse to a %v", paramNum, fieldName,
@@ -495,7 +495,7 @@ func assignField(paramNum int, fieldName string, dest reflect.Value, src reflect
 // by this package are already registered by default.
 //
 // The arguments are most efficient when they are the exact same type as the
-// underlying field in the command struct associated with the the method,
+// underlying field in the command struct associated with the method,
 // however this function also will perform a variety of conversions to make it
 // more flexible.  This allows, for example, command line args which are strings
 // to be passed unaltered.  In particular, the following conversions are

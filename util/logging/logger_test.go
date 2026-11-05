@@ -1,25 +1,13 @@
-// Copyright 2021 Shift Crypto AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package logging
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -60,15 +48,14 @@ func TestNewLogger(t *testing.T) {
 	}
 
 	// A dir where testing log files are stored.
-	tempdir, err := ioutil.TempDir("", "logger_test")
-	require.NoError(t, err, "temp dir")
+	tempdir := t.TempDir()
 	defer os.RemoveAll(tempdir)
 
 	// Prep the data: existing file is still smaller than the maxLogFileSizeBytes
 	// but a new sufficiently large message should trigger log file rotation.
 	logfile := filepath.Join(tempdir, "log.txt")
 	v := []byte("0123456789012345678901234") // 25 bytes > maxLogFileSizeBytes
-	require.NoError(t, ioutil.WriteFile(logfile, v, 0644), "write log.txt")
+	require.NoError(t, os.WriteFile(logfile, v, 0644), "write log.txt")
 
 	// Execute the child process where the actual rotation and truncation happens.
 	cmd := exec.Command(os.Args[0], "-test.run=TestNewLogger", "-test.v=true")
@@ -79,10 +66,12 @@ func TestNewLogger(t *testing.T) {
 
 	// Expect the rotate log file to also be truncated to
 	// maxLogFileSizeBytes - 25 = last 20 bytes.
-	b1, _ := ioutil.ReadFile(logfile + rotatedSuffix)
+	b1, _ := os.ReadFile(logfile + rotatedSuffix)
 	assert.Equal(t, "56789012345678901234", string(b1), "old truncated logfile")
-	b2, _ := ioutil.ReadFile(logfile)
+	b2, _ := os.ReadFile(logfile)
 	assert.Equal(t, "level=info msg=new\n", string(b2), "new logfile")
+	requirePrivateFileMode(t, logfile)
+	requirePrivateFileMode(t, logfile+rotatedSuffix)
 }
 
 func TestLoggerRotatingWriter(t *testing.T) {
@@ -96,15 +85,14 @@ func TestLoggerRotatingWriter(t *testing.T) {
 	}
 
 	// A dir where testing log files are stored.
-	tempdir, err := ioutil.TempDir("", "logger_test")
-	require.NoError(t, err, "temp dir")
+	tempdir := t.TempDir()
 	defer os.RemoveAll(tempdir)
 
 	// Prep the data: existing file is still smaller than the maxLogFileSizeBytes
 	// but a new sufficiently large message should trigger log file rotation.
 	logfile := filepath.Join(tempdir, "log.txt")
 	v := []byte("0123456789") // 10 bytes < maxLogFileSizeBytes
-	require.NoError(t, ioutil.WriteFile(logfile, v, 0644), "write log.txt")
+	require.NoError(t, os.WriteFile(logfile, v, 0644), "write log.txt")
 
 	// Execute the child process which actually logs a new message.
 	cmd := exec.Command(os.Args[0], "-test.run=TestLoggerRotatingWriter", "-test.v=true")
@@ -115,8 +103,40 @@ func TestLoggerRotatingWriter(t *testing.T) {
 
 	// Expect the logger to rotate the file since the total size exceeds
 	// maxLogFileSizeBytes.
-	b1, _ := ioutil.ReadFile(logfile + rotatedSuffix)
+	b1, _ := os.ReadFile(logfile + rotatedSuffix)
 	assert.Equal(t, "0123456789", string(b1), "rotated logfile")
-	b2, _ := ioutil.ReadFile(logfile)
+	b2, _ := os.ReadFile(logfile)
 	assert.Equal(t, "level=info msg=newfile\n", string(b2), "new logfile")
+	requirePrivateFileMode(t, logfile)
+	requirePrivateFileMode(t, logfile+rotatedSuffix)
+}
+
+func TestRestrictExistingRotatedLog(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows file permissions behave differently")
+	}
+
+	logfile := filepath.Join(t.TempDir(), "log.txt")
+	require.NoError(t, os.WriteFile(logfile, []byte("active\n"), 0600), "write log.txt")
+	require.NoError(t, os.WriteFile(logfile+rotatedSuffix, []byte("rotated\n"), 0644), "write log.txt.1")
+
+	logger := NewLogger(&Configuration{Output: logfile, Level: logrus.InfoLevel})
+	if rot, ok := logger.Out.(*rotatingWriter); ok {
+		t.Cleanup(func() {
+			require.NoError(t, rot.logfile.Close())
+		})
+	}
+
+	requirePrivateFileMode(t, logfile)
+	requirePrivateFileMode(t, logfile+rotatedSuffix)
+}
+
+func requirePrivateFileMode(t *testing.T, filename string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return
+	}
+	info, err := os.Stat(filename)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0600), info.Mode().Perm())
 }

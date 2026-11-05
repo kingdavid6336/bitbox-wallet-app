@@ -1,0 +1,228 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { useState, useEffect } from 'react';
+import { useLoad } from '@/hooks/api';
+import { useTranslation } from 'react-i18next';
+import { GuideWrapper, GuidedContent, Header, Main } from '@/components/layout';
+import { ViewContent, View } from '@/components/view/view';
+import { WithSettingsTabs } from './components/tabs';
+import { ManageBackupSetting } from './components/device-settings/manage-backup-setting';
+import { ShowRecoveryWordsSetting } from './components/device-settings/show-recovery-words-setting';
+import { GoToStartupSettings } from './components/device-settings/go-to-startup-settings';
+import { PassphraseSetting } from './components/device-settings/passphrase-setting';
+import { DeviceInfo, getDeviceInfo, getVersion, getRootFingerprint } from '@/api/bitbox02';
+import { alertUser } from '@/components/alert/Alert';
+import { Skeleton } from '@/components/skeleton/skeleton';
+import { AttestationCheckSetting } from './components/device-settings/attestation-check-setting';
+import { FirmwareSetting } from './components/device-settings/firmware-setting';
+import { BluetoothFirmwareSetting } from './components/device-settings/bluetooth-firmware-setting';
+import { BluetoothToggleEnabledSetting } from './components/device-settings/bluetooth-toggle-enabled-setting';
+import { ChangeDevicePasswordSetting } from './components/device-settings/change-password-setting';
+import { SecureChipSetting } from './components/device-settings/secure-chip-setting';
+import { DeviceNameSetting } from './components/device-settings/device-name-setting';
+import { DeviceLanguageSetting } from './components/device-settings/device-language-setting';
+import { FactoryResetSetting } from './components/device-settings/factory-reset-setting';
+import { RootFingerprintSetting } from './components/device-settings/root-fingerprint-setting';
+import { Bip85Setting } from './components/device-settings/bip85-setting';
+import { ManageDeviceGuide } from '@/routes/device/bitbox02/settings-guide';
+import { SettingsContent, type TSettingsContentSection } from './components/settings-content';
+import { SubTitle } from '@/components/title';
+import { runningInIOS } from '@/utils/env';
+import {
+  isBluetoothToggleSettingVisible,
+  isDeviceBluetoothSupported,
+} from './settings-availability';
+import styles from './bb02-settings.module.css';
+
+type TProps = {
+  deviceID: string;
+};
+
+export const StyledSkeleton = () => {
+  return (
+    <div className={styles.skeletonWrapper}>
+      <Skeleton fontSize="var(--item-height-xlarge)" />
+    </div>
+  );
+};
+
+
+export const BB02Settings = ({
+  deviceID
+}: TProps) => {
+  const { t } = useTranslation();
+  return (
+    <GuideWrapper>
+      <GuidedContent>
+        <Main>
+          <Header
+            variant="navigation"
+            desktopTitle={t('sidebar.settings')}
+            hideSidebarToggler
+            mobileBackButton
+            title={t('sidebar.device')}
+          />
+          <View fullscreen={false}>
+            <ViewContent>
+              <WithSettingsTabs hideMobileMenu>
+                <ManageDeviceSettingsContent deviceID={deviceID} />
+              </WithSettingsTabs>
+            </ViewContent>
+          </View>
+        </Main>
+      </GuidedContent>
+      <ManageDeviceGuide />
+    </GuideWrapper>
+  );
+};
+
+export const ManageDeviceSettingsContent = ({
+  deviceID,
+}: TProps) => {
+  const { t } = useTranslation();
+
+  const [deviceInfo, setDeviceInfo] = useState<DeviceInfo>();
+  const versionInfo = useLoad(() => getVersion(deviceID), [deviceID]);
+  const rootFingerprintResult = useLoad(() => getRootFingerprint(deviceID), [deviceID]);
+
+  useEffect(() => {
+    getDeviceInfo(deviceID)
+      .then(result => {
+        if (!result.success) {
+          alertUser(t('genericError'));
+          return;
+        }
+        setDeviceInfo(result.deviceInfo);
+      })
+      .catch(console.error);
+  }, [deviceID, t]);
+
+  const sections: TSettingsContentSection[] = [
+    {
+      id: 'backups',
+      items: [
+        { id: 'manage-backups', content: <ManageBackupSetting deviceID={deviceID} /> },
+        { id: 'show-recovery-words', content: <ShowRecoveryWordsSetting deviceID={deviceID} /> },
+      ],
+      title: <SubTitle className="m-top-default">{t('deviceSettings.backups.title')}</SubTitle>,
+    },
+    {
+      id: 'device-settings',
+      items: [
+        {
+          id: 'device-name',
+          content: deviceInfo ? (
+            <DeviceNameSetting
+              deviceName={deviceInfo.name}
+              deviceID={deviceID}
+            />
+          ) : (
+            <StyledSkeleton />
+          ),
+        },
+        {
+          id: 'device-language',
+          content: deviceInfo ? (
+            <DeviceLanguageSetting
+              key={deviceID}
+              deviceID={deviceID}
+              language={deviceInfo.language}
+              supportedLanguages={deviceInfo.supportedLanguages}
+            />
+          ) : (
+            <StyledSkeleton />
+          ),
+        },
+        ...(isBluetoothToggleSettingVisible(deviceInfo) ? [{
+          id: 'bluetooth',
+          content: <BluetoothToggleEnabledSetting deviceID={deviceID} enabled={deviceInfo.bluetooth.enabled} />,
+        }] : deviceInfo === undefined && !runningInIOS() ? [{
+          id: 'bluetooth',
+          content: <StyledSkeleton />,
+        }] : []),
+        {
+          id: 'device-password',
+          content: versionInfo ? (
+            <ChangeDevicePasswordSetting
+              deviceID={deviceID}
+              canChangePassword={versionInfo.canChangePassword}
+            />
+          ) : (
+            <StyledSkeleton />
+          ),
+        },
+      ],
+      title: <SubTitle className="m-top-default">{t('deviceSettings.deviceSettings.title')}</SubTitle>,
+    },
+    {
+      id: 'device-information',
+      items: [
+        {
+          id: 'firmware',
+          content: versionInfo ? (
+            <FirmwareSetting
+              deviceID={deviceID}
+              versionInfo={versionInfo}
+            />
+          ) : (
+            <StyledSkeleton />
+          ),
+        },
+        ...(isDeviceBluetoothSupported(deviceInfo) ? [{
+          id: 'bluetooth-firmware',
+          content: (
+            <BluetoothFirmwareSetting
+              firmwareVersion={deviceInfo.bluetooth.firmwareVersion}
+            />
+          ),
+        }] : []),
+        { id: 'authenticity-check', content: <AttestationCheckSetting deviceID={deviceID} /> },
+        {
+          id: 'root-fingerprint',
+          content: rootFingerprintResult && rootFingerprintResult.success
+            ? <RootFingerprintSetting rootFingerprint={rootFingerprintResult.rootFingerprint} />
+            : <StyledSkeleton />,
+        },
+        {
+          id: 'secure-chip',
+          content: deviceInfo && deviceInfo.securechipModel !== ''
+            ? <SecureChipSetting secureChipModel={deviceInfo.securechipModel} />
+            : <StyledSkeleton />,
+        },
+      ],
+      title: <SubTitle className="m-top-default">{t('deviceSettings.deviceInformation.title')}</SubTitle>,
+    },
+    {
+      id: 'expert-settings',
+      items: [
+        {
+          id: 'passphrase',
+          content: deviceInfo ? (
+            <PassphraseSetting
+              passphraseEnabled={deviceInfo.mnemonicPassphraseEnabled}
+              deviceID={deviceID}
+            />
+          ) : (
+            <StyledSkeleton />
+          ),
+        },
+        {
+          id: 'bip85',
+          content: versionInfo ? (
+            <Bip85Setting
+              canBIP85={versionInfo.canBIP85}
+              deviceID={deviceID}
+            />
+          ) : (
+            <StyledSkeleton />
+          ),
+        },
+        { id: 'startup-settings', content: <GoToStartupSettings deviceID={deviceID} /> },
+        { id: 'factory-reset', content: <FactoryResetSetting deviceID={deviceID} /> },
+      ],
+      title: <SubTitle className="m-top-default">{t('settings.expert.title')}</SubTitle>,
+    },
+  ];
+
+  return <SettingsContent sections={sections} />;
+};

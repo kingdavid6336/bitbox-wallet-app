@@ -1,0 +1,151 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { useTranslation } from 'react-i18next';
+import { useParams } from 'wouter';
+import { useAppState } from '@/contexts/app-state-context';
+import { SubTitle } from '@/components/title';
+import { DesktopBackButton } from '@/components/backbutton/backbutton';
+import { Guide } from '@/components/guide/guide';
+import { Entry } from '@/components/guide/entry';
+import { GuidedContent, GuideWrapper, Header, Main } from '@/components/layout';
+import { Backups } from '@/routes/device/bitbox01/backups';
+import { BackupsV2 } from '@/routes/device/bitbox02/backups';
+import { SDCardCheck } from '@/routes/device/bitbox02/sdcardcheck';
+
+type TRouteParams = {
+  deviceID: string;
+};
+
+export const ManageBackups = () => {
+  const { deviceID } = useParams<TRouteParams>();
+  const { t } = useTranslation();
+  const { devices } = useAppState();
+
+  if (!deviceID || !devices[deviceID]) {
+    return null;
+  }
+
+  return (
+    <GuideWrapper>
+      <GuidedContent>
+        <Main>
+          <Header
+            variant="navigation"
+            mobileBackButton
+            title={t('backup.title')}
+          />
+          <div className="content padded">
+            <BackupsList deviceID={deviceID} />
+          </div>
+        </Main>
+      </GuidedContent>
+      <ManageBackupGuide deviceID={deviceID} />
+    </GuideWrapper>
+  );
+};
+
+type TProps = {
+  deviceID: string;
+};
+
+const BackupsList = ({
+  deviceID,
+}: TProps) => {
+  const { t } = useTranslation();
+  const { devices } = useAppState();
+
+  if (!deviceID) {
+    return null;
+  }
+  switch (devices[deviceID]) {
+  case 'bitbox':
+
+    return (
+      <>
+        <SubTitle>{t('backup.list')}</SubTitle>
+        <Backups
+          deviceID={deviceID}
+          showCreate={true}
+          showRestore={false}>
+          <DesktopBackButton>
+            {t('button.back')}
+          </DesktopBackButton>
+        </Backups>
+      </>
+    );
+  case 'bitbox02':
+    return (
+      <SDCardCheck deviceID={deviceID}>
+        <BackupsV2
+          deviceID={deviceID}
+          showCreate={true}
+          showRestore={false}
+          showRadio={false}>
+          <DesktopBackButton>
+            {t('button.back')}
+          </DesktopBackButton>
+        </BackupsV2>
+      </SDCardCheck>
+    );
+  default:
+    return null;
+  }
+};
+
+const ManageBackupGuide = ({
+  deviceID,
+}: TProps) => {
+  const { t } = useTranslation();
+  const { devices } = useAppState();
+
+  if (!deviceID) {
+    return null;
+  }
+
+  switch (devices[deviceID]) {
+  case 'bitbox':
+    return (
+      <Guide>
+        <Entry key="guide.backups.whatIsABackup" entry={{
+          text: t('guide.backups.whatIsABackup.text'),
+          title: t('guide.backups.whatIsABackup.title'),
+        }} />
+        <Entry key="guide.backups.encrypt" entry={{
+          text: t('guide.backups.encrypt.text'),
+          title: t('guide.backups.encrypt.title'),
+        }} />
+        <Entry key="guide.backups.check" entry={{
+          text: t('guide.backups.check.text'),
+          title: t('guide.backups.check.title'),
+        }} />
+        <Entry key="guide.backups.howOften" entry={{
+          text: t('guide.backups.howOften.text'),
+          title: t('guide.backups.howOften.title'),
+        }} />
+      </Guide>
+    );
+  case 'bitbox02':
+    return (
+      <Guide>
+        <Entry key="guide.backupsBB02.whatIsABackup" entry={{
+          text: t('guide.backupsBB02.whatIsABackup.text'),
+          title: t('guide.backupsBB02.whatIsABackup.title'),
+        }} />
+        <Entry key="guide.backupsBB02.encrypt" entry={{
+          text: t('guide.backupsBB02.encrypt.text'),
+          title: t('guide.backupsBB02.encrypt.title'),
+        }} shown={true} />
+        <Entry key="guide.backupsBB02.check" entry={{
+          text: t('guide.backupsBB02.check.text'),
+          title: t('guide.backupsBB02.check.title'),
+        }} />
+        <Entry key="guide.backups.howOften" entry={{
+          text: t('guide.backups.howOften.text'),
+          title: t('guide.backups.howOften.title'),
+        }} />
+      </Guide>
+    );
+  default:
+    return null;
+  }
+};

@@ -1,62 +1,86 @@
-/**
- * Copyright 2018 Shift Devices AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import { Button } from '../../../components/forms';
-import { PasswordSingleInput } from '../../../components/password';
-import { apiPost } from '../../../utils/request';
+import React, { ReactNode, useContext, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { AppContext } from '@/contexts/AppContext';
+import { registerTest, type TTestKeystoreEdition } from '@/api/keystores';
+import { Button, Checkbox, PasswordInput } from '@/components/forms';
+import { Dialog, DialogButtons, DialogScrollContent } from '@/components/dialog/dialog';
+import style from './skipfortesting.module.css';
 
-interface SkipForTestingProps {
-    show: boolean;
-}
+type TProps = {
+  children?: ReactNode;
+  className?: string;
+};
 
-interface SkipForTestingState {
-    testPIN: string;
-}
-
-export class SkipForTesting extends Component<SkipForTestingProps, SkipForTestingState> {
-    public readonly state: SkipForTestingState = {
-        testPIN: '',
-    };
-
-    private registerTestingDevice = (e: Event) => {
-        apiPost('test/register', { pin: this.state.testPIN });
-        e.preventDefault();
+export const SkipForTesting = ({
+  children,
+  className,
+}: TProps) => {
+  const { t } = useTranslation();
+  const { isTesting } = useContext(AppContext);
+  const [dialog, setDialog] = useState(false);
+  const [testPIN, setTestPIN] = useState('');
+  const [testPINVisible, setTestPINVisible] = useState(false);
+  const [btcOnly, setBTCOnly] = useState(false);
+  const registerTestingDevice = async (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    const edition: TTestKeystoreEdition = btcOnly ? 'btc-only' : 'multi';
+    const response = await registerTest(testPIN, edition);
+    if (response.success) {
+      setDialog(false);
     }
+  };
 
-    private handleFormChange = (value: string) => {
-        this.setState({ testPIN: value });
-    }
-
-    public render({ show }: RenderableProps<SkipForTestingProps>, { testPIN }: SkipForTestingState) {
-        if (!show) {
-            return null;
-        }
-        return (
-            <form onSubmit={this.registerTestingDevice} style="flex-grow: 0; max-width: 400px; width: 100%; align-self: center;">
-                <PasswordSingleInput
-                    type="password"
-                    autoFocus
-                    label="Test Password"
-                    onValidPassword={this.handleFormChange}
-                    value={testPIN} />
-                <Button type="submit" secondary>
-                    Skip for Testing
-                </Button>
-            </form>
-        );
-    }
-}
+  if (!isTesting) {
+    return null;
+  }
+  return (
+    <>
+      <Button
+        className={className}
+        onClick={() => {
+          setTestPIN('');
+          setTestPINVisible(false);
+          setDialog(true);
+        }}
+        primary
+      >
+        {children ? children : t('testWallet.prompt.title')}
+      </Button>
+      <Dialog
+        medium
+        open={dialog}
+        title={t('testWallet.prompt.title')}
+        onClose={() => setDialog(false)}>
+        <form onSubmit={registerTestingDevice}>
+          <DialogScrollContent>
+            <ul className={style.checklist}>
+              <li>{t('testWallet.prompt.info.0')}</li>
+              <li>{t('testWallet.prompt.info.1')}</li>
+              <li>{t('testWallet.prompt.info.2')}</li>
+            </ul>
+            <PasswordInput
+              autoFocus
+              label={t('testWallet.prompt.passwordLabel')}
+              value={testPIN}
+              visible={testPINVisible}
+              onVisibilityChange={setTestPINVisible}
+              onChange={event => setTestPIN(event.target.value)} />
+            <Checkbox
+              id="test-wallet-btc-only"
+              checked={btcOnly}
+              onChange={e => setBTCOnly((e.target as HTMLInputElement).checked)}
+              label={t('generic.bitcoinOnly')}
+            />
+          </DialogScrollContent>
+          <DialogButtons>
+            <Button primary type="submit">
+              {t('testWallet.prompt.button')}
+            </Button>
+          </DialogButtons>
+        </form>
+      </Dialog>
+    </>
+  );
+};

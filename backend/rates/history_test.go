@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package rates
 
 import (
@@ -10,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/util/test"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -90,7 +92,7 @@ func TestUpdateHistory(t *testing.T) {
 	}
 
 	g := fixedTimeRange(time.Unix(wantStartUnix, 0), time.Unix(wantEndUnix, 0))
-	n, err := updater.updateHistory(context.Background(), "btc", "USD", g)
+	n, err := updater.updateHistory(t.Context(), "btc", "USD", g)
 	require.NoError(t, err, "updater.updateHistory err")
 	assert.Equal(t, 2, n, "updater.updateHistory n")
 	wantHistory := map[string][]exchangeRate{
@@ -111,6 +113,52 @@ func TestUpdateHistory(t *testing.T) {
 	assert.Equal(t, wantHistory, updater.history, "updater2.history")
 }
 
+func TestFetchGeckoMarketRangeNormalizesBitcoinUnitRates(t *testing.T) {
+	tt := []struct {
+		coin      string
+		fiat      string
+		wantValue float64
+	}{
+		{coin: "btc", fiat: BTC.String(), wantValue: 1},
+		{coin: "btc", fiat: SAT.String(), wantValue: unitSatoshi},
+		{coin: "tbtc", fiat: BTC.String(), wantValue: 1},
+		{coin: "eth-erc20-wbtc", fiat: BTC.String(), wantValue: 0.99904149},
+	}
+	for _, test := range tt {
+		t.Run(test.coin+"/"+test.fiat, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "GET", r.Method, "request method")
+				assert.Equal(t, "/coins/"+geckoCoin[test.coin]+"/market_chart/range", r.URL.Path, "URL path")
+				assert.Equal(t, "btc", r.URL.Query().Get("vs_currency"), "vs_currency query arg")
+
+				fmt.Fprintln(w, `{
+					"prices": [
+					  [
+					    1598918700000,
+					    0.99904149
+					  ]
+					]
+				}`)
+			}))
+			defer ts.Close()
+
+			updater := NewRateUpdater(http.DefaultClient, t.TempDir())
+			defer updater.Stop()
+			updater.SetCoingeckoURL(ts.URL)
+
+			rates, err := updater.fetchGeckoMarketRange(
+				t.Context(),
+				test.coin,
+				test.fiat,
+				fixedTimeRange(time.Unix(1598918462, 0), time.Unix(1599004862, 0)),
+			)
+			require.NoError(t, err)
+			require.Len(t, rates, 1)
+			assert.Equal(t, test.wantValue, rates[0].value)
+		})
+	}
+}
+
 func TestFetchGeckoMarketRangeInvalidCoinFiat(t *testing.T) {
 	tt := []struct{ coin, fiat string }{
 		{"BTC", "invalid"},
@@ -119,11 +167,11 @@ func TestFetchGeckoMarketRangeInvalidCoinFiat(t *testing.T) {
 		{"", "USD"},
 	}
 	for _, test := range tt {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		var updater RateUpdater
 		g := fixedTimeRange(time.Now().Add(-time.Hour), time.Now())
 		_, err := updater.fetchGeckoMarketRange(ctx, test.coin, test.fiat, g)
-		assert.Error(t, err, "fetchGeckoMarketRange(%q, %q) returned nil error", test.coin, test.fiat)
+		require.Error(t, err, "fetchGeckoMarketRange(%q, %q) returned nil error", test.coin, test.fiat)
 		cancel()
 	}
 }
@@ -155,20 +203,20 @@ func TestHistoryEarliestLatest(t *testing.T) {
 
 	assert.Equal(t,
 		updater.history["ltcUSD"][1].timestamp,
-		updater.HistoryLatestTimestampAll([]string{"btc", "ltc"}, "USD"))
+		updater.HistoryLatestTimestampFiat([]string{"btc", "ltc"}, "USD"))
 
-	assert.Zero(t, updater.HistoryLatestTimestampAll([]string{"btc", "foo"}, "USD"))
-	assert.Zero(t, updater.HistoryLatestTimestampAll([]string{"foo", "btc"}, "USD"))
+	assert.Zero(t, updater.HistoryLatestTimestampFiat([]string{"btc", "foo"}, "USD"))
+	assert.Zero(t, updater.HistoryLatestTimestampFiat([]string{"foo", "btc"}, "USD"))
 }
 
-// TestLoadDumpUnusableDB ensures no panic when the RateUpdater.historyDB is unusable.
+// TestLoadDumpBucketUnusableDB ensures no panic when the RateUpdater.historyDB is unusable.
 func TestLoadDumpBucketUnusableDB(t *testing.T) {
 	updater := NewRateUpdater(nil, "/dev/null")
 	defer updater.Stop()
 	_, err1 := updater.loadHistoryBucket("foo")
-	assert.Error(t, err1, "loadHistoryBucket")
+	require.Error(t, err1, "loadHistoryBucket")
 	err2 := updater.dumpHistoryBucket("bar", nil)
-	assert.Error(t, err2, "dumpHistoryBucket")
+	require.Error(t, err2, "dumpHistoryBucket")
 }
 
 func TestDumpLoadHistoryBucket(t *testing.T) {
@@ -189,7 +237,7 @@ func TestDumpLoadHistoryBucket(t *testing.T) {
 	defer updater2.Stop()
 	rates, err := updater2.loadHistoryBucket("btcUSD")
 	require.NoError(t, err, "updater2.loadHistoryBucket")
-	assert.Equal(t, 4, len(rates), "len(rates)")
+	assert.Len(t, rates, 4, "len(rates)")
 }
 
 func TestReconfigureHistoryLoadsFromDB(t *testing.T) {
@@ -230,8 +278,8 @@ func BenchmarkDumpHistoryBucket(b *testing.B) {
 	}
 	updater := NewRateUpdater(nil, test.TstTempDir("BenchmarkDumpHistoryBucket"))
 	defer updater.Stop()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		err := updater.dumpHistoryBucket("btcUSD", rates)
 		require.NoError(b, err, "updater.dumpHistoryBucket")
 	}
@@ -249,14 +297,35 @@ func BenchmarkLoadHistoryBucket(b *testing.B) {
 	updater := NewRateUpdater(nil, dbdir)
 	updater.dumpHistoryBucket("btcUSD", rates)
 	updater.Stop()
-	updater = nil // make sure unused in the rest of the test
 
 	updater2 := NewRateUpdater(nil, dbdir)
 	defer updater2.Stop()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		rates, err := updater2.loadHistoryBucket("btcUSD")
 		require.NoError(b, err, "updater.loadHistoryBucket")
-		require.Equal(b, 5000, len(rates), "len(rates)")
+		require.Len(b, rates, 5000, "len(rates)")
 	}
+}
+
+func TestHistoryLatestTimestampCoin(t *testing.T) {
+	updater := NewRateUpdater(nil, "/dev/null") // don't need to make HTTP requests or load DB
+	defer updater.Stop()
+	updater.history = map[string][]exchangeRate{
+		"btcUSD": {
+			{value: 2, timestamp: time.Date(2020, 9, 1, 0, 0, 0, 0, time.UTC)},
+			{value: 3, timestamp: time.Date(2020, 9, 2, 0, 0, 0, 0, time.UTC)},
+			{value: 5, timestamp: time.Date(2020, 9, 3, 0, 0, 0, 0, time.UTC)},
+			{value: 8, timestamp: time.Date(2020, 9, 4, 0, 0, 0, 0, time.UTC)},
+		},
+		"btcEUR": {
+			{value: 2, timestamp: time.Date(2020, 9, 1, 0, 0, 0, 0, time.UTC)},
+			{value: 3, timestamp: time.Date(2020, 9, 2, 0, 0, 0, 0, time.UTC)},
+			{value: 5, timestamp: time.Date(2020, 9, 3, 0, 0, 0, 0, time.UTC)},
+		},
+	}
+	assert.Equal(t, time.Time{}, updater.HistoryLatestTimestampCoin("eth"))
+	assert.Equal(t,
+		time.Date(2020, 9, 3, 0, 0, 0, 0, time.UTC),
+		updater.HistoryLatestTimestampCoin("btc"))
 }

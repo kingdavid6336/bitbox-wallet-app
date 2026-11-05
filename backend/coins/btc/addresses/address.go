@@ -1,47 +1,45 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package addresses
 
 import (
 	"fmt"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/blockchain"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/signing"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/blockchain"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/types"
+	ourbtcutil "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/util"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/signing"
+	addresspkg "github.com/btcsuite/btcd/address/v2"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/btcsuite/btcd/txscript/v2"
 	"github.com/sirupsen/logrus"
 )
+
+// AddressID identifies a BTC/LTC address at the account/frontend boundary.
+// It is permanently identical to the address scriptHashHex.
+type AddressID = blockchain.ScriptHashHex
+
+// NewAddressID creates an address ID from a pubkey script.
+func NewAddressID(pubkeyScript []byte) AddressID {
+	return blockchain.NewScriptHashHex(pubkeyScript)
+}
 
 // AccountAddress models an address that belongs to an account of the user.
 // It contains all the information needed to receive and spend funds.
 type AccountAddress struct {
-	btcutil.Address
+	addresspkg.Address
 
-	// Configuration contains the absolute keypath and the extended public keys of the address.
-	Configuration *signing.Configuration
+	// AccountConfiguration is the account level configuration from which this address was derived.
+	AccountConfiguration *signing.Configuration
+	// PublicKey is the public key of a single-sig address.
+	PublicKey  *btcec.PublicKey
+	Derivation types.Derivation
 
-	// HistoryStatus is used to determine if the address status changed, and to determine if the
-	// address has been used before or not. The status corresponds to
-	// https://github.com/kyuupichan/electrumx/blob/46f245891cb62845f9eec0f9549526a7e569eb03/docs/protocol-basics.rst#status.
-	HistoryStatus string
-
-	// redeemScript stores the redeem script of a BIP16 P2SH output or nil if address type is P2PKH.
-	redeemScript []byte
+	// redeemScript stores the redeem script of a BIP16 P2SH output or nil if address type is not
+	// P2SH.
+	RedeemScript []byte
 
 	log *logrus.Entry
 }
@@ -49,33 +47,42 @@ type AccountAddress struct {
 // NewAccountAddress creates a new account address.
 func NewAccountAddress(
 	accountConfiguration *signing.Configuration,
-	keyPath signing.RelativeKeypath,
+	derivation types.Derivation,
 	net *chaincfg.Params,
 	log *logrus.Entry,
 ) *AccountAddress {
 
-	var address btcutil.Address
-	var redeemScript []byte
-	configuration, err := accountConfiguration.Derive(keyPath)
-	if err != nil {
-		log.WithError(err).Panic("Failed to derive the configuration.")
-	}
 	log = log.WithFields(logrus.Fields{
-		"key-path":      configuration.AbsoluteKeypath().Encode(),
-		"configuration": configuration.String(),
+		"accountConfiguration": accountConfiguration.String(),
+		"change":               derivation.Change,
+		"addressIndex":         derivation.AddressIndex,
 	})
 	log.Debug("Creating new account address")
 
-	publicKeyHash := btcutil.Hash160(configuration.PublicKey().SerializeCompressed())
-	switch configuration.ScriptType() {
+	var address addresspkg.Address
+	var redeemScript []byte
+	relativeKeypath := signing.NewEmptyRelativeKeypath().
+		Child(derivation.SimpleChainIndex(), signing.NonHardened).
+		Child(derivation.AddressIndex, signing.NonHardened)
+	derivedXpub, err := relativeKeypath.Derive(accountConfiguration.ExtendedPublicKey())
+	if err != nil {
+		log.WithError(err).Panic("Failed to derive xpub.")
+	}
+	publicKey, err := derivedXpub.ECPubKey()
+	if err != nil {
+		log.WithError(err).Panic("Failed to convert an extended public key to a normal public key.")
+	}
+
+	publicKeyHash := addresspkg.Hash160(publicKey.SerializeCompressed())
+	switch accountConfiguration.ScriptType() {
 	case signing.ScriptTypeP2PKH:
-		address, err = btcutil.NewAddressPubKeyHash(publicKeyHash, net)
+		address, err = addresspkg.NewAddressPubKeyHash(publicKeyHash, net)
 		if err != nil {
 			log.WithError(err).Panic("Failed to get P2PKH addr. from public key hash.")
 		}
 	case signing.ScriptTypeP2WPKHP2SH:
-		var segwitAddress *btcutil.AddressWitnessPubKeyHash
-		segwitAddress, err = btcutil.NewAddressWitnessPubKeyHash(publicKeyHash, net)
+		var segwitAddress *addresspkg.AddressWitnessPubKeyHash
+		segwitAddress, err = addresspkg.NewAddressWitnessPubKeyHash(publicKeyHash, net)
 		if err != nil {
 			log.WithError(err).Panic("Failed to get p2wpkh-p2sh addr. from publ. key hash.")
 		}
@@ -83,29 +90,38 @@ func NewAccountAddress(
 		if err != nil {
 			log.WithError(err).Panic("Failed to get redeem script for segwit address.")
 		}
-		address, err = btcutil.NewAddressScriptHash(redeemScript, net)
+		address, err = addresspkg.NewAddressScriptHash(redeemScript, net)
 		if err != nil {
 			log.WithError(err).Panic("Failed to get a P2SH address for segwit.")
 		}
 	case signing.ScriptTypeP2WPKH:
-		address, err = btcutil.NewAddressWitnessPubKeyHash(publicKeyHash, net)
+		address, err = addresspkg.NewAddressWitnessPubKeyHash(publicKeyHash, net)
 		if err != nil {
 			log.WithError(err).Panic("Failed to get p2wpkh addr. from publ. key hash.")
 		}
+	case signing.ScriptTypeP2TR:
+		outputKey := txscript.ComputeTaprootKeyNoScript(publicKey)
+		address, err = addresspkg.NewAddressTaproot(schnorr.SerializePubKey(outputKey), net)
+		if err != nil {
+			log.WithError(err).Panic("Failed to get p2tr addr")
+		}
 	default:
-		log.Panic(fmt.Sprintf("Unrecognized script type: %s", configuration.ScriptType()))
+		log.Panic(fmt.Sprintf("Unrecognized script type: %s", accountConfiguration.ScriptType()))
 	}
 
 	return &AccountAddress{
-		Address:       address,
-		Configuration: configuration,
-		HistoryStatus: "",
-		redeemScript:  redeemScript,
-		log:           log,
+		Address:              address,
+		AccountConfiguration: accountConfiguration,
+		PublicKey:            publicKey,
+		Derivation:           derivation,
+		RedeemScript:         redeemScript,
+		log:                  log,
 	}
 }
 
 // ID implements accounts.Address.
+// For BTC/LTC, this value must never change because it is treated interchangeably with the
+// address scriptHashHex.
 func (address *AccountAddress) ID() string {
 	return string(address.PubkeyScriptHashHex())
 }
@@ -115,18 +131,16 @@ func (address *AccountAddress) EncodeForHumans() string {
 	return address.EncodeAddress()
 }
 
-// AbsoluteKeypath implements coin.AbsoluteKeypath.
+// AbsoluteKeypath implements accounts.Address.
 func (address *AccountAddress) AbsoluteKeypath() signing.AbsoluteKeypath {
-	return address.Configuration.AbsoluteKeypath()
-}
-
-func (address *AccountAddress) isUsed() bool {
-	return address.HistoryStatus != ""
+	return address.AccountConfiguration.AbsoluteKeypath().
+		Child(address.Derivation.SimpleChainIndex(), false).
+		Child(address.Derivation.AddressIndex, false)
 }
 
 // PubkeyScript returns the pubkey script of this address. Use this in a tx output to receive funds.
 func (address *AccountAddress) PubkeyScript() []byte {
-	script, err := txscript.PayToAddrScript(address.Address)
+	script, err := ourbtcutil.PkScriptFromAddress(address.Address)
 	if err != nil {
 		address.log.WithError(err).Panic("Failed to get the pubkey script for an address.")
 	}
@@ -143,53 +157,13 @@ func (address *AccountAddress) PubkeyScriptHashHex() blockchain.ScriptHashHex {
 // calculating the hash to be signed in a transaction. This info is needed when trying to spend
 // from this address.
 func (address *AccountAddress) ScriptForHashToSign() (bool, []byte) {
-	switch address.Configuration.ScriptType() {
+	switch address.AccountConfiguration.ScriptType() {
 	case signing.ScriptTypeP2PKH:
 		return false, address.PubkeyScript()
 	case signing.ScriptTypeP2WPKHP2SH:
-		return true, address.redeemScript
+		return true, address.RedeemScript
 	case signing.ScriptTypeP2WPKH:
 		return true, address.PubkeyScript()
-	default:
-		address.log.Panic("Unrecognized address type.")
-	}
-	panic("The end of the function cannot be reached.")
-}
-
-// SignatureScript returns the signature script (and witness) needed to spend from this address.
-// The signatures have to be provided in the order of the configuration (and some can be nil).
-func (address *AccountAddress) SignatureScript(
-	signature btcec.Signature,
-) ([]byte, wire.TxWitness) {
-	publicKey := address.Configuration.PublicKey()
-	switch address.Configuration.ScriptType() {
-	case signing.ScriptTypeP2PKH:
-		signatureScript, err := txscript.NewScriptBuilder().
-			AddData(append(signature.Serialize(), byte(txscript.SigHashAll))).
-			AddData(publicKey.SerializeCompressed()).
-			Script()
-		if err != nil {
-			address.log.WithError(err).Panic("Failed to build signature script for P2PKH.")
-		}
-		return signatureScript, nil
-	case signing.ScriptTypeP2WPKHP2SH:
-		signatureScript, err := txscript.NewScriptBuilder().
-			AddData(address.redeemScript).
-			Script()
-		if err != nil {
-			address.log.WithError(err).Panic("Failed to build segwit signature script.")
-		}
-		txWitness := wire.TxWitness{
-			append(signature.Serialize(), byte(txscript.SigHashAll)),
-			publicKey.SerializeCompressed(),
-		}
-		return signatureScript, txWitness
-	case signing.ScriptTypeP2WPKH:
-		txWitness := wire.TxWitness{
-			append(signature.Serialize(), byte(txscript.SigHashAll)),
-			publicKey.SerializeCompressed(),
-		}
-		return []byte{}, txWitness
 	default:
 		address.log.Panic("Unrecognized address type.")
 	}

@@ -1,0 +1,123 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { useTranslation } from 'react-i18next';
+import { useAppState } from '@/contexts/app-state-context';
+import { Main, Header, GuideWrapper, GuidedContent } from '@/components/layout';
+import { View, ViewContent } from '@/components/view/view';
+import { DarkmodeToggleSetting } from './components/appearance/darkmodeToggleSetting';
+import { NotesImport } from './components/appearance/notesImport';
+import { NotesExport } from './components/appearance/notesExport';
+import { ExportBalanceStatementSetting } from './components/appearance/export-balance-statement-setting';
+import { DefaultCurrencyDropdownSetting } from './components/appearance/defaultCurrencyDropdownSetting';
+import { LanguageDropdownSetting } from './components/appearance/languageDropdownSetting';
+import { ActiveCurrenciesDropdownSetting } from './components/appearance/activeCurrenciesDropdownSetting';
+import { PortfolioPercentageDropdownSetting } from './components/appearance/portfolioPercentageDropdownSetting';
+import { WithSettingsTabs } from './components/tabs';
+import { Guide } from '@/components/guide/guide';
+import { Entry } from '@/components/guide/entry';
+import { SettingsContent, type TSettingsContentSection } from './components/settings-content';
+import { SubTitle } from '@/components/title';
+import { isBalanceStatementSettingVisible, isNotesSettingsVisible } from './settings-availability';
+import { SimpleMarkup } from '@/utils/markup';
+
+export const General = () => {
+  const { t } = useTranslation();
+  return (
+    <GuideWrapper>
+      <GuidedContent>
+        <Main>
+          <Header
+            variant="navigation"
+            desktopTitle={t('sidebar.settings')}
+            hideSidebarToggler
+            mobileBackButton
+            title={t('settings.general')}
+          />
+          <View fullscreen={false}>
+            <ViewContent>
+              <WithSettingsTabs hideMobileMenu>
+                <GeneralSettingsContent />
+              </WithSettingsTabs>
+            </ViewContent>
+          </View>
+        </Main>
+      </GuidedContent>
+      <GeneralGuide />
+    </GuideWrapper>
+
+  );
+};
+
+export const GeneralSettingsContent = () => {
+  const { t } = useTranslation();
+  const { activeAccounts, hasAccounts, hasLightningAccount } = useAppState();
+
+  const sections: TSettingsContentSection[] = [
+    {
+      id: 'appearance',
+      items: [
+        { id: 'language', content: <LanguageDropdownSetting /> },
+        { id: 'default-currency', content: <DefaultCurrencyDropdownSetting /> },
+        { id: 'active-currencies', content: <ActiveCurrenciesDropdownSetting /> },
+        { id: 'portfolio-percentage', content: <PortfolioPercentageDropdownSetting /> },
+        { id: 'dark-mode', content: <DarkmodeToggleSetting /> },
+      ],
+      title: <SubTitle>{t('settings.appearance')}</SubTitle>,
+    },
+    ...(isNotesSettingsVisible(hasAccounts, hasLightningAccount) ? [{
+      id: 'notes',
+      items: [
+        { id: 'export-notes', content: <NotesExport /> },
+        { id: 'import-notes', content: <NotesImport /> },
+      ],
+      title: <SubTitle className="m-top-default">{t('settings.notes.title')}</SubTitle>,
+    }] : []),
+    ...(isBalanceStatementSettingVisible(hasAccounts) ? [{
+      id: 'other',
+      items: [
+        { id: 'export-balance-statement', content: <ExportBalanceStatementSetting accounts={activeAccounts} /> },
+      ],
+      title: <SubTitle className="m-top-default">{t('settings.other')}</SubTitle>,
+    }] : []),
+  ];
+
+  return (
+    <SettingsContent sections={sections} />
+  );
+};
+
+const GeneralGuide = () => {
+  const { t } = useTranslation();
+
+  return (
+    <Guide title={t('guide.guideTitle.appearance')}>
+      <Entry key="guide.settings.sats" entry={{
+        text: t('guide.settings.sats.text'),
+        title: t('guide.settings.sats.title'),
+      }} />
+      <Entry key="guide.accountRates" entry={{
+        link: {
+          text: 'www.coingecko.com',
+          url: 'https://www.coingecko.com/'
+        },
+        text: t('guide.accountRates.text'),
+        title: t('guide.accountRates.title')
+      }} />
+      <Entry key="guide.appearancePortfolioPercentageOptions" entry={{
+        text: t('guide.appearancePortfolioPercentageOptions.text'),
+        title: t('guide.appearancePortfolioPercentageOptions.title'),
+      }}>
+        <ul>
+          <SimpleMarkup
+            tagName="li"
+            markup={t('guide.appearancePortfolioPercentageOptions.listOptions.0')}
+          />
+          <SimpleMarkup
+            tagName="li"
+            markup={t('guide.appearancePortfolioPercentageOptions.listOptions.1')}
+          />
+        </ul>
+      </Entry>
+    </Guide>
+  );
+};

@@ -1,131 +1,53 @@
-.balance {
-    /*font-weight: bold;*/
+.balanceContainer {
+  color: var(--color-default);
+  max-width: 100%;
 }
 
-.amount {
-    position: relative;
-    line-height: 1;
-    margin: 0;
+.availableBalanceTitle {
+  color: var(--color-secondary);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.balance {
+  align-items: baseline;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  font-size: var(--size-large);
+  font-weight: 400;
+  gap: var(--space-eight) var(--space-half);
+  min-height: 37px;
+  position: relative;
 }
 
 .unit {
-    color: var(--color-secondary);
+  font-size: var(--size-header);
 }
 
 .pendingBalance {
-    margin: 0;
-    padding-top: var(--space-half);
-    color: var(--color-secondary);
-    font-size: var(--size-small);
-    line-height: 1;
+  color: var(--color-secondary);
+  font-size: var(--size-smaller);
+  line-height: 1;
+  margin: 0;
+  padding-top: var(--space-half);
 }
 
-.balanceConversion {
-    padding-left: var(--spacing-default);
-}
-
-.incomingConversion {
-
-}
-
-.balanceTable {
-    border-spacing: 0;
-    border-collapse: collapse;
-    position: relative;
-    display: flex;
-    flex-direction: row;
-    align-items: flex-end;
-}
-
-.balanceTable tr {
-    display: inline-block;
-    vertical-align: bottom;
-}
-
-.balanceTable th {
-    text-transform: uppercase;
-    text-align: left;
-    padding-bottom: 0;
-}
-
-.balanceTable td {
-    font-size: var(--size-large);
-    font-weight: 400;
-    line-height: 1;
-    vertical-align: baseline;
-    padding: 0;
-}
-
-.balanceTable td:last-child {
-    font-size: var(--size-default);
-}
-
-.balanceTable .availableAmount {
-    padding-right: var(--space-quarter);
-    text-align: right;
-}
-
-.balanceTable .availableUnit {
-    color: var(--color-secondary);
-    padding-right: var(--space-half);
-}
-
-.balanceTable .incomingRow {
-    display: block;
-}
-
-.balanceTable .incomingRow td {
-    font-size: var(--size-small) !important;
+.incomingBalance {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: .4ch;
 }
 
 @media (max-width: 768px) {
-    .balance {
-        text-align: center;
-    }
 
-    .balanceTable {
-        display: inline-block;
-        margin: 0 auto;
-    }
-}
+  .balance {
+    font-size: var(--size-header);
+    min-height: auto;
+  }
 
-@media (max-width: 560px) {
-    .balanceTable td {
-        font-size: var(--size-subheader);
-    }
-}
+  .pendingBalance {
+    padding-top: var(--space-quarter);
+  }
 
-.accountName {
-    position: relative;
-    display: inline-flex;
-    flex-direction: row;
-    justify-content: flex-start;
-    align-items: center;
-    margin-bottom: 5px;
-}
-
-.accountName span {
-    font-size: 14px;
-    color: var(--color-secondary);
-    line-height: 1;
-    margin-right: var(--spacing-half);
-}
-
-.accountName a {
-    position: absolute;
-    right: -18px;
-    display: inline-block;
-    text-decoration: none;
-    background-color: var(--color-blue);
-    color: var(--color-white);
-    width: 18px;
-    height: 18px;
-    line-height: 18px;
-    font-size: 12px;
-    border-radius: 50%;
-    text-align: center;
-}
-
-.accountInfo {
-    height: var(--size-medium);
 }

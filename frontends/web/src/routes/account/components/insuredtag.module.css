@@ -1,0 +1,32 @@
+.insured {
+  background: var(--color-palegreen);
+  border-radius: var(--space-half);
+  border: 1px solid;
+  border-color: var(--color-lightgreen);
+  color: var(--color-darkgreen);
+  font-size: var(--size-smaller);
+  margin: 0px 10px;
+  max-height: 2.4rem;
+  padding: .4rem 10px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.insured div {
+  max-height: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.insured img {
+  max-height: 14px;
+}
+
+.insured span {
+  margin-left: 5px;
+}
+
+.insuredShield {
+    padding: 3px;
+    max-height: 22px;
+}

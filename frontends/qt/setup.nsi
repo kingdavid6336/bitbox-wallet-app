@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 Name "BitBoxApp"
 
 # Need admin privileges for writing to $PROGRAMFILES64 and HKLM.
@@ -8,9 +10,11 @@ SetCompressor /SOLID lzma
 
 # General Symbol Definitions
 !define REGKEY "SOFTWARE\$(^Name)"
-!define VERSION 4.30.0.0
+!ifndef VERSION
+!error "VERSION define not provided (pass -DVERSION=major.minor.patch.build)"
+!endif
 !define COMPANY "Shift Crypto AG"
-!define URL https://github.com/digitalbitbox/bitbox-wallet-app/releases/
+!define URL https://github.com/BitBoxSwiss/bitbox-wallet-app/releases/
 !define BINDIR "build\windows"
 !define ICONDIR "resources\win"
 !define APP_EXE "BitBox.exe"
@@ -73,12 +77,13 @@ ShowUninstDetails show
 
 # Installer sections
 Section -Main SEC0000
-    DetailPrint "Shutting down any running instances of ${APP_EXE}"
-    ExecWait "taskkill /IM ${APP_EXE} /F"
-    # taskkill may exit before the process actually terminates.
-    # Give it a couple seconds to release any open files.
-    Sleep 3000
-    DetailPrint "Proceeding with the installation"
+    # Finds if there is an open window with name BitBoxApp
+    # If found, prompts user to close the window then quits installer
+    FindWindow $0 "" "BitBoxApp"
+    StrCmp $0 0 notRunning
+        MessageBox MB_OK|MB_ICONEXCLAMATION "BitBoxApp is running. Please close it first and restart the installer." /SD IDOK
+        Quit
+    notRunning:
 
     SetOutPath $INSTDIR
     SetOverwrite on
@@ -88,6 +93,9 @@ Section -Main SEC0000
     #File /r /x Makefile* @abs_top_srcdir@/doc\*.*
     SetOutPath $INSTDIR
     WriteRegStr HKCU "${REGKEY}\Components" Main 1
+
+    # Create a shortcut on the desktop
+    CreateShortCut "$DESKTOP\$(^Name).lnk" "$INSTDIR\${APP_EXE}" "" "" 0
 SectionEnd
 
 Section -post SEC0001
@@ -149,8 +157,7 @@ Section -un.post UNSEC0001
     DeleteRegKey HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)"
     Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\Uninstall $(^Name).lnk"
     Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\$(^Name).lnk"
-    Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\BitBox.lnk"
-    Delete /REBOOTOK "$SMSTARTUP\Bitcoin.lnk"
+    Delete /REBOOTOK "$DESKTOP\$(^Name).lnk"
     Delete /REBOOTOK $INSTDIR\uninstall.exe
     Delete /REBOOTOK $INSTDIR\debug.log
     Delete /REBOOTOK $INSTDIR\db.log

@@ -1,33 +1,37 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package bridgecommon_test
 
 import (
 	"log"
+	"os"
 	"testing"
 	"time"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/bridgecommon"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/devices/usb"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/bridgecommon"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/usb"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/config"
 	"github.com/stretchr/testify/require"
 )
 
-type communication struct{}
+func TestMain(m *testing.M) {
+	appDir, err := os.MkdirTemp("", "bitbox-bridgecommon-test-")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(appDir)
+	config.SetAppDir(appDir)
+	m.Run()
+}
+
+type communication struct {
+	responses chan string
+}
 
 func (c communication) Respond(queryID int, response string) {
 	log.Println("Respond:", queryID, response)
+	c.responses <- response
 }
 
 func (c communication) PushNotify(msg string) {
@@ -57,22 +61,76 @@ func (e environment) NativeLocale() string {
 	return ""
 }
 
+func (e environment) NumberFormat() *backend.NumberFormat {
+	return nil
+}
+
+func (e environment) GetSaveFilename(string) string {
+	return ""
+}
+
+func (e environment) SetDarkTheme(bool) {
+	// nothing to do here.
+}
+
+func (e environment) DetectDarkTheme() bool {
+	return false
+}
+
+func (e environment) Auth() {}
+
+func (e environment) OnAuthSettingChanged(bool) {}
+
+func (e environment) CanEncryptLightningMnemonic() bool { return false }
+
+func (e environment) StoreLightningEncryptionKey(string, string) error { return nil }
+
+func (e environment) LoadLightningEncryptionKey(string) (string, error) { return "", nil }
+
+func (e environment) DeleteLightningEncryptionKey(string) error { return nil }
+
+func (e environment) BluetoothConnect(string) {}
+
+func (e environment) UserAgentPlatform() string {
+	return "linux"
+}
+
 // TestServeShutdownServe checks that you can call Serve twice in a row.
 func TestServeShutdownServe(t *testing.T) {
+	t.Cleanup(bridgecommon.Shutdown)
+	comm := communication{responses: make(chan string, 1)}
+	getURI := func() string {
+		t.Helper()
+		bridgecommon.BackendCall(1, `{"method":"GET","endpoint":"lightning/uri"}`)
+		select {
+		case response := <-comm.responses:
+			return response
+		case <-time.After(5 * time.Second):
+			t.Fatal("no URI response")
+			return ""
+		}
+	}
+	// Android can deliver its launch intent before the Go service binds.
+	bridgecommon.HandleURI("lightning:lnbc1startup")
 	bridgecommon.Serve(
 		false,
+		false,
 		nil,
-		communication{},
+		comm,
 		environment{},
 	)
+	require.JSONEq(t, `{"revision":1,"input":"lnbc1startup"}`, getURI())
+	bridgecommon.HandleURI("lightning:donate@bitcoin.org.hk")
+	require.JSONEq(t, `{"revision":2,"input":"donate@bitcoin.org.hk"}`, getURI())
 	bridgecommon.Shutdown()
 
 	done := make(chan struct{})
 	go func() {
 		bridgecommon.Serve(
 			false,
+			false,
 			nil,
-			communication{},
+			comm,
 			environment{},
 		)
 		close(done)
@@ -83,4 +141,5 @@ func TestServeShutdownServe(t *testing.T) {
 	case <-time.After(time.Second):
 		require.Fail(t, "could not Serve twice")
 	}
+	require.JSONEq(t, `{"revision":0,"input":null}`, getURI(), "launch links must not replay after a backend restart")
 }

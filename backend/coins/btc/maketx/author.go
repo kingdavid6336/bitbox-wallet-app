@@ -6,9 +6,8 @@
 package maketx
 
 import (
-	"github.com/btcsuite/btcutil"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/addresses"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/signing"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/signing"
+	"github.com/btcsuite/btcd/btcutil/v2"
 	"github.com/sirupsen/logrus"
 )
 
@@ -40,7 +39,7 @@ func isDustAmount(
 	// Calculate the total (estimated) cost to the network.  This is
 	// calculated using the serialize size of the output plus the serial
 	// size of a transaction input which redeems it.
-	sigScriptSize, _ := addresses.SigScriptWitnessSize(configuration)
+	sigScriptSize, _ := sigScriptWitnessSize(configuration)
 	inputSize := calcInputSize(sigScriptSize)
 	totalSize := outputSize(pkScriptSize) + inputSize
 

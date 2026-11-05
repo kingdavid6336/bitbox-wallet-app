@@ -1,0 +1,97 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import '../../../__mocks__/i18n';
+import { Mock, beforeAll, describe, expect, it, vi } from 'vitest';
+import { render, fireEvent, act } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import { Alert, alertUser } from './Alert';
+
+vi.mock('@/utils/request', () => ({
+  apiGet: vi.fn().mockResolvedValue(null),
+}));
+
+import { apiGet } from '@/utils/request';
+import { BackButtonProvider } from '@/contexts/BackButtonContext';
+
+(apiGet as Mock).mockImplementation(endpoint => {
+  switch (endpoint) {
+  case 'config': { return Promise.resolve({ backend: { userLanguage: 'it' } }); }
+  // case 'native-locale': { return Promise.resolve('de'); }
+  default: { return Promise.resolve(); }
+  }
+});
+
+describe('Alert', () => {
+
+  beforeAll(() => {
+    window.matchMedia = (
+      window.matchMedia || function(query) {
+        return {
+          matches: false,
+          media: query,
+          onchange: null,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          dispatchEvent: vi.fn(),
+        };
+      }
+    );
+  });
+
+  function renderAlert() {
+    return render(
+      <BackButtonProvider>
+        <Alert/>
+      </BackButtonProvider>
+    );
+  }
+
+  it('should render the Alert component properly', () => {
+    // render the Alert component
+    const { getByText, getByRole } = renderAlert();
+
+    act(() => {
+      // trigger the alertUser function
+      alertUser('This is a test alert message');
+    });
+
+    // assert that the message and the OK button are rendered
+    expect(getByText('This is a test alert message')).toBeInTheDocument();
+    expect(getByRole('button')).toBeInTheDocument();
+  });
+
+  it('should call the callback function when OK button is clicked', () => {
+    // define a mock callback function
+    const mockCallback = vi.fn();
+
+    // render the Alert component
+    const { getByRole, container } = renderAlert();
+
+    act(() => {
+      // trigger the alertUser function
+      alertUser('This is a test alert message', { callback: mockCallback });
+    });
+
+    // simulate clicking on the OK button
+    fireEvent.click(getByRole('button'));
+
+    // assert that the mock callback function was called
+    expect(mockCallback).toHaveBeenCalled();
+
+    // assert that the alert has been dismissed
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('should use the asDialog option when specified', () => {
+    // render the Alert component
+    const { container } = renderAlert();
+
+    act(() => {
+      // trigger the alertUser function with asDialog: false
+      alertUser('This is a test alert message', { asDialog: false });
+    });
+
+    // assert that the element is not rendered as a dialog
+    expect(container.querySelector('.dialog')).not.toBeInTheDocument();
+  });
+});

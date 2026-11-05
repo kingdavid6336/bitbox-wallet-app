@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package rates
 
 import (
@@ -25,6 +27,7 @@ func (updater *RateUpdater) ReconfigureHistory(coins, fiats []string) {
 	for key, stop := range updater.historyGo {
 		stop()
 		delete(updater.historyGo, key)
+		delete(updater.history, key)
 	}
 	// Enable those requested.
 	for _, coin := range coins {
@@ -178,11 +181,11 @@ func (updater *RateUpdater) updateHistory(ctx context.Context, coin, fiat string
 
 	updater.historyMu.Lock()
 	defer updater.historyMu.Unlock()
-	allRates := append(updater.history[bucketName], fetchedRates...)
-	sort.Slice(allRates, func(i, j int) bool {
-		return allRates[i].timestamp.Before(allRates[j].timestamp)
+
+	updater.history[bucketName] = append(updater.history[bucketName], fetchedRates...)
+	sort.Slice(updater.history[bucketName], func(i, j int) bool {
+		return updater.history[bucketName][i].timestamp.Before(updater.history[bucketName][j].timestamp)
 	})
-	updater.history[bucketName] = allRates
 
 	return len(fetchedRates), nil
 }
@@ -213,11 +216,33 @@ func (updater *RateUpdater) HistoryEarliestTimestamp(coin, fiat string) time.Tim
 	return t
 }
 
-// HistoryLatestTimestampAll returns the latest timestamp for which there an exchange rates is
+// HistoryLatestTimestampFiat returns the latest timestamp for which there an exchange rates is
 // available for all coins. In other words: the earliest of all latest timestamps.
-func (updater *RateUpdater) HistoryLatestTimestampAll(coins []string, fiat string) time.Time {
+func (updater *RateUpdater) HistoryLatestTimestampFiat(coins []string, fiat string) time.Time {
 	var result time.Time
 	for _, coin := range coins {
+		latest := updater.HistoryLatestTimestamp(coin, fiat)
+		if latest.IsZero() {
+			return latest
+		}
+		if result.IsZero() || latest.Before(result) {
+			result = latest
+		}
+	}
+	return result
+}
+
+// HistoryLatestTimestampCoin returns the latest time at which all the active
+// historical rates are available for a given coin.
+func (updater *RateUpdater) HistoryLatestTimestampCoin(coin string) time.Time {
+	updater.historyMu.RLock()
+	defer updater.historyMu.RUnlock()
+	var result time.Time
+	for _, fiat := range fromGeckoFiat {
+		if _, exists := updater.history[coin+fiat]; !exists {
+			// skipping inactive currencies
+			continue
+		}
 		latest := updater.HistoryLatestTimestamp(coin, fiat)
 		if latest.IsZero() {
 			return latest
@@ -255,43 +280,44 @@ func (updater *RateUpdater) fetchGeckoMarketRange(ctx context.Context, coin, fia
 	}
 
 	// Make the call, abiding the upstream rate limits.
-	msg := fmt.Sprintf("fetch coingecko coin=%s fiat=%s start=%s", coin, fiat, timeRange.start)
 	var jsonBody struct{ Prices [][2]float64 } // [timestamp in milliseconds, value]
-	callErr := updater.geckoLimiter.Call(ctx, msg, func() error {
-		param := url.Values{
-			"from":        {strconv.FormatInt(timeRange.start.Unix(), 10)},
-			"to":          {strconv.FormatInt(timeRange.end().Unix(), 10)},
-			"vs_currency": {gfiat},
-		}
-		endpoint := fmt.Sprintf("%s/coins/%s/market_chart/range?%s", updater.coingeckoURL, gcoin, param.Encode())
-		req, err := http.NewRequest("GET", endpoint, nil)
-		if err != nil {
-			return err
-		}
-
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-		res, err := updater.httpClient.Do(req.WithContext(ctx))
-		if err != nil {
-			return err
-		}
-		defer res.Body.Close() //nolint:errcheck
-		if res.StatusCode != http.StatusOK {
-			return fmt.Errorf("fetchGeckoMarketRange: bad response code %d", res.StatusCode)
-		}
-		// 1Mb is more than enough for a single response, but make sure initial
-		// download with empty cache fits here. See maxGeckoRange.
-		return json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&jsonBody)
-	})
-	if callErr != nil {
-		return nil, callErr
+	if err := updater.geckoLimiter.Wait(ctx); err != nil {
+		return nil, err
 	}
 
+	param := url.Values{
+		"from":        {strconv.FormatInt(timeRange.start.Unix(), 10)},
+		"to":          {strconv.FormatInt(timeRange.end().Unix(), 10)},
+		"vs_currency": {gfiat},
+	}
+	endpoint := fmt.Sprintf("%s/coins/%s/market_chart/range?%s", updater.coingeckoURL, gcoin, param.Encode())
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	res, err := updater.httpClient.Do(req.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close() //nolint:errcheck
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetchGeckoMarketRange: bad response code %d", res.StatusCode)
+	}
+
+	// 1Mb is more than enough for a single response, but make sure initial
+	// download with empty cache fits here. See maxGeckoRange
+	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&jsonBody); err != nil {
+		return nil, err
+	}
 	// Transform the response into a usable result.
 	rates := make([]exchangeRate, len(jsonBody.Prices))
 	for i, v := range jsonBody.Prices {
+		value := normalizeHistoricalRate(gcoin, fiat, v[1])
 		rates[i] = exchangeRate{
-			value:     v[1],
+			value:     value,
 			timestamp: time.Unix(int64(v[0])/1000, 0), // local timezone
 		}
 	}

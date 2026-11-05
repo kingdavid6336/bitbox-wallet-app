@@ -1,16 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package bitbox
 
@@ -21,7 +9,7 @@ import (
 	"log"
 	"math"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
 )
 
 const (
@@ -106,7 +94,7 @@ func (dbb *Device) bootloaderSendBin(bin []byte) error {
 		chunkNum++
 
 		dbb.bootloaderStatus.Progress = float64(chunkNum) / float64(totalChunks)
-		dbb.fireEvent(EventBootloaderStatusChanged, nil)
+		dbb.fireEvent(EventBootloaderStatusChanged)
 		log.Printf("firmware upgrade progress: %f\n", dbb.bootloaderStatus.Progress)
 		if chunkNum == 0 {
 			return errp.New("firmware file too big")
@@ -117,7 +105,7 @@ func (dbb *Device) bootloaderSendBin(bin []byte) error {
 
 // BootloaderUpgradeFirmware uploads a signed bitbox firmware release to the device. Returns an
 // error if the device is not in bootloader mode.
-// See https://github.com/digitalbitbox/mcu/releases
+// See https://github.com/BitBoxSwiss/mcu/releases
 func (dbb *Device) BootloaderUpgradeFirmware(signedFirmware []byte) error {
 	if dbb.bootloaderStatus == nil {
 		return errp.New("device is not in bootloader mode")
@@ -128,7 +116,7 @@ func (dbb *Device) BootloaderUpgradeFirmware(signedFirmware []byte) error {
 
 	dbb.bootloaderStatus.Progress = 0
 	dbb.bootloaderStatus.Upgrading = true
-	dbb.fireEvent(EventBootloaderStatusChanged, nil)
+	dbb.fireEvent(EventBootloaderStatusChanged)
 	err := func() error {
 		// Erase the firmware (required).
 		if err := dbb.bootloaderSendCmd('e', nil); err != nil {
@@ -146,11 +134,11 @@ func (dbb *Device) BootloaderUpgradeFirmware(signedFirmware []byte) error {
 	if err != nil {
 		dbb.bootloaderStatus.Upgrading = false
 		dbb.bootloaderStatus.ErrMsg = err.Error()
-		dbb.fireEvent(EventBootloaderStatusChanged, nil)
+		dbb.fireEvent(EventBootloaderStatusChanged)
 		return err
 	}
 	dbb.bootloaderStatus.Progress = 0
 	dbb.bootloaderStatus.UpgradeSuccessful = true
-	dbb.fireEvent(EventBootloaderStatusChanged, nil)
+	dbb.fireEvent(EventBootloaderStatusChanged)
 	return nil
 }

@@ -1,63 +1,106 @@
 {
   "account": {
+    "account": "Akaun",
+    "accounts": "Akaun",
+    "backupReminder": "Dompet anda <strong>{{name}}</strong> lulus {{fiat}} {{threshold}}!\n\nKami mengesyorkan membuat sandaran kertas untuk perlindungan tambahan. Ia cepat dan mudah.",
+    "backupReminderLink": "Buat sandaran kertas",
     "disconnect": "Sambungan hilang. Mencuba lagi...",
-    "exportTransactions": "Eksport Transaksi ke Folder Muat Turun sebagai Fail CSV",
+    "exportTransactions": "Eksport transaksi ke folder muat turun sebagai fail CSV",
     "fatalError": "Terdapat kesilapan yang tidak dijangka.",
     "incoming": "Masuk",
-    "info": {
-      "btc-p2pkh": "Ini adalah akaun Bitcoin Legacy. Adalah disyorkan bahawa anda menggunakan akaun Segwit Bitcoin, kerana bayaran rangkaian yang lebih rendah.",
-      "btc-p2wpkh": "Ini adalah akaun Bitcoin Native Segwit, dengan yuran rangkaian yang lebih rendah. Ia menggunakan format alamat Bech32, yang belum disokong secara meluas. Gunakan ini hanya jika anda ingin mencuba teknologi bleeding edge.",
-      "btc-p2wpkh-p2sh": "Ini adalah akaun Segwit Bitcoin, dan disyorkan kerana yuran rangkaian yang lebih rendah. Jika anda baru naik taraf dari aplikasi sebelumnya, wang anda dapat dilihat dalam akaun Bitcoin Legacy, yang dapat diaktifkan dalam tetapan. Jika anda ingin mencuba teknologi canggih dengan yuran rangkaian yang lebih rendah, pergi ke Tetapan dan aktifkan akaun Bitcoin Native Segwit, yang menggunakan format alamat Bech32.",
-      "tbtc-p2pkh": "$t(account.info.btc-p2pkh)",
-      "tbtc-p2wpkh": "$t(account.info.btc-p2wpkh)",
-      "tbtc-p2wpkh-p2sh": "$t(account.info.btc-p2wpkh-p2sh)"
-    },
     "initializing": "Mendapatkan maklumat dari blockchain ...",
-    "openFile": "Buka fail",
-    "reconnecting": "Sambungan hilang, mencuba menyambung kembali..."
+    "insuranceExpired": "<strong>Akaun tidak lagi diinsuranskan</strong>\n\nPelan insurans untuk akaun ini telah diubah suai.\nSila semak halaman insurans untuk butiran.",
+    "insured": "Akaun yang diinsuranskan",
+    "maybeProxyError": "Proksi Tor diaktifkan. Pastikan proksi Tor anda berfungsi dengan baik atau matikan tetapan proksi.",
+    "reconnecting": "Sambungan hilang, mencuba menyambung kembali...",
+    "syncedAddressesCount": "{{count}} alamat telah diimbas",
+    "uncoveredFunds": "Anda mempunyai syiling pada alamat yang tidak diinsuranskan. Nama alamat: <strong>{{name}}</strong>, akaun yang tidak diinsuranskan: {{uncovered}}.\nKarena akaun itu diinsuranskan, hanya syiling diterima melalui <strong>Segwit asli (Native Segwit)</strong> adalah jenis alamat yang diinsuranskan. Syiling pada jenis alamat yang berbeza, walaupun ia berada pada akaun yang sama, tidak diinsuranskan.\nSila alihkan semua syiling anda daripada jenis alamat yang tidak disokong kepada jenis alamat <strong>Segwit asl (Native Segwit)i</strong>, jadi semua syiling anda pada akaun ini diinsuranskan.",
+    "uncoveredFundsLink": "Ikuti panduan ini tentang cara mengalihkan syiling anda.",
+    "warning": "Amaran!"
   },
   "accountInfo": {
     "address": "Alamat",
-    "extendedPublicKey": "Public Key Lanjutan",
-    "title": "Maklumat Akaun",
-    "verify": "Sahkan pada peranti"
+    "buyCTA": {
+      "information": {
+        "looksEmpty": "Nampaknya dompet ini kosong.",
+        "start": "Memulakan dengan mendepositkan beberapa syiling ke dalam dompet atau membeli terus di dalam aplikasi BitBoxApp."
+      }
+    },
+    "extendedPublicKey": "Public key lanjutan",
+    "label": "Maklumat akaun",
+    "scriptType": "Jenis skrip",
+    "title": "Maklumat akaun",
+    "verify": "Sahkan pada peranti",
+    "xpubTypeChangeBtn": {
+      "p2pkh": "Lihat legacy P2PKH extended public key",
+      "p2tr": "Lihat Taproot",
+      "p2wpkh": "Lihat Segwit Asli"
+    },
+    "xpubTypeInfo": "Sedang memaparkan {{scriptType}} public key lanjutan ({{current}} daripada {{numberOfXPubs}})"
   },
   "accountSummary": {
+    "availableBalance": "Baki yang ada",
     "balance": "Baki",
-    "exportSummary": "Eksport Ringkasan Akaun ke Folder Muat Turun sebagai Fail CSV",
-    "fiatBalance": "Baki Fiat",
-    "name": "Nama Akaun",
+    "name": "Nama akaun",
     "noAccount": "Tiada akaun untuk dipaparkan.",
-    "synchronizing": "Menyegerakkan akaun dengan blockchain:",
-    "title": "Ringkasan Akaun",
-    "total": "Jumlah"
+    "portfolio": "Portfolio",
+    "title": "Portfolio saya",
+    "total": "Jumlah",
+    "transactionHistory": "Sejarah transaksi"
   },
   "addAccount": {
-    "accountName": "Nama akaun",
-    "address": "Alamat",
-    "coin": "Syiling",
-    "error": {
-      "alreadyExists": "Akaun ini sudah ada.",
-      "invalidAddress": "Sila masukkan alamat yang sah",
-      "xprivEntered": "AMARAN: Anda memasukkan Private Key Lanjutan. Sila masukkan Public Key Lanjutan dan simpan Private Key anda.",
-      "xpubInvalid": "Public Key Lanjutan salah format."
+    "chooseName": {
+      "nextButton": "Tambah Akaun",
+      "step": "Nama akaun",
+      "title": "Namakan akaun anda"
     },
-    "extendedPublicKey": "Public Key Lanjutan",
-    "scriptType": "Jenis Skrip",
-    "submit": "Tambah Akaun",
-    "title": "Tambah Akaun",
-    "warning": {
-      "xpubWrongNet": "Amaran: Format Public Key Lanjutan menunjukkan bahawa ia mungkin tidak sah untuk jenis akaun yang dipilih. Sekiranya anda tidak melihat transaksi yang dijangka, maka cuba import Public Key Lanjutan dengan jenis akaun yang lain."
-    }
+    "selectCoin": {
+      "nextButton": "Seterusnya",
+      "step": "Pilih syiling",
+      "title": "Pilih mata wang kripto"
+    },
+    "success": {
+      "addAnotherAccount": "Tambah akaun lain",
+      "message": "<strong>{{accountName}}</strong> telah ditambahkan ke akaun anda",
+      "nextButton": "Selesai",
+      "step": "Selesai",
+      "title": "Akaun ditambahkan"
+    },
+    "title": "Tambah akaun"
+  },
+  "aopp": {
+    "addressRequest": "{{host}} sedang meminta alamat penerimaan.",
+    "addressRequestWithLogo": "sedang meminta alamat penerima",
+    "addressRequestWithLogoAndXPub": "sedang meminta alamat penerima dan kunci awam (xpub).",
+    "addressRequestWithXPub": "{{host}} sedang meminta alamat penerima dan kunci awam (xpub).",
+    "banner": "Permintaan alamat sedang dijalankan. Sila sambungkan peranti anda untuk meneruskan.",
+    "errorTitle": "Ralat semasa permintaan alamat",
+    "labelAddress": "Alamat",
+    "labelMessage": "Mesej",
+    "reverifyInfoText": "Sahkan alamat",
+    "signing": "Untuk meneruskan, tandatangani mesej pada BitBox anda",
+    "success": {
+      "message": "Teruskan {{host}}",
+      "title": "Alamat berjaya dihantar"
+    },
+    "title": "Permintaan alamat",
+    "xpubRequested": "Berkongsi xpub anda membolehkan perkhidmatan luaran melihat alamat akaun anda. Syiling anda masih selamat dan kekal dalam kawalan anda."
   },
   "app": {
     "upgrade": "Versi baru aplikasi ini telah didapati! Sila kemaskini dari {{current}} ke {{version}}."
   },
+  "auth": {
+    "authButton": "Sahkan",
+    "dismissButton": "Batal",
+    "missing": "Sila sediakan kunci skrin dalam tetapan sistem peranti anda.",
+    "title": "Sila sahkan untuk meneruskan"
+  },
   "backup": {
     "check": {
+      "aborted": "Pemeriksaan sandaran telah dihentikan pada peranti",
       "checking": "Memeriksa backup...",
-      "confirmTitle": "Semak Backup",
-      "notOK": "Backup TIDAK sepadan dengan wallet.",
+      "confirmTitle": "Semak sandaran",
+      "notOK": "Tiada sandaran pada kad microSD yang sepadan dengan dompet di BitBox. Ini boleh berlaku jika anda memasukkan kad microSD yang digunakan untuk menyediakan BitBox yang lain. Sila cari kad microSD yang betul yang digunakan semasa menyediakan BitBox ini dan cuba lagi.",
       "ok": "Backup sepadan dengan wallet.",
       "password": {
         "label": "Kata laluan pemulihan",
@@ -65,32 +108,34 @@
         "showLabel": "Kata laluan pemulihan"
       },
       "success": "Backup berjaya disahkan",
-      "title": "Semak Backup"
+      "title": "Semak sandaran"
     },
     "create": {
       "alreadyExists": "Anda sudah mempunyai backup yang sah. Adakah anda ingin menciptanya kembali?",
       "fail": "TIDAK BERJAYA membuat backup!",
       "info": "Sila masukkan kata laluan pemulihan dari wallet terkini untuk pengesahan",
       "name": {
-        "label": "Nama backup",
+        "label": "Nama sandaran",
         "placeholder": "Sila memberi nama backup"
       },
       "password": {
-        "label": "Kata Laluan Pemulihan",
+        "label": "Kata laluan pemulihan",
         "placeholder": "Sila masukkan kata laluan pemulihan anda"
       },
-      "title": "Buat Backup",
-      "verificationFailed": "Kata laluan pemulihan TIDAK sesuai dompet terkini. Backup telah dibuat. Sila gunakan 'Semak Backup' untuk mengesahkan kembali password pemulihan anda."
+      "title": "Buat sandaran",
+      "verificationFailed": "Kata laluan pemulihan TIDAK SEPADAN dengan dompet semasa. Sandaran telah dibuat. Sila gunakan 'Semak sandaran' untuk mengesahkan kata laluan pemulihan anda sekali lagi."
     },
     "description": "Pilih <strong>fail backup wallet</strong>",
-    "insert": "Sila masukkan kad micro SD untuk mengurus backup.",
-    "insertButton": "Saya telah memasukkan kad micro SD",
-    "list": "Telah jumpa <strong>backup berikut</strong> pada kad SD ini:",
+    "insert": "Sila masukkan kad microSD untuk menguruskan sandaran.",
+    "insertButton": "Saya telah memasukkan kad microSD",
+    "link": "Pergi ke manage backups",
+    "list": "Sandaran kad microSD anda",
     "noBackups": "Tiada backup pada kad microSD ini.",
     "restore": {
-      "confirmTitle": "Memulihkan Backup",
+      "confirmTitle": "Pulihkan sandaran",
       "error": {
-        "e200": "SD card tidak dijumpai"
+        "e200": "kad microSD tidak ditemui",
+        "general": "Ralat memulihkan sandaran"
       },
       "password": {
         "label": "Kata laluan pemulihan atau kata laluan pemulihan tersembunyi",
@@ -99,185 +144,725 @@
         "showLabel": "Kata laluan pemulihan"
       },
       "restoring": "Memulihkan backup...",
+      "selectedBackup": "<strong>{{backupName}}</strong> dicipta pada {{createdDateTime}} akan dipulihkan.",
+      "subtitle": "Sila pilih sandaran untuk meneruskan",
       "title": "Memulihkan",
       "understand": "Saya faham bahawa kata laluan pemulihan yang salah akan membuat dompet yang berbeza"
     },
-    "title": "Urus Backup"
+    "showMnemonic": {
+      "title": "Tunjukkan perkataan pemulihan",
+      "warning": "<strong>Jangan sekali-kali berkongsi kata-kata pemulihan anda dengan sesiapa pun.</strong> Perkataan pemulihan anda memberikan akses penuh kepada dompet anda. Jika seseorang meminta anda untuk kata-kata pemulihan anda, ia adalah penipu, jangan kongsikannya!"
+    },
+    "title": "Uruskan sandaran"
   },
   "bb02Bootloader": {
-    "abort": "Jangan naik taraf - Kembali",
+    "abort": "Jangan naik taraf – bawa saya kembali",
+    "abort_noUpgrade": "Bawa saya balik",
+    "additionalUpgradeFollows1": "Peningkatan tambahan akan menyusul serta-merta selepas ini.",
+    "additionalUpgradeFollows2": "Sila pastikan BitBox anda dipalamkan sehingga semua peningkatan selesai.",
     "advanced": {
+      "label": "Tetapan lanjutan",
       "toggleShowFirmwareHash": "Tunjukkan hash firmware setiap kali pada permulaan"
     },
     "flipscreen": "Putar skrin",
     "orientation": "Orientasi peranti salah?",
-    "success": "Naik taraf berjaya! Meneruskan dalam {{rebootSeconds}} detik..."
+    "success": "Naik taraf berjaya!",
+    "success_install": "Pemasangan berjaya! ",
+    "upgradeTitle": "Menaik taraf perisian tegar BitBox",
+    "upgradeTitle_install": "Memasang perisian tegar BitBox"
   },
   "bitbox": {
     "error": {
       "e10000": "Kata laluan peranti terkini salah",
       "e10001": "Gagal mengganti kata laluan peranti",
-      "e102": "Kata laluan mestilah terdiri daripada sekurang-kurangnya 4 aksara.",
-      "e112": "Kata laluan peranti tersembunyi tidak boleh sama dengan kata laluan peranti utama."
+      "e102": "Kata laluan mestilah terdiri daripada sekurang-kurangnya 4 aksara."
     }
   },
   "bitbox02Interact": {
-    "followInstructions": "Sila ikuti arahan pada BitBox02 anda."
+    "confirmDate": "Sahkan tarikh hari ini pada BitBox anda",
+    "confirmDateText": "Tarikh ini akan digunakan untuk membuat sandaran anda.",
+    "confirmName": "Sahkan nama pada BitBox",
+    "confirmWords": "Tuliskan {{amount}} perkataan pemulihan daripada BitBox anda",
+    "confirmWordsText": "Selepas itu BitBox meminta anda mengesahkan setiap perkataan untuk mengesahkan bahawa sandaran adalah betul.",
+    "followInstructions": "Sila ikut arahan pada BitBox anda.",
+    "followInstructionsMnemonic": "Ikut arahan pada BitBox anda untuk memasukkan perkataan pemulihan daripada sandaran anda dan memulihkan dompet anda.",
+    "followInstructionsMnemonicTitle": "Pulihkan dari perkataan pemulihan"
   },
   "bitbox02Settings": {
-    "deviceName": {
-      "input": "Nama BitBox02",
-      "title": "Tetapkan Nama BitBox02"
+    "bluetoothToggleEnabled": {
+      "alertDisabled": "Bluetooth kini dimatikan pada BitBox anda. Jika anda ingin menyambung dengan iPhone pada masa hadapan, anda perlu mendayakannya semula.",
+      "alertEnabled": "Bluetooth kini dihidupkan.",
+      "description": "Bluetooth digunakan untuk menyambung dengan iPhone.",
+      "titleDisabled": "Hidupkan Bluetooth",
+      "titleEnabled": "Matikan Bluetooth"
     },
-    "mnemonicPassphrase": {
-      "disable": "Matikan Frasa Laluan Mnemonik",
-      "enable": "Aktifkan Frasa Laluan Mnemonik",
-      "successDisable": "Frasa Laluan Mnemonik berjaya dimatikan.",
-      "successEnable": "Frasa Sambung Mnemonik berjaya diaktifkan.\n\nMulai sekarang anda boleh memasukkan frasa laluan selepas membuka kunci BitBox 02 anda.\n\nSekiranya anda tidak tahu apa kata laluan, sila nyahaktifkan pilihan ini. Ia adalah pilihan pengguna yang maju. \n\n\n<strong>Amaran:</strong> setiap frasa laluan menjana Wallet yang sah.\nAnda perlu memastikan frasa laluan anda <strong>selamat dan jangan melupakannya.</strong>\n\n<strong>Jika anda kehilangan frasa laluan anda, anda tidak dapat mengakses syiling anda. Itu bermakna duit syiling anda akan hilang.</strong>"
+    "changePassword": {
+      "description": "Tukar kata laluan peranti BitBox.",
+      "success": "Kata laluan berjaya ditukar",
+      "title": "Tukar kata laluan peranti"
+    },
+    "deviceName": {
+      "current": "Nama peranti semasa",
+      "error": "Nama peranti tidak dapat ditetapkan",
+      "error_104": "Mengesahkan nama peranti telah digugurkan pada peranti.",
+      "input": "Nama BitBox",
+      "placeholder": "Nama peranti baharu",
+      "title": "Tetapkan nama BitBox"
+    },
+    "gotoStartupSettings": {
+      "description": "Ini akan but semula BitBox anda dan masukkan tetapan permulaan.",
+      "title": "Ini akan me-reboot BitBox02 anda dan masuk ke dalam tetapan permulaan semula."
     }
   },
   "bitbox02Wizard": {
-    "attestationFailed": "Pengesahan peranti gagal. BitBox anda mungkin palsu atau terkompromi. Syiling di BitBox02 mungkin berisiko hilang. Sila hubungi support@shiftcrypto.ch dengan segera.",
+    "advanced": {
+      "button": "Pilihan lanjutan",
+      "outOfDate": "Kemas kini perisian tegar diperlukan",
+      "seed12WordInfo": "Sila ambil perhatian bahawa bilangan perkataan tidak boleh diubah selepas mencipta dompet.",
+      "seed12WordLabel": "Buat 12 perkataan dan bukannya benih 24 perkataan",
+      "seed12WordText": "Secara lalai, BitBox menggunakan benih 24 perkataan. Kedua-dua panjang benih adalah selamat daripada paksaan kasar dalam amalan. Sesetengah pengguna mungkin lebih suka kemudahan benih 12 perkataan sebaliknya.",
+      "skipSDCardLabel": "Langkau sandaran kad microSD dan tulis perkataan pemulihan sebaliknya",
+      "skipSDCardText": "Anda sentiasa mempunyai pilihan untuk membuat sandaran kad microSD atau menulis perkataan pemulihan anda selepas persediaan. Ini boleh dilakukan dari tetapan.",
+      "title": "Pilihan sandaran lanjutan"
+    },
+    "attestationFailed": "Pengesahan peranti gagal. BitBox anda mungkin palsu atau terkompromi. Syiling di BitBox02 mungkin berisiko hilang. Sila hubungi support@bitbox.swiss dengan segera.",
     "backup": {
       "point1": "Pilih backup pada kad microSD",
       "point2": "Tetapkan kata laluan untuk peranti anda",
       "restoreText": "Ok, mari kita pulihkan backup!",
-      "text1": "Hebat, kata laluan BitBox02 anda sudah ditetapkan dan wallet dibuat. Kini tiba masanya untuk membuat backup pertama anda. Sila pastikan kad microSD anda dimasukkan ke dalam BitBox02 anda dan teruskan.",
+      "text1": "Bagus, kata laluan BitBox anda kini ditetapkan dan dompet dibuat. Kini tiba masanya untuk membuat sandaran pertama anda. Sila pastikan kad microSD anda dimasukkan ke dalam BitBox anda dan teruskan.",
       "text2": "Sila ikuti arahan pada skrin pada peranti anda untuk membuat backup.",
-      "text3": "Selepas backup anda dicipta, sila tarik keluar kad microSD dan simpan itu di <strong>lokasi selamat</strong>. Kandungan kad microSD tidak dilindungi kata laluan. Jangan sekali-kali memasukkannya ke peranti lain selain BitBox02 anda."
+      "text3": "Selepas sandaran anda dibuat, sila keluarkan kad microSD dan simpannya dalam a <strong>lokasi selamat</strong>. Kandungan kad microSD tidak dilindungi kata laluan. Jangan sekali-kali memasukkannya ke dalam mana-mana peranti lain kecuali BitBox anda.",
+      "userConfirmation1": "Saya harus menyimpan sandaran saya di lokasi yang selamat.",
+      "userConfirmation2": "Sandaran saya tidak dilindungi dengan kata laluan. Siapa saja yang mempunyai akses kepadanya dapat mengakses dompet saya.",
+      "userConfirmation3": "Jika saya kehilangan atau merosakkan BitBox saya, satu-satunya cara untuk memulihkan dana saya ialah memulihkan daripada sandaran saya.",
+      "userConfirmation4": "Jika saya kehilangan atau merosakkan kedua-dua sandaran saya dan BitBox saya maka dana saya akan hilang.",
+      "userConfirmation5": "Saya tidak sepatutnya memasukkan sandaran kad mikroSD saya ke dalam komputer, telefon, pencetak atau mana-mana peranti selain daripada BitBox.",
+      "userConfirmation5mnemonic": "Saya tidak sepatutnya meletakkan perkataan pemulihan saya dalam komputer, telefon, pencetak atau mana-mana peranti selain daripada BitBox."
     },
     "create": {
-      "button": "Beri Nama dan Teruskan",
+      "button": "Namakan peranti & teruskan",
       "info": "Inilah langkah-langkah asas yang akan anda ambil untuk menyediakan BitBox anda: ",
-      "inputTitle": "Nama Wallet",
+      "inputTitle": "Nama dompet",
       "point1": "Tetapkan nama untuk peranti anda",
       "point2": "Tetapkan kata laluan untuk peranti anda",
       "point3": "Buat backup",
       "text": "Ok, mari buat dompet baru!"
     },
+    "createBackupAborted": "Membuat sandaran dihentikan.",
+    "createBackupFailed": "Gagal membuat sandaran, cuba lagi.",
     "initialize": {
-      "passwordText": "Sekarang mari kita tetapkan kata laluan untuk peranti anda. Gunakan kawalan pada BitBox anda untuk memasukkan dan memilih kata laluan.",
-      "passwordTitle": "Tetapkan kata laluan untuk BitBox anda",
-      "text": "Berjaya berpasangan dengan BitBox02 anda! Sekarang mari kita inisialisasi peranti anda. Mulailah dengan memilih untuk membuat wallet baru, atau untuk memulihkan wallet dari backup yang sudah ada. <strong>Sila pastikan anda mempunyai kad microSD yang sudah dimasukkan dalam BitBox02 anda</strong>",
-      "tip": "Sebelum meneruskan, sangat disyorkan supaya anda meneruskan di persekitaran yang selamat.",
-      "title": "Inisialisasi BitBox anda"
+      "tip": "Kami mengesyorkan agar anda meneruskan di lokasi yang selamat."
     },
+    "noPasswordMatch": "Kata laluan tidak sepadan, sila cuba lagi.",
     "pairing": {
-      "confirmButton": "Sahkan dan Teruskan",
-      "failed": "Pasangan tidak berjaya disahkan. Sila tancap ulang BitBox02 anda.",
-      "paired": "Anda telah mengesahkan pada peranti anda bahawa kod sepadan. Jika ini betul, anda boleh meneruskan dengan mengklik butang di bawah.",
-      "title": "Sahkan Kod Pasangan",
-      "unpaired": "BitBox02 baru telah dikesan. Sila sahkan bahawa kod berikut sepadan dengan apa yang ditunjukkan pada peranti anda. Jika kod itu sepadan, sentuh di bawah tanda semak pada BitBox02 anda dan kemudian klik butang di bawah untuk meneruskan."
+      "failed": "Gandingan yang tidak disahkan. Sila pasang semula BitBox anda.",
+      "paired": "Anda telah mengesahkan kod berikut pada peranti anda. Sila teruskan.",
+      "title": "Sahkan kod gandingan",
+      "unpaired": "BitBox yang tidak berpasangan telah dikesan. Sila sahkan kod berpasangan sepadan dengan apa yang ditunjukkan pada BitBox anda."
+    },
+    "restoreFromMnemonic": {
+      "e104": "Pemulihan daripada perkataan pemulihan telah dibatalkan.",
+      "failed": "Pemulihan daripada perkataan pemulihan gagal, sila cuba lagi."
+    },
+    "stepBackup": {
+      "beforeProceed": "Sebelum meneruskan, sila baca pertimbangan keselamatan berikut:",
+      "createBackup": "Anda kini akan membuat sandaran pada kad microSD anda.",
+      "createBackupMnemonic": "Kini, anda akan dapat menulis perkataan pemulihan."
+    },
+    "stepBackupSuccess": {
+      "fundsSafe": "Untuk memastikan dana anda selamat, sila ingat perkara berikut:",
+      "title": "Sandaran Dipulihkan!"
+    },
+    "stepConnected": {
+      "unlock": "Masukkan kata laluan BitBox untuk membuka kunci."
+    },
+    "stepCreate": {
+      "description": "Nama ini digunakan untuk peranti dan nama sandaran",
+      "error": {
+        "genericMessage": "Gunakan huruf, nombor, simbol asas, ruang. Maks 30 aksara.",
+        "invalidChars": "Nama mengandungi aksara tidak sah: {{invalidChars}}.",
+        "tooLong": "Nama terlalu panjang."
+      },
+      "nameLabel": "Nama BitBox",
+      "namePlaceholder": "BitBox Saya",
+      "title": "Pilih nama peranti BitBox",
+      "toastMicroSD": "Sila masukkan kad microSD anda ke dalam BitBox anda yang akan digunakan untuk menyimpan sandaran dompet."
+    },
+    "stepCreateSuccess": {
+      "removeMicroSD": "Sila keluarkan kad microSD daripada BitBox anda dan simpan di lokasi yang selamat.",
+      "storeMnemonic": "Sila simpan perkataan pemulihan anda di lokasi yang selamat",
+      "success": "Anda telah berjaya membuat sandaran anda."
+    },
+    "stepInsertSD": {
+      "insertSDCard": "Sila masukkan kad mikroSD ke dalam BitBox anda untuk meneruskan.",
+      "insertSDCardToSeeBackups": "Sila masukkan kad microSD ke dalam BitBox anda untuk melihat sandaran anda.",
+      "insertSDcardTitle": "Masukkan kad mikroSD"
+    },
+    "stepPassword": {
+      "e104": "Menetapkan kata laluan telah dibatalkan.",
+      "title": "Tetapkan kata laluan BitBox",
+      "useControls": "Gunakan kawalan pada BitBox anda untuk menetapkan kata laluan peranti."
+    },
+    "stepUninitialized": {
+      "create": "Saya mahu mencipta dompet baharu pada BitBox saya.",
+      "restore": "Saya mahu memulihkan dompet saya daripada sandaran.",
+      "restoreMicroSD": "Pulihkan daripada kad microSD",
+      "restoreMnemonic": "Pulihkan daripada perkataan pemulihan",
+      "title": "Sediakan dompet anda"
     },
     "success": {
-      "text": "Hooray! BitBox02 anda kini siap untuk digunakan.\n\nUntuk maklumat lanjut mengenai cara menggunakan aplikasi BitBox, sila gunakan panduan dalam aplikasi dengan mengklik tanda tanya di sudut kanan atas.",
       "title": "Anda sudah bersedia untuk pergi!"
     }
   },
-  "bitboxBase": {
-    "connect": "Sambungkan Base",
-    "detectedBases": "Mengesan peranti berikut pada rangkaian anda:",
-    "manualInput": "Tidak dapat melihat Base BitBox anda? Sambung secara manual di bawah:",
-    "title": "Base BitBox"
+  "bitsurance": {
+    "dashboard": {
+      "active": "Polisi insurans aktif",
+      "button": "Insuranskan akaun baharu",
+      "canceled": "Dibatalkan",
+      "coverage": "Liputan maksimum",
+      "inactive": "Tidak aktif",
+      "processing": "Memproses",
+      "refused": "enggan",
+      "supportLink": "Urus kontrak",
+      "title": "Akaun yang diinsuranskan",
+      "waitpayment": "Menunggu pembayaran"
+    },
+    "detect": {
+      "button": "Semak insurans sedia ada",
+      "insured": "Akaun yang diinsuranskan dikesan:",
+      "notInsured": "Tiada akaun yang diinsuranskan dikesan. Jika anda pasti anda mempunyai akaun yang diinsuranskan, sila pastikan anda mempunyai dompet yang betul disambungkan.",
+      "text": "Jika anda sudah mendaftar dengan Bitsurance, BitBoxApp boleh menyegerakkan perlindungan insurans sedia ada anda secara automatik.",
+      "title": "Sudah diinsuranskan?"
+    },
+    "insure": {
+      "button": "Semak ketersediaan dan harga",
+      "faq": "Baca lebih lanjut mengenai Soalan Lazim Bitsurance",
+      "listItem1": "rompakan",
+      "listItem2": "Peras ugut (cth., serangan sepana $5)",
+      "listItem3": "Kemusnahan akibat kebakaran, air atau bencana alam",
+      "month": "bulan",
+      "text": "Insuranskan BitBox anda dan bitcoin bernilai sehingga €100,000",
+      "text2": "Pelan insurans bermula pada €30/tahun (€2.50/bulan). Anda boleh mengetahui lebih lanjut tentang Bitsurance dan tawaran insurans tepat mereka di",
+      "text3": "Kini tersedia di Jerman, dengan lebih banyak wilayah untuk diikuti.",
+      "title": "Bermula"
+    },
+    "intro": {
+      "link": "Laman web Bitsurance",
+      "text1": "BitBox berfungsi dengan Bitsurance untuk menambah lapisan perlindungan tambahan untuk bitcoin anda. Walaupun BitBox memastikan dana anda selamat, Bitsurance melindungi ancaman di rumah yang tidak boleh dikurangkan dengan teknologi sahaja, seperti pecah rumah, peras ugut atau pemusnahan dompet perkakasan itu sendiri."
+    },
+    "terms": {
+      "link": "Dasar Privasi Bitsurance",
+      "text1": "Bitsurance ialah perkhidmatan pihak ketiga yang bebas. Untuk pertanyaan mengenai tawaran dan tuntutan insurans mereka, sila hubungi Bitsurance secara terus.",
+      "text2": "Insurans kini tersedia di Jerman, dengan lebih banyak wilayah untuk diikuti.",
+      "text3": "Perlindungan Bitcoin maksimum yang tersedia pada masa ini ialah €100,000 setiap orang. Jumlah yang lebih tinggi dirancang untuk masa hadapan.",
+      "text4": "Maklumat peribadi dan kunci awam lanjutan (extended public key) akaun anda yang diinsuranskan adalah sebahagian daripada polisi insurans dan akan dikongsi dengan Bitsurance dan pembekal insurans.",
+      "text5": "Untuk maklumat lanjut tentang privasi, sila rujuk"
+    },
+    "title": "Insurans"
+  },
+  "bitsuranceAccount": {
+    "errorNoXpub": "Ralat: Tidak dapat mendapatkan xpub daripada akaun.",
+    "noAccount": "Tiada akaun yang boleh diinsuranskan.",
+    "select": "Pilih akaun"
   },
   "blink": {
     "button": "Berkedip"
   },
+  "bluetooth": {
+    "connected": "bersambung",
+    "connectionFailed": "gagal",
+    "connectionIssues": "Menghadapi masalah sambungan?",
+    "disabledGloballyDescription": "Sila hidupkan Bluetooth untuk bersambung ke BitBox anda.",
+    "disabledGloballyTitle": "Akses Bluetooth dilumpuhkan.",
+    "disabledPermissionDescription": "Sila benarkan Bluetooth bersambung ke BitBox anda.",
+    "disabledPermissionTitle": "Akses Bluetooth dinyahdayakan untuk BitBoxApp.",
+    "enable": "Sila hidupkan Bluetooth",
+    "select": "Pilih BitBox anda"
+  },
   "bootloader": {
-    "button": "Naik taraf Firmware sekarang",
-    "progress": "Menaiktaraf: {{progress}}%",
+    "button": "Tingkatkan perisian tegar sekarang",
+    "button_install": "Pasang firmware sekarang",
+    "progress": "Menaiktaraf",
+    "progress_install": "Memasang",
     "success": "Naik taraf berjaya! Sila pasang ulang peranti. Kali ini, jangan sentuh butang."
   },
   "button": {
     "abort": "Tinggalkan",
     "back": "Kembali",
-    "changepin": "Ubah kata laluan peranti",
-    "check": "Semak Backup",
+    "changepin": "Tukar kata laluan peranti",
+    "check": "Semak sandaran",
+    "continue": "Teruskan",
     "copy": "Menyalin",
     "create": "Buat",
+    "dismiss": "Batalkan",
+    "done": "Selesai",
     "download": "Muat turun",
-    "hiddenwallet": "Buat wallet tersembunyi",
     "next": "Berikut",
     "ok": "OK",
     "previous": "Sebelumnya",
-    "receive": "Terima",
+    "proceedOnBitBox": "Teruskan pada BitBox anda",
     "restore": "Memulihkan",
-    "send": "Hantar",
+    "select": "Pilih",
     "unlock": "Buka",
+    "update": "Kemas kini",
     "upgrade": "Naik taraf"
+  },
+  "buy": {
+    "bitrefill": {
+      "error": {
+        "insufficientFunds": "Dana tidak mencukupi untuk membeli kad hadiah."
+      },
+      "transactionNote": "Dihantar ke Bitrefill"
+    },
+    "exchange": {
+      "bankTransfer": "Transfer bank",
+      "bestDeal": "Tawaran terbaik",
+      "buy": "Beli",
+      "creditCard": "Kad kredit",
+      "description_bitrefill": "Beli kad hadiah, isi semula telefon & banyak lagi",
+      "fast": "Cepat",
+      "fee": "bayaran",
+      "infoContent": {
+        "bitrefill": {
+          "disclaimer": {
+            "account": {
+              "link": "Had pembelian bitrefill",
+              "text": "Anda boleh menggunakan Bitrefill tanpa membuat akaun, dalam had tertentu. Untuk meningkatkan had perbelanjaan anda, anda boleh membuat akaun asas atau menjadi pelanggan yang disahkan. Untuk butiran penuh, lihat had pembelian Bitrefill.",
+              "title": "Akaun dan had"
+            },
+            "claims": {
+              "link": "Sokongan bitrefill",
+              "text": "Jika anda mengalami sebarang masalah dengan pembelian, sila hubungi Bitrefill terus dalam masa 30 hari dari pesanan anda.",
+              "title": "Tuntutan"
+            },
+            "dataProtection": {
+              "link": "Dasar privasi bitrefill",
+              "text": "BitBoxApp tidak mengumpul data peribadi. Bitrefill mengumpul maklumat mengikut Dasar Privasinya.",
+              "title": "Perlindungan Data"
+            },
+            "fees": {
+              "text": "Bitrefill tidak mengenakan yuran eksplisit, tetapi harga produk mungkin termasuk markup, yang boleh berbeza-beza bergantung pada peruncit, wilayah dan kadar pertukaran Bitrefill dikenakan.",
+              "title": "Bayaran"
+            },
+            "intro": {
+              "text": "Bitrefill ialah platform dalam talian yang membolehkan anda membeli kad hadiah, menambah nilai telefon mudah alih dan membayar bil menggunakan bitcoin atau mata wang kripto lain. Ini adalah cara mudah untuk membelanjakan kripto pada barangan dan perkhidmatan harian tanpa menukarnya kepada wang tradisional. Bitrefill menawarkan rangkaian luas produk daripada jenama global dan popular di kalangan orang yang ingin hidup di crypto atau membeli-belah secara persendirian.",
+              "title_bitcoin": "Belanja bitcoin dengan Bitrefill",
+              "title_crypto": "Belanja kripto dengan Bitrefill"
+            },
+            "security": {
+              "link": "Model ancaman keselamatan BitBox02",
+              "text": "Bitrefill ialah perkhidmatan luaran yang tidak dilindungi oleh model ancaman keselamatan BitBox. Apabila anda membuat pembelian, bayaran anda dihantar ke alamat Bitrefill. BitBox tidak boleh mengesahkan bahawa alamat ini betul.",
+              "title": "Notis keselamatan"
+            }
+          },
+          "infobox": {
+            "intro": "Bitrefill ialah platform dalam talian di mana anda boleh membelanjakan bitcoin dan mata wang kripto lain untuk keperluan harian dengan membeli kad hadiah, tambah nilai mudah alih dan pelbagai perkhidmatan. Penyepaduan dengan BitBoxApp membolehkan anda membelanjakan syiling anda terus dari BitBox anda tanpa memindahkannya ke bursa atau dompet lain."
+          }
+        },
+        "btcdirect": {
+          "disclaimer": {
+            "dataProtection": {
+              "link": "Dasar privasi BTC Direct",
+              "text": "BitBoxApp tidak mengumpul data peribadi. BTC Direct mengumpul maklumat yang diperlukan mengikut Dasar Privasi mereka untuk memenuhi piawaian kawal selia.",
+              "title": "Perlindungan Data"
+            },
+            "kyc": {
+              "text": "Pengesahan identiti pelanggan diperlukan untuk semua dagangan. Pengurus akaun anda akan membimbing anda melalui proses dan menjawab sebarang soalan yang mungkin anda ada.",
+              "title": "Pengesahan identiti"
+            },
+            "partnership": {
+              "text": "Dengan kerjasama BTC Direct, broker Eropah yang dipercayai, BitBox menawarkan dagangan over-the-counter (OTC) berskala besar untuk Bitcoin, Ethereum, stablecoin dan banyak lagi dengan sokongan pakar secara langsung dalam BitBoxApp.",
+              "title": "Beli dan jual dengan BTC Direct's Private Trading Desk"
+            },
+            "paymentMethods": {
+              "buy": "Membeli bitcoin:",
+              "buy2": "Buat pesanan belian yang besar dengan pengurus akaun anda, kunci harga tetap dan bayar melalui pindahan wang melalui bank. Kripto anda dihantar terus ke BitBox anda selepas pembayaran.",
+              "fee": "Jumlah dagangan minimum sebanyak €50,000 dikenakan, dengan bayaran telus antara 0.5% dan 1%.",
+              "sell": "Jual bitcoin:",
+              "sell2": "Kunci harga OTC tetap apabila membuat pesanan jual. Pembayaran EUR dibuat sebaik sahaja anda menghantar crypto ke BTC Direct. Bantuan peribadi disediakan jika diperlukan.",
+              "title": "Kaedah pembayaran dan yuran"
+            },
+            "personal": {
+              "text": "Setiap pelanggan Perdagangan Persendirian diberikan pengurus akaun khusus untuk bantuan diperibadikan melalui telefon, panggilan video, e-mel atau sembang. Harga beli dan jual segera ditetapkan apabila pesanan dibuat, walaupun penyelesaian berlaku kemudian. Pesanan dilaksanakan melalui meja OTC BTC Direct, meminimumkan gelinciran.",
+              "title": "Perkhidmatan peribadi dengan harga tetap"
+            },
+            "security": {
+              "link": "Model ancaman keselamatan BitBox",
+              "text": "Meja Dagangan Persendirian BTC Direct ialah perkhidmatan luaran yang tidak dilindungi oleh model ancaman keselamatan BitBox. Walau bagaimanapun, BTC Direct mengetahui dengan baik produk BitBox dan menawarkan panduan yang selamat dan berpengetahuan. Produk BitBox mengesahkan alamat crypto semasa transaksi untuk memastikan penghantaran selamat.",
+              "title": "Keselamatan"
+            },
+            "title": "Penafian"
+          },
+          "infobox": {
+            "intro_btconly": "Dapatkan bantuan peribadi untuk dagangan Bitcoin yang bernilai tinggi, tanpa kaunter (OTC).",
+            "intro_multi": "Dapatkan bantuan peribadi untuk dagangan over-the-counter (OTC) bernilai tinggi untuk Bitcoin, stablecoin Ethereum dan banyak lagi.",
+            "kyc": "BTC Direct memerlukan pengesahan identiti untuk semua dagangan, dengan pengurus akaun anda membimbing anda melalui setiap langkah.",
+            "learnmore": "Ketahui lebih lanjut mengenai Meja Dagangan Persendirian BTC Direct.",
+            "listItem1": "Beli dan jual pada bila-bila masa dengan menghubungi pengurus akaun anda melalui telefon, e-mel, panggilan video atau sembang.",
+            "listItem2": "Pembayaran diselesaikan melalui pindahan wang melalui bank selepas pesanan dibuat.",
+            "listItem3": "Jumlah pesanan minimum: €50,000.",
+            "listItem4": "Yuran telus ditetapkan pada 0.5%-1%, termasuk bimbingan peribadi.",
+            "manager": "Anda akan mempunyai pengurus akaun khusus yang membimbing anda pada setiap langkah, memastikan pengalaman yang selamat dan mudah dengan kadar tetap dan kegelinciran minimum."
+          }
+        },
+        "btcdirectWidget": {
+          "disclaimer": {
+            "description": "Kami bekerjasama dengan BTC Direct, broker Eropah yang dipercayai, untuk memudahkan pembelian dan penjualan mata wang kripto dalam BitBoxApp. Perkhidmatan ini tersedia di seluruh Eropah menggunakan pindahan bank, kad kredit dan banyak kaedah pembayaran tempatan.",
+            "kyc": {
+              "description": "Pengesahan identiti pelanggan diperlukan untuk semua dagangan. Anda perlu mengambil swafoto dan mengambil gambar dokumen rasmi.",
+              "title": "Pengesahan identiti"
+            },
+            "paymentMethods": {
+              "buy": "Membeli: Bayar dalam EUR untuk mendapatkan syiling dihantar terus ke BitBox anda. Anda boleh memilih antara pembelian sekali dan berulang. Untuk pemindahan bank, kadar pertukaran ditetapkan apabila BTC Direct menerima wang. Kaedah segera menggunakan kadar penukaran tetap untuk masa yang terhad.",
+              "note": "Nota: Kadar pertukaran BTC Direct mungkin berbeza sedikit daripada kadar BitBoxApp.",
+              "sell": "Menjual: Hantar mata wang kripto anda ke BTC Direct dan terima EUR dalam akaun bank anda. Kadar pertukaran ditetapkan sebaik sahaja BTC Direct menerima syiling anda.",
+              "title": "Kaedah pembayaran dan yuran"
+            },
+            "security": {
+              "description": "BTC Direct ialah perkhidmatan luaran yang tidak dilindungi oleh model ancaman keselamatan BitBox. Kami bekerjasama rapat dengan BTC Direct untuk meningkatkan keselamatan keseluruhan.",
+              "link": "Model ancaman keselamatan BitBox",
+              "title": "Keselamatan"
+            },
+            "title_bitcoin": "Beli dan jual bitcoin dengan BTC Direct",
+            "title_crypto": "Beli dan jual kripto dengan BTC Direct"
+          },
+          "infobox": {
+            "feesBuying": {
+              "bancontact": "Bancontact: {{fee}}%",
+              "bankTransfer": "Pindahan bank, SEPA, iDEAL: {{fee}}%",
+              "creditDebitCard": "Kad kredit, Cartes Bancaires: {{fee}}%",
+              "sofort": "Sofort: {{fee}}%",
+              "title": "Bayaran untuk membeli"
+            },
+            "feesSelling": {
+              "bankTransfer": "Transfer bank: {{fee}}%",
+              "title": "Bayaran untuk menjual"
+            },
+            "intro": "Pembelian dan penjualan mata wang kripto Eropah dengan EUR.",
+            "payment": {
+              "bancontact": "Bancontact",
+              "bankTransfer": "Pindahan bank, SEPA Instant, iDEAL",
+              "creditDebitCard": "Kad kredit (Mastercard, Visa), Cartes Bancaires",
+              "sofort": "Sofort",
+              "title": "Cara bayaran"
+            }
+          },
+          "learnmore": "Ketahui lebih lanjut tentang BTC Direct"
+        },
+        "moonpay": {
+          "fees": {
+            "bankTransfer": "Pemindahan bank: {{fee}}%",
+            "creditDebitCard": "Kad kredit/debit: {{fee}}%",
+            "learnMore": "Ketahui lebih lanjut tentang Moonpay",
+            "title": "Bayaran"
+          },
+          "fullCurrenciesList": "Lihat senarai penuh mata wang di sini",
+          "payment": {
+            "asteriskText": "* Tidak tersedia untuk penduduk AS",
+            "bankTransfer": "Transfer bank*",
+            "bankTransferDetails": {
+              "pix": "PIX (transaksi BR di Brasil sahaja)",
+              "sepa": "SEPA dan SEPA Instant (transaksi EUR di negara-negara SEPA sahaja)",
+              "uk": "UK Faster Payments (transaksi GBP di UK sahaja)"
+            },
+            "creditDebitCard": "Kad kredit/debit",
+            "creditDebitCardDetails": {
+              "cards": "Amex, Mastercard, Visa dan Maestro"
+            },
+            "learnMore": "Lihat butiran lanjut tentang kaedah pembayaran",
+            "title": "Cara bayaran"
+          },
+          "supportedCurrencies": "Menyokong semua mata wang fiat utama: USD, EUR, CHF dan lain-lain."
+        },
+        "pocket": {
+          "fees": {
+            "info": "Transfer bank: {{fee}}%",
+            "title": "Bayaran"
+          },
+          "learnMore": "Ketahui lebih lanjut tentang Pocket",
+          "payment": {
+            "bankTransfer": "Transfer bank",
+            "bankTransferDetails": {
+              "sepa": "SEPA dan SEPA Segera (urus niaga EUR di negara SEPA sahaja)",
+              "sic": "Swiss Interbank Clearing (transaksi CHF di CH/LI sahaja)",
+              "uk": "UK Faster Payments (transaksi GBP di UK sahaja)"
+            },
+            "bankTransferReccuring": "Bagaimana cara menyiapkan pembelian berkala dengan standing order?",
+            "title": "Cara bayaran"
+          },
+          "sell": {
+            "title": "Jual Bitcoin"
+          },
+          "supportedCurrencies": "Menyokong mata wang Eropah: EUR, GBP dan CHF.",
+          "verification": {
+            "info": "Hanya memerlukan pengesahan identiti melebihi ambang harian dan tahunan.",
+            "link": "Cari ambang semasa di sini",
+            "title": "Pengesahan identiti"
+          }
+        },
+        "region": {
+          "title": "Pilih wilayah akaun bank anda didaftarkan untuk melihat pilihan yang tersedia untuk anda."
+        }
+      },
+      "noExchanges": "Maaf, tiada pertukaran tersedia di rantau ini.",
+      "region": "Wilayah",
+      "selectRegion": "Tidak dinyatakan",
+      "sell": "jual",
+      "spend": "Berbelanja"
+    },
+    "info": {
+      "continue": "Setuju dan teruskan",
+      "crypto": "kripto",
+      "disclaimer": {
+        "intro": [
+          "Kami bekerjasama dengan MoonPay untuk menawarkan anda cara yang lancar untuk membeli {{coinCode}} terus dalam BitBoxApp. Ia hanya beberapa klik.",
+          "MoonPay ialah platform yang memudahkan dan cepat untuk membeli {{coinCode}} di lebih 160+ negara."
+        ],
+        "payment": {
+          "details": "Anda boleh beli {{coinCode}} serta-merta melalui MoonPay dengan kaedah pembayaran berikut. Pesanan kad kredit atau debit adalah segera dan mudah, tetapi lebih mahal disebabkan peningkatan risiko caj balik. Kami mengesyorkan menggunakan pilihan pindahan bank untuk jumlah yang lebih besar. Yuran minimum ialah 4 USD/EUR atau setara.",
+          "footnote": "Sila ambil perhatian bahawa kadar pertukaran MoonPay boleh berbeza daripada yang digunakan dalam BitBoxApp, menghasilkan jumlah yang sedikit berbeza.",
+          "table": {
+            "1_description": "Yuran terendah, boleh mengambil masa sehingga 3 hari bekerja",
+            "1_method": "Pindahan bank (SEPA)",
+            "2_description": "Yuran yang lebih tinggi tetapi cepat dan segera",
+            "2_method": "Kad kredit & debit",
+            "description": "Penerangan",
+            "fee": "Yuran",
+            "method": "Kaedah"
+          },
+          "title": "Kaedah pembayaran dan yuran"
+        },
+        "privacyPolicy": "Dasar privasi MoonPay",
+        "protection": {
+          "descriptionGeneric_bitcoin": "BitBoxApp tidak mengumpul sebarang data semasa membeli Bitcoin, dana yang masuk dianggap seperti transaksi biasa. Bagaimanapun pertukaran rakan kongsi perlu mengumpul beberapa maklumat untuk beroperasi. Sila rujuk dasar privasi masing-masing untuk melihat dengan lebih terperinci cara data dikendalikan.",
+          "descriptionGeneric_crypto": "BitBoxApp tidak mengumpul sebarang data semasa membeli kripto, dana yang masuk dianggap seperti transaksi biasa. Bagaimanapun pertukaran rakan kongsi perlu mengumpul beberapa maklumat untuk beroperasi. Sila rujuk dasar privasi masing-masing untuk melihat dengan lebih terperinci cara data dikendalikan.",
+          "title": "Perlindungan Data"
+        },
+        "security": {
+          "descriptionGeneric_bitcoin": "Apabila anda membeli Bitcoin melalui pertukaran rakan kongsi, anda menggunakan perkhidmatan luaran. Perkhidmatan ini berada di luar skop model ancaman keselamatan BitBox dan bergantung pada keselamatan dan keselamatan persekitaran yang dijalankan oleh perisian BitBoxApp.",
+          "descriptionGeneric_crypto": "Apabila anda membeli kripto melalui pertukaran rakan kongsi, anda menggunakan perkhidmatan luaran. Perkhidmatan ini berada di luar skop model ancaman keselamatan BitBox dan bergantung pada keselamatan dan keselamatan persekitaran yang dijalankan oleh perisian BitBoxApp.",
+          "link": "Model \"security threat\"",
+          "title": "Model security"
+        },
+        "title_bitcoin": "Selamat datang ke kedai sehenti anda untuk membeli Bitcoin",
+        "title_crypto": "Selamat datang ke kedai sehenti anda untuk membeli crypto"
+      },
+      "next": "Seterusnya",
+      "selectLabel": "Pilih akaun anda",
+      "selectPlaceholder": "Pilih syiling",
+      "skip": "Jangan tunjukkan lagi"
+    },
+    "pocket": {
+      "error": {
+        "insufficientFunds": "Dana tidak mencukupi pada akaun yang dipilih."
+      },
+      "paymentRequestNote": "Permintaan bayaran daripada",
+      "previousTransactions": "Sejarah transaksi akaun ini tidak kosong. Berkongsi akaun ini akan menjadikan semua urus niaga masa lalu dan masa depannya kelihatan untuk Pocket. Teruskan juga?",
+      "usedAddress": "Alamat {{address}} telah digunakan, sila mulakan semula dengan alamat baharu.",
+      "verifyBitBox02": "Sila sahkan bahawa alamat yang anda terima melalui e-mel sepadan dengan alamat yang dipaparkan pada Bitbox anda. Jika boleh, anda harus membuka e-mel pada peranti kedua untuk keselamatan yang lebih baik."
+    }
   },
   "changePin": {
     "newTitle": "Kata laluan peranti baru",
     "oldLabel": "Kata laluan peranti terkini"
   },
-  "checkSDcard": "memeriksa kad micro SD",
+  "chart": {
+    "dataMissing": "Mengumpul data sejarah... nantikan.",
+    "dataOldTimestamp": "Pengemaskinian kadar pertukaran sejarah. Carta tidak memaparkan data selepas {{time}}.",
+    "dataUpdating": "mengemas kini data…",
+    "filter": {
+      "all": "Semua",
+      "month": "Bulan",
+      "week": "Minggu",
+      "year": "Tahun"
+    }
+  },
+  "checkSDcard": "menyemak kad mikroSD",
+  "clickHere": "Tekan di sini.",
   "confirm": {
-    "abortInfo": "Sentuh untuk ",
-    "abortInfoRedText": "tinggalkan",
-    "approveInfo": "Tahan 4 detik untuk ",
-    "approveInfoGreenText": "sahkan",
-    "info": "Pada BitBox anda",
-    "infoWhenPaired": "Mula-mula pada telefon mudah alih yang dipasangkan dan kemudian BitBox anda"
+    "info": "Teruskan pada BitBox anda. "
   },
   "confirmOnDevice": "Sila sahkan pada peranti anda.",
-  "device": {
-    "appUpradeRequired": "BitBox anda tidak sesuai dengan aplikasi desktop ini. Sila muat turun dan pasang versi terkini."
+  "connectKeystore": {
+    "promptNoName": "Sila sambungkan BitBox anda untuk meneruskan",
+    "promptWithName": "Sila sambungkan BitBox anda bernama \"{{name}}\"untuk meneruskan"
   },
-  "deviceLock": {
-    "button": "Membolehkan Pengesahan Dua Langkah (2FA)",
-    "condition1": "Adakah anda mempunyai backup?",
-    "condition2": "Apakah pengesahan aplikasi mudah alih berfungsi?",
-    "condition3": "2FA MENYAHAKTIFKAN backup dan pemasangan aplikasi. Peranti mesti DITETAPKAN SEMULA untuk keluar dari 2FA!",
-    "confirm": "Membolehkan Pengesahan Dua Langkah (2FA)",
-    "title": "Membolehkan Pengesahan Dua Langkah (2FA)"
+  "darkmode": {
+    "toggle": "Mod gelap"
+  },
+  "device": {
+    "appUpradeRequired": "BitBox anda tidak sesuai dengan aplikasi desktop ini. Sila muat turun dan pasang versi terkini.",
+    "firmwareUpgradeRequired": "Kemas kini perisian tegar diperlukan untuk menggunakan ciri ini.",
+    "keystoreConnected": "Wallet bersambung",
+    "unsupportedFeature": "Ciri ini tidak tersedia pada peranti ini."
   },
   "deviceSettings": {
+    "backups": {
+      "manageBackups": {
+        "description": "Cipta atau sahkan sandaran kad microSD anda."
+      },
+      "showRecoveryWords": {
+        "description": "Tunjukkan dan sahkan perkataan pemulihan pada skrin BitBox."
+      },
+      "title": "Sandaran"
+    },
+    "bluetoothFirmware": {
+      "title": "Perisian tegar Bluetooth"
+    },
+    "deviceInformation": {
+      "attestation": {
+        "description": "BitBoxApp menyemak sama ada peranti anda adalah tulen."
+      },
+      "deviceName": {
+        "description": "Tukar nama peranti anda."
+      },
+      "passwordStretchingAlgo": {
+        "description": "Algoritma yang digunakan untuk menyulitkan benih pada BitBox anda.",
+        "title": "Algoritma buka kunci (unlock algorithm)"
+      },
+      "rootFingerprint": {
+        "description": "Root fingerprint ialah pengecam unik untuk dompet yang sedang digunakan. Root fingerpri boleh membantu anda membezakan antara dompet yang berbeza jika anda menggunakan frasa laluan."
+      },
+      "securechip": {
+        "description": "Model cip selamat."
+      },
+      "title": "Maklumat peranti"
+    },
+    "deviceSettings": {
+      "title": "Tetapan peranti"
+    },
+    "expert": {
+      "bip85": {
+        "description": "Hasilkan kunci anak (child keys) daripada dompet BitBox anda.",
+        "disclaimer": "Saya memahami cara kunci kanak-kanak berfungsi dan pertimbangan keselamatan",
+        "how": {
+          "description": "Kunci anak (child keys) dipaparkan sebagai mnemonik pada BitBox anda. Anda boleh mencipta seberapa banyak kunci anak yang anda mahu. Untuk menunjukkan kunci anak, anda akan diminta untuk nombor anak (iaitu 1, 2, 3 dsb.) dan panjang mnemonik yang dikehendaki (12, 18 atau 24 perkataan pemulihan). Ingat, anda mesti menjejaki <strong>bilangan anak dan bilangan perkataan</strong> untuk memaparkan mnemonik yang sama kemudian.",
+          "title": "Bagaimanakah ia berfungsi?"
+        },
+        "recover": {
+          "description": "Anda sentiasa boleh memaparkan mnemonik untuk kunci anak (child keys) sekali lagi. Seperti yang dinyatakan, anda mesti ingat <strong>bilangan anak dan bilangan perkataan</strong> untuk memaparkan mnemonik yang sama. Jangan sekali-kali mengimport perkataan pemulihan BitBox utama anda ke dalam dompet lain, hanya gunakan kunci anak apabila mengimport ke dompet lain.",
+          "title": "Bagaimana untuk memulihkan dompet menggunakan kunci anak (child key) dari BitBox?"
+        },
+        "security": {
+          "description": "Jangan sekali-kali menggunakan semula kunci anak (child key). Sebagai contoh, jangan gunakan kunci anak untuk dompet panas dan kemudian gunakan kunci yang sama untuk dompet perkakasan. Kunci itu tidak dianggap selamat kerana ia digunakan untuk dompet panas (hot wallet).",
+          "title": "Pertimbangan keselamatan"
+        },
+        "title": "Tunjukkan kunci anak BIP-85",
+        "what": {
+          "description": "Kunci anak (child keys) diturunkan dari benih utama (main seed) anda dan boleh digunakan untuk membuat dompet baru tanpa perlu membuat sandaran benih tambahan. Sebagai contoh, anda boleh membuat kunci anak dan mengimportnya ke dalam dompet panas (hot wallet) daripada membiarkan dompet panas tersebut membuat benih yang baru sepenuhnya.",
+          "link": "Baca lebih lanjut mengenai BIP-85",
+          "title": "Apa itu kunci anak (child keys)?"
+        }
+      },
+      "factoryReset": {
+        "description": "Tetapkan semula peranti anda kepada tetapan kilang. Ini memadamkan dompet daripada BitBox anda!",
+        "title": "Tetapan semula kilang"
+      },
+      "goToStartupSettings": {
+        "description": "Masukkan pemuat but BitBox. Anda boleh mendayakan cincang perisian tegar dari sini."
+      },
+      "passphrase": {
+        "description": "Dayakan atau lumpuhkan ciri frasa laluan.",
+        "title": "Ungkapan laluan"
+      }
+    },
     "firmware": {
+      "firmwareVersion": "Versi Perisian Tegar",
       "newVersion": {
-        "label": "Versi yang tersedia"
+        "label": "Versi tersedia"
       },
       "title": "Firmware",
       "upToDate": "Peranti anda adalah yang terkini",
+      "upgradeAvailable": "Peningkatan baharu tersedia",
       "version": {
         "label": "Versi"
       }
     },
     "hardware": {
+      "attestation": {
+        "false": "Semakan ketulenan gagal",
+        "label": "Semakan ketulenan",
+        "true": "BitBox anda adalah sahih"
+      },
       "sdcard": {
         "false": "Belum dimasukkan",
-        "label": "Kad micro SD",
+        "label": "kad mikroSD",
         "true": "Telah dimasukkan"
       },
+      "securechip": "Cip selamat",
       "title": "Hardware"
     },
     "loading": "Mengambil maklumat peranti ...",
-    "pairing": {
-      "lock": {
-        "false": "dinyahaktifkan",
-        "label": "Pengesahan Dua Langkah (2FA)",
-        "true": "Diaktifkan"
-      },
-      "mobile": {
-        "false": "Ditutup",
-        "label": "Aplikasi Mudah Alih",
-        "true": "Buka"
-      },
-      "status": {
-        "false": "Belum dipasangkan",
-        "label": "Status",
-        "true": "Dipasangkan"
-      },
-      "title": "Memasang"
-    },
+    "noDevice": "Tiada peranti disambungkan",
     "secrets": {
-      "manageBackups": "Urus Backup",
+      "manageBackups": "Uruskan sandaran",
       "title": "Rahsia"
     }
   },
   "deviceTampered": "Apakah BitBox anda dibekalkan dengan kata laluan pemulihan? Jika ya, hentikan proses persediaan dan hubungi sokongan segera. Shift tidak akan memberikan anda dompet siap pakai atau membuat cadangan kata laluan.",
   "dialog": {
     "cancel": "Batal",
-    "confirm": "Sahkan"
+    "confirm": "Sahkan",
+    "confirmTitle": "Pengesahan"
+  },
+  "error": {
+    "accountAlreadyExists": "Akaun sudah wujud.",
+    "accountLimitReached": "Tidak boleh menambah akaun. Bilangan maksimum akaun untuk syiling ini telah dicapai.",
+    "aoppCallback": "Terdapat ralat menghantar alamat kepada {{host}}.",
+    "aoppInvalidRequest": "Invalid request.",
+    "aoppNoAccounts": "Tiada akaun tersedia.",
+    "aoppSigningAborted": "Permintaan pemilikan alamat dibatalkan.",
+    "aoppUnknown": "Ralat tidak diketahui berlaku.",
+    "aoppUnsupportedAsset": "Aset tidak disokong.",
+    "aoppUnsupportedFormat": "Tiada akaun tersedia yang menyokong format alamat yang diminta.",
+    "aoppUnsupportedKeystore": "Peranti yang disambungkan tidak boleh menandatangani mesej untuk aset ini.",
+    "aoppVersion": "Versi tidak diketahui.",
+    "keystoreTimeout": "Permintaan dompet tamat tempoh. Sila cuba lagi.",
+    "wrongKeystore": "Dompet salah disambungkan. Sila pastikan anda memasukkan peranti yang betul yang sepadan dengan akaun ini.",
+    "wrongKeystore2": " Jika anda menggunakan frasa laluan pilihan, pastikan anda telah memasukkan frasa laluan yang betul untuk akaun tersebut."
+  },
+  "exchange": {
+    "btcdirect": {
+      "currencyMismatch": "Mata wang yang tidak dijangka dalam permintaan pembayaran",
+      "insufficientFunds": "Dana tidak mencukupi pada akaun yang dipilih."
+    },
+    "buySell": {
+      "coinNotSupported": "Tiada pilihan tersedia untuk jenis syiling ini.",
+      "regionNotSupported": "Tiada pilihan tersedia untuk wilayah ini."
+    },
+    "pocket": {
+      "terms": {
+        "dataprotection": {
+          "link": "Dasar privasi poket",
+          "p1": "BitBoxApp tidak mempelajari atau mengumpul sebarang data peribadi. Pocket mengumpul beberapa data peribadi seperti yang dijelaskan dalam Dasar Privasi mereka.",
+          "title": "Perlindungan Data"
+        },
+        "fees": {
+          "extraNote": "Sila ambil perhatian bahawa anda perlu membeli Bitcoin dengan Pocket terlebih dahulu sebelum anda boleh menjual.",
+          "note": "Nota: Kadar pertukaran Pocket mungkin berbeza daripada kadar BitBoxApp.",
+          "p1": "<strong>Membeli bitcoin:</strong> Gunakan pindahan bank SEPA untuk menghantar EUR atau CHF dan dapatkan bitcoin dihantar terus ke BitBox anda selepas Pocket menerima pemindahan, biasanya pada hari yang sama.",
+          "p2": "<strong>Menjual bitcoin:</strong> Hantar Bitcoin ke Pocket dan terima EUR atau CHF dalam akaun bank berdaftar anda. Kadar pertukaran ditetapkan apabila Pocket menerima Bitcoin anda.",
+          "title": "Kaedah pembayaran dan yuran"
+        },
+        "kyc": {
+          "info": "Pocket mungkin memerlukan dokumen pengenalan diri. Sila rujuk Soalan Lazim mereka untuk maklumat lanjut.",
+          "link": "Baca Soalan Lazim Poket",
+          "title": "KYC/AML (Kenali Pelanggan Anda / Pencegahan Pengubahan Wang Haram)"
+        },
+        "security": {
+          "link": "Model ancaman keselamatan BitBox",
+          "p1": "Menggunakan Pocket ialah perkhidmatan luaran dan tidak dilindungi oleh model ancaman keselamatan BitBox. Walau bagaimanapun, kami bekerjasama rapat dengan Pocket untuk meningkatkan keselamatan keseluruhan.",
+          "p2": "<strong>Membeli bitcoin:</strong> Anda akan mendapat e-mel untuk mengesahkan bitcoin anda menerima alamat melalui saluran komunikasi kedua.",
+          "p3": "<strong>Menjual bitcoin:</strong> BitBox mengesahkan alamat deposit Bitcoin secara kriptografi dan memaparkan \"Poket\" pada dompet perkakasan.",
+          "title": "Keselamatan"
+        },
+        "welcome": {
+          "p1": "Kami bekerjasama dengan Pocket, broker Switzerland, untuk memudahkan pembelian dan penjualan bitcoin dalam BitBoxApp. Perkhidmatan ini tersedia di seluruh Eropah di mana pemindahan bank SEPA disokong.",
+          "title": "Beli dan jual bitcoin dengan Pocket"
+        }
+      }
+    }
   },
   "fiat": {
     "default": "tetapan standard",
@@ -285,7 +870,44 @@
     "title": "Mata wang"
   },
   "footer": {
-    "appVersion": "Versi App:"
+    "appVersion": "Versi apl:"
+  },
+  "gapLimit": {
+    "change": "Had jurang untuk menukar alamat",
+    "description": "Konfigurasikan had jurang tersuai untuk bitcoin menerima dan menukar alamat.",
+    "maxValue": "Gap limit tidak boleh melebihi {{max}}.",
+    "minValue": "Gap limit mestilah sekurang-kurangnya {{min}}.",
+    "receive": "Gap limit untuk menerima alamat",
+    "title": "Tetapan gap limit tersuai"
+  },
+  "generic": {
+    "buy": "Beli {{coinCode}}",
+    "buySell": "Pasaran",
+    "buy_bitcoin": "Beli Bitcoin",
+    "buy_crypto": "Beli kripto",
+    "close": "tutup",
+    "enable": "Dayakan",
+    "enabled_false": "Dinyahaktifkan",
+    "enabled_true": "Diaktifkan",
+    "noOptionOnIos": "Tidak tersedia pada iOS",
+    "noOptions": "Tiada pilihan ditemui",
+    "paymentRequestNote": "{{name}} payment {{orderId}}",
+    "receive": "terima {{coinCode}}",
+    "receiveWithoutCoinCode": "Terima",
+    "receive_bitcoin": "Terima Bitcoin",
+    "receive_crypto": "Terima crypto",
+    "received": "Diterima",
+    "reset": "Tetapkan semula",
+    "resetToDefault": "Tetapkan semula kepada tetapan standard",
+    "search": "Cari…",
+    "searchButton": "Cari",
+    "sell": "Jual {{coinCode}}",
+    "sell_bitcoin": "Jual Bitcoin",
+    "sell_crypto": "Jual crypto",
+    "send": "Hantar",
+    "sent": "Dihantar",
+    "spend_bitcoin": "Belanja bitcoin",
+    "spend_crypto": "Belanja kripto"
   },
   "genericError": "Kesalahan muncul. Sekiranya anda melihat sebarang masalah, sila mulakan semula aplikasi.",
   "goal": {
@@ -296,7 +918,7 @@
     "paragraph": "Sila pilih salah satu pilihan berikut:",
     "step": {
       "1": {
-        "title": "Maklumat Keselamatan"
+        "title": "Maklumat keselamatan"
       },
       "2": {
         "description": "Tetapkan kata laluan peranti",
@@ -320,93 +942,151 @@
   },
   "guide": {
     "accountDescription": {
-      "text": "Ini adalah gambaran keseluruhan akaun anda. Ia menunjukkan transaksi masuk dan keluar. Baki dipaparkan untuk setiap akaun secara berasingan. Rujuk panduan dalam tetapan untuk mengetahui lebih lanjut mengenai jenis akaun yang berlainan.",
-      "title": "Apa yang dipaparkan di sini?"
+      "text": "Gambaran keseluruhan akaun anda menunjukkan baki anda yang tersedia serta transaksi masuk dan keluar. Panduan kami dalam 'Tetapan' mempunyai lebih banyak maklumat tentang setiap jenis akaun. ",
+      "title": "Apakah yang ditunjukkan oleh halaman ini kepada saya?"
     },
     "accountFiat": {
-      "text": "Ya, anda boleh mengklik ticker mana sahaja untuk berputar melalui beberapa mata wang fiat. Anda juga boleh menukar senarai mata wang dalam tetapan.",
+      "text": "ya. Klik pada mana-mana ticker untuk berputar melalui mata wang fiat. Anda boleh menukar senarai mata wang dalam tetapan.",
       "title": "Bolehkah saya memaparkan kadar penukaran lain?"
     },
     "accountIncomingBalance": {
-      "text": "Jumlah yang akan masuk dan akan dipindahkan kepada anda tetapi belum disahkan oleh rangkaian.",
+      "text": "Masuk menjumlahkan amaun yang dipindahkan kepada anda tetapi belum disahkan oleh rangkaian.",
       "title": "Apakah maksud akan masuk?"
     },
     "accountInfo": {
+      "exportTransactions": {
+        "text": "\"Eksport transaksi\" di bawah \"Maklumat akaun\" dan buka folder muat turun anda untuk mencari fail CSV yang dieksport. Ini berguna untuk perkhidmatan seperti CoinTracking untuk pelaporan cukai.",
+        "title": "Bagaimanakah saya boleh mengeksport sejarah transaksi saya? (cth., untuk CoinTracking)"
+      },
+      "multipleXPubs": {
+        "text": "Setiap xpub terikat dengan \"Jenis\" yang ditunjukkan: sama ada \"Segwit Asli (bech32)\", \"Segwit Terbungkus\" atau \"Taproot\" (Bitcoin sahaja). Ini adalah jenis skrip yang digunakan oleh {{coinName}}. BitBoxApp menggabungkannya, menyokong berbilang jenis skrip dalam akaun yang sama. Kerana setiap jenis skrip memberikan xpub yang berbeza, terdapat berbilang xpub bagi setiap akaun.\n\nJika anda menerima secara konsisten pada alamat lalai (Native Segwit), anda hanya memerlukan xpub \"bech32\". Walau bagaimanapun, jika anda turut menerima dana untuk \"Wrapped Segwit\" atau \"Taproot\", anda juga perlu menggunakan kunci awam lanjutan \"Wrapped Segwit\" dan \"Taproot\".",
+        "title": "Mengapa terdapat banyak xpub?"
+      },
+      "privacy": {
+        "text": "Untuk akaun khusus ini, kunci awam lanjutan mendedahkan keseluruhan sejarah kewangan, baki akaun anda dan semua urus niaga masa hadapan. Tetapi xpub tidak membenarkan sesiapa membelanjakan syiling anda.\n\nJika anda memberikan xpub kepada seseorang, anda harus sedar bahawa orang atau syarikat ini boleh melihat semua transaksi lain akaun yang sama. Oleh itu, adalah idea yang baik untuk menggunakan akaun itu hanya untuk tujuan ini dan menyimpan dana lain dalam akaun yang berbeza.",
+        "title": "Adakah saya perlu merahsiakan xpub saya?"
+      },
+      "verify": {
+        "text": "Ya, adalah idea yang baik untuk menyemak semula xpub anda. Jika orang lain akan menjana alamat terima daripada xpub ini untuk menghantar wang kepada anda, ini amat penting. Anda perlu mengesahkannya pada peranti untuk memastikan bahawa xpub ini kepunyaan anda; jika tidak, semua dana boleh pergi ke alamat yang salah.",
+        "title": "Adakah saya perlu mengesahkan xpub pada peranti?"
+      },
       "xpub": {
-        "text": "Public Key Lanjutan adalah kunci akar yang mana semua alamat penerima sebuah akaun diperoleh.\nIa disediakan di sini untuk kegunaan lanjutan dan saling kendalian dengan wallet yang hanya boleh dilihat sahaja, seperti Electrum atau Sentinel.",
+        "text": "Kunci awam lanjutan (xpub) ialah kunci akar yang daripadanya semua alamat penerima akaun diperoleh.\n\nIa disediakan di sini untuk kegunaan lanjutan dan saling kendali dengan dompet jam tangan sahaja, seperti Electrum atau Sentinel. Jika anda menerima jenis alamat yang berbeza, sila import semua format xpub yang berbeza ke dalam dompet jam tangan sahaja untuk melihat semua syiling anda.\n\nSila ambil perhatian, dompet pihak ketiga mungkin belum menyokong Taproot xpubs lagi.",
         "title": "Apa itu Public Key Lanjutan?"
       }
     },
-    "accountLegacyConvert": {
-      "text": "Pergi ke akaun Bitcoin, pilih terima dan salin alamat. Kembali ke akaun Legacy anda, klik hantar, tampal alamat yang disalin dan tandakan hantar semua. Kemudian tanda tangan dan hantar untuk memindahkan semua syiling anda dalam satu transaksi.",
-      "title": "Bagaimana untuk mengalihkan duit syiling saya keluar dari akaun Legacy?"
-    },
     "accountRates": {
-      "link": {
-        "text": "www.coingecko.com",
-        "url": "https://www.coingecko.com/"
-      },
       "text": "Kadar pertukaran dikemas kini setiap minit oleh CoinGecko.",
-      "title": "Kadar mana yang digunakan?"
+      "title": "Kadar pertukaran yang manakah digunakan?"
     },
     "accountReload": {
-      "text": "Semua maklumat transaksi dikemas kini secara automatik.",
-      "title": "Bagaimanakah saya dapat memuatkan semula sejarah transaksi?"
+      "text": "Tidak ada keperluan. Maklumat transaksi anda dikemas kini secara automatik.",
+      "title": "Bolehkah saya memuat semula sejarah transaksi?"
     },
     "accountSendDisabled": {
       "text": "Butang 'Hantar' diaktifkan apabila baki anda tidak kosong.",
       "title": "Mengapa saya tidak dapat menghantar sebarang {{unit}}?"
     },
+    "accountSummaryAmount": {
+      "text": "Jumlah keseluruhan ialah jumlah semua akaun crypto anda. Kadar pertukaran diperoleh daripada coingecko.com.\n\nNota: Jika anda menggunakan MyEtherWallet untuk token yang tidak disokong dalam BitBoxApp, ia tidak akan dimasukkan dalam jumlah yang dipaparkan.",
+      "title": "Bagaimanakah jumlah keseluruhan dikira?"
+    },
+    "accountSummaryDescription": {
+      "text": "Di sini anda boleh melihat prestasi portfolio anda dari semasa ke semasa. Ringkasan akaun crypto individu anda dipaparkan di bawah carta.",
+      "title": "Apa yang dipaparkan di sini?"
+    },
     "accountTransactionAttributesBTC": {
-      "text": "Saiz maya: Digunakan untuk menentukan yuran rangkaian. Anda telah berjaya menyimpan yuran jika ia lebih kecil daripada saiz transaksi.\nSaiz: Saiz transaksi yang sebenarnya dalam bait apabila disirikan mengikuti blockchan yang mendasarinya.\nBerat: Diperkenalkan dengan Segwit, itu adalah metrik baru untuk menilai saiz transaksi dan blok. Setiap bait saksi yang dipisahkan dianggap sebagai satu, semua yang lain sebagai empat unit berat. Dibandingkan satu megabyte dalam saiz sebenarnya, had saiz blok kini adalah empat juta unit berat.",
-      "title": "Butiran transaksi yang berkaitan dengan Bitcoin"
+      "text": "Saiz maya: Menentukan yuran rangkaian. Anda berjaya menjimatkan yuran jika ia lebih kecil daripada saiz transaksi.\nSaiz: Saiz urus niaga sebenar dalam bait apabila bersiri mengikut rantaian asas.\nBerat: Metrik baharu diperkenalkan dengan Segwit untuk menilai transaksi dan saiz blok. Setiap bait saksi yang diasingkan dikira sebagai satu, yang lain sebagai empat unit berat. Daripada satu megabait dalam saiz sebenar, had saiz blok kini ialah empat juta unit berat.",
+      "title": "Bagaimana pula dengan butiran transaksi khusus Bitcoin?"
     },
     "accountTransactionAttributesGeneric": {
-      "text": "Pengesahan: Apabila transaksi anda disiarkan buat kali pertama, ia tidak akan disahkan terlebih dahulu. Anda perlu menunggu untuk dimasukkan ke dalam blok oleh pelombong, selepas itu ia akan mempunyai 1 pengesahan. Setiap blok yang disiarkan di rangkaian selepas itu akan menambah pengesahan lain ke transaksi anda. Secara umum pedagang dan pelaku rangkaian lain hanya akan menerima transaksi dengan pengesahan 3-6 sebelum mempertimbangkan transaksi sebagai selesai.\nID Transaksi: Nombor pengenalan unik yang boleh digunakan untuk mencari transaksi dalam blok explorer.\nYuran: Pelombong dibayar yuran transaksi sebagai insentif untuk memasukkan transaksi di blok-blok yang mereka laksanakan. Untuk mengetahui lebih lanjut, klik pada butang hantar.",
-      "title": "Apa makna daripada maklumat yang ditunjukkan dalam butiran transaksi?"
+      "text": "Pengesahan: Siaran transaksi pertama anda tidak disahkan sehingga pelombong memasukkannya ke dalam blok, selepas itu ia mempunyai satu pengesahan. Setiap blok yang disiarkan pada rangkaian menambah pengesahan lain pada transaksi anda. Umumnya peniaga dan pelaku rangkaian lain hanya akan menyelesaikan transaksi dengan antara tiga hingga enam pengesahan.\nID Transaksi: Nombor pengenalan unik yang membolehkan anda mencari transaksi dalam penjelajah blok.\nYuran: Pelombong dibayar yuran transaksi sebagai insentif untuk memasukkan transaksi dalam blok yang mereka lombong. Untuk mengetahui lebih lanjut, klik pada butang hantar.",
+      "title": "Apakah maklumat dalam butiran transaksi?"
     },
     "accountTransactionConfirmation": {
-      "text": "Ini adalah transaksi yang telah disiarkan ke rangkaian dan sedang menunggu untuk disahkan.",
+      "text": "Transaksi disiarkan ke rangkaian tetapi belum disahkan.",
       "title": "Apa itu transaksi yang tertunda?"
     },
     "accountTransactionLabel": {
-      "text": "Ia adalah alamat di mana anda menerima syiling atau menghantar syiling itu. Satu alamat menyandi bagaimana (dan dengan demikian oleh siapa) syiling dapat dibelanjakan.",
-      "title": "Alamat mana yang dipaparkan untuk setiap transaksi?"
+      "text": "Ia adalah alamat yang anda terima syiling atau hantar syiling.",
+      "title": "Alamat manakah yang dipaparkan untuk setiap transaksi?"
     },
     "accountTransactionTime": {
-      "text": "Masa daripada transaksi yang telah disahkan di blokchain.",
+      "text": "Masa pengesahan transaksi blockchain.",
       "title": "Masa mana yang dipaparkan?"
     },
+    "accounts": {
+      "howManyAccounts": {
+        "text": "Bitcoin dan Litecoin boleh mempunyai jumlah akaun yang sewenang-wenangnya. Selepas enam akaun, anda hanya boleh menambah akaun lain jika akaun sebelumnya telah digunakan. \nSyiling lain boleh mempunyai maksimum lima akaun.",
+        "title": "Berapa banyak akaun yang boleh saya buat?"
+      },
+      "howtoAddTokens": {
+        "text": "Token yang menggunakan standard ERC20 terikat pada akaun Ethereum tertentu. Untuk mendayakan atau melumpuhkan token tertentu, buka skrin \"Urus akaun\", kembangkan akaun Ethereum anda dan hidupkan atau matikan token yang dikehendaki.",
+        "title": "Bagaimanakah saya boleh menambah token tambahan?"
+      },
+      "moveFunds": {
+        "text": "ya. Tetapi kerana akaun adalah bebas, anda perlu menghantar dana anda menggunakan transaksi biasa.",
+        "title": "Bolehkah saya memindahkan dana antara akaun?"
+      },
+      "recoverAccounts": {
+        "text": "ya. BitBoxApp mencipta akaun menggunakan piawaian yang mantap yang serasi dengan kebanyakan dompet crypto lain.",
+        "title": "Bolehkah saya memulihkan akaun saya dengan dompet lain?"
+      },
+      "supportedCoins": {
+        "link": {
+          "text": "Lihat syiling yang disokong"
+        },
+        "text": "BitBoxApp menyokong Bitcoin, Litecoin dan Ethereum serta pilihan token ERC20. Untuk Cardano dan token lain, gunakan BitBox anda dengan perisian alternatif seperti AdaLite atau Rabby. Anda boleh mendapatkan senarai lengkap semua syiling yang disokong di tapak web kami:",
+        "title": "Syiling mana yang disokong?"
+      },
+      "whatAreAccounts": {
+        "text": "Dompet anda boleh mengurus berbilang akaun syiling yang sama. Akaun berguna apabila anda ingin mengasingkan dana.",
+        "title": "Apakah akaun?"
+      },
+      "whatIsRememberWallet": {
+        "text": "Mendayakan \"Ingat dompet\" membolehkan anda melihat akaun untuk dompet ini dalam BitBoxApp walaupun apabila BitBox tidak dipalamkan. Ini membolehkan anda menyemak baki dan portfolio anda pada bila-bila masa anda mahu. BitBox masih perlu dipalamkan dan dibuka kuncinya untuk menghantar atau menerima syiling.\n\nMelumpuhkan \"Ingat dompet\" memerlukan anda memasukkan BitBox (atau dompet frasa laluan) masing-masing untuk melihat akaun tersebut dalam BitBoxApp.",
+        "title": "Apa yang berlaku apabila saya mendayakan/lumpuhkan \"Ingat dompet\"?"
+      },
+      "whyIsThisUseful": {
+        "text": "Akaun bagus untuk mengurus dana untuk orang atau tujuan yang berbeza kerana ia dipisahkan. Anda juga boleh berkongsi \"kunci awam lanjutan\" akaun tanpa mendedahkan apa-apa tentang akaun anda yang lain. Ini membolehkan anda berulang kali menerima dana tanpa menggunakan semula alamat, seperti menerima gaji anda atau kerap membeli kripto.",
+        "title": "Mengapa ini berguna?"
+      }
+    },
     "appendix": {
-      "href": "https://shiftcrypto.ch/contact",
+      "feedback": {
+        "link": "Beritahu kami.",
+        "text": "Ada maklum balas?"
+      },
       "link": "Hubungi kami!",
-      "text": "Soalan lain?"
+      "questionService": "Mempunyai masalah dengan {{serviceName}}?",
+      "text": "Soalan lain?",
+      "textService": "Jika anda menghadapi masalah dengan {{serviceName}}, sila hubungi mereka secara terus:"
     },
     "backups": {
       "check": {
-        "text": "'Semak Backup' membolehkan anda mengesahkan bahawa anda mempunyai backup kerja yang sesuai dengan dompet semasa anda. Ia juga boleh digunakan untuk mengesahkan bahawa anda masih mempunyai kata laluan pemulihan yang betul. Anda dapat menyemak kata laluan pemulihan utama atau tersembunyi anda.",
-        "title": "Apa itu 'Semak Backup'?"
+        "text": "'Semak sandaran' membolehkan anda mengesahkan bahawa anda mempunyai sandaran berfungsi yang sepadan dengan dompet semasa anda. Ia juga boleh digunakan untuk mengesahkan bahawa anda masih mempunyai kata laluan pemulihan yang betul. Anda boleh menyemak kata laluan pemulihan utama anda atau kata laluan pemulihan tersembunyi anda.",
+        "title": "Apakah itu 'Semak sandaran'?"
       },
       "encrypt": {
         "text": "Tidak, tetapi kata laluan pemulihan diperlukan untuk memperoleh wallet dari benih yang disimpan.",
         "title": "Bolehkah saya menyulitkan backup?"
       },
       "howOften": {
-        "text": "Cadangan dibuat secara automatik apabila dompet baru dibuat. Anda hanya perlu membuat backup baru jika kad micro SD anda hilang atau rosak, atau jika anda mahu menggunakan lebih daripada satu kad micro SD sebagai backup.\nAnda tidak perlu membuat backup baru selepas aktiviti transaksi. Semua data transaksi anda dapat diciptakan oleh backup tunggal anda yang dijana secara automatik untuk anda.",
+        "text": "Sandaran dijana secara automatik apabila dompet baharu dibuat. Anda hanya perlu membuat sandaran baharu jika kad microSD anda hilang atau rosak, atau jika anda ingin menggunakan berbilang kad microSD sebagai sandaran.\nAnda tidak perlu membuat sandaran baharu selepas aktiviti transaksi. Semua data transaksi anda boleh dicipta semula oleh sandaran tunggal anda yang dijana secara automatik untuk anda.",
         "title": "Berapa kerap saya perlu membuat backup?"
       },
       "whatIsABackup": {
-        "text": "Ia adalah salinan benih pada kad micro SD. Benih bersama-sama dengan kata laluan pemulihan menjana dompet anda.",
+        "text": "Ia adalah salinan benih pada kad microSD. Benih bersama kata laluan pemulihan anda menjana dompet anda.",
         "title": "Apa itu backup?"
       }
     },
     "backupsBB02": {
       "check": {
-        "text": "'Semak Backup' membolehkan anda mengesahkan bahawa anda mempunyai backup kerja yang sesuai dengan dompet semasa anda.",
-        "title": "Apa itu 'Semak Backup'?"
+        "text": "'Semak sandaran' membolehkan anda mengesahkan bahawa anda mempunyai sandaran berfungsi yang sepadan dengan dompet semasa anda.",
+        "title": "Apakah itu 'Semak sandaran'?"
       },
       "encrypt": {
-        "text": "Tidak. Sila simpan kad SD mikro dengan selamat, kerana ia mengandung benih yang tidak disenarai untuk memulihkan dompet anda.",
+        "text": "Tidak. Sila pastikan kad microSD selamat, kerana ia mengandungi benih yang tidak disulitkan untuk memulihkan dompet anda. Jika anda ingin melindungi kata laluan benih anda, anda boleh mendayakan frasa laluan pilihan dalam tetapan pakar di bawah \"Urus peranti\".",
         "title": "Bolehkah saya menyulitkan backup?"
       },
       "whatIsABackup": {
@@ -415,61 +1095,131 @@
       }
     },
     "bitbox": {
-      "2FA": {
-        "text": "Apabila 2FA dihidupkan, semua transaksi perlu diluluskan pada telefon mudah alih yang dipasangkan untuk membelanjakan duit syiling. Di bawah tudung, nombor guna tunggal yang disulitkan dihantar ke aplikasi mudah alih, disahsulitkan di sana, dan kembali ke BitBox dengan menekan butang Terima. Komunikasi dengan peranti ini dilakukan melalui saluran antara telefon mudah alih dan aplikasi desktop ini yang ditubuhkan semasa berpasangan.\n\nPastikan anda telah membackup wallet anda dan pasangkan aplikasi mudah alih sebelum menghidupkan 2FA. Setelah dihidupkan, slot micro SD dan pasangan aplikasi mudah alih akan dimatikan. Mereka boleh diaktifkan semula dengan menetapkan semula BitBox, yang mana akan menghapuskan peranti tersebut.",
-        "title": "Bagaimanakah Pengesahan Dua Langkah (2FA) berfungsi?"
-      },
-      "disable2FA": {
-        "text": "Untuk mematikan 2FA, anda perlu menetapkan semula BitBox anda dan kemudian memulihkan wallet dari backupnya. Pastikan anda masih mempunyai kad micro SD dengan backup dan bahawa anda masih ingat kata laluan pemulihan anda. Kemudian tekan 'Tetapkan semula Peranti'. Lalu tetapkan kata laluan peranti baru dan pilih 'Atau Pulihkan Backup'. Pilih backup yang telah anda buat dari wallet, klik 'Pulihkan' dan masukkan kata laluan pemulihan yang anda gunakan semasa membuat dompet.",
-        "title": "Bagaimanakah saya dapat mematikan Pengesahan Dua Langkah (2FA)?"
-      },
       "ejectBitbox": {
         "text": "Anda boleh mencabut BitBox bila-bila masa tanpa perlu mengklik ikon 'Selamat Lepaskan Perkakasan' terlebih dahulu.",
         "title": "Bagaimana saya dapat menarik keluar BitBox?"
       },
       "ejectSD": {
-        "text": "Anda dapat menyingkirkan micro SD kad dari BitBox kapanpun selama anda tidak menciptakan atau memulihkan sebuah backup",
-        "title": "Bagaimana saya dapat mengeluarkan kad micro SD?"
-      },
-      "hiddenWallet": {
-        "text": "Ia adalah wallet kedua pada peranti yang sama yang dilindungi oleh kata laluan peranti dan kata laluan pemulihan yang berlainan, yang boleh anda gunakan untuk tujuan penafian yang munasabah. Dikeranakan penggunaan benih backup yang sama untuk wallet biasa dan tersembunyi anda, tiada tambahan backup diperlukan.",
-        "title": "Apa itu wallet tersembunyi?"
-      },
-      "legacyHiddenWallet": {
-        "text": "Mula-mula klik butang di bawah (tersedia jika BitBox dikunci dengan kata laluan peranti utama dan 2FA dinyahdayakan), kemudian pasang kembali Bitbox dan buka dengan kata laluan peranti tersembunyi anda.",
-        "title": "Bagaimanakah saya dapat mengakses legacy wallet tersembunyi?"
-      },
-      "pairing": {
-        "text": "Selepas memuat turun aplikasi mudah alih kami untuk iOS atau Android, anda dapat menubuhkan saluran selamat antara aplikasi mudah alih dan aplikasi ini dengan mengimbas kod QR yang dipaparkan. Setelah diimbas, ikut arahan dalam aplikasi mudah alih.",
-        "title": "Bagaimana memasangkan dengan selamat telefon anda"
+        "text": "Anda boleh mengeluarkan kad microSD daripada BitBox pada bila-bila masa selagi anda tidak dalam proses mencipta atau memulihkan sandaran.",
+        "title": "Bagaimanakah saya boleh mengeluarkan kad microSD?"
       }
+    },
+    "bitsurance": {
+      "faq": {
+        "link": {
+          "text": "www.bitsurance.eu"
+        },
+        "text": "Sila semak tapak web Bitsurance dan Soalan Lazim mereka untuk butiran lanjut.",
+        "title": "Soalan tambahan?"
+      },
+      "privacy": {
+        "link": {
+          "text": "Dasar privasi Bitsurance"
+        },
+        "text": "Seperti mana-mana polisi insurans biasa, ia mengandungi nama penuh dan alamat anda, dan menyatakan objek yang diinsuranskan (ditakrifkan oleh kunci awam lanjutan akaun Bitcoin yang diinsuranskan). Data ini diserahkan kepada Bitsurance secara langsung dan tidak dikongsi dengan Shift Crypto. Sila rujuk dasar privasi Bitsurance untuk mendapatkan maklumat lanjut",
+        "title": "Apakah maklumat peribadi yang diperlukan untuk insurans?"
+      },
+      "renew": {
+        "text": "Insurans akan diperbaharui secara automatik untuk tahun hadapan. Anda boleh membatalkan pembaharuan pada bila-bila masa dengan mengklik pada \"Urus kontrak\" dalam BitBoxApp, yang membawa anda ke portal pelanggan Bitsurance.",
+        "title": "Bagaimanakah saya boleh memperbaharui atau membatalkan insurans?"
+      },
+      "status": {
+        "text": "Akaun yang berjaya diinsuranskan ditandakan dengan lencana hijau \"diinsuranskan\" di penjuru kiri sebelah atas pada setiap halaman akaun Bitcoin. Dalam bahagian \"Insurans\", anda boleh melihat gambaran keseluruhan semua akaun Bitcoin yang diinsuranskan dan status insurans semasa mereka. Ia boleh mengambil masa sehingga 48 jam untuk mengemas kini status insurans.",
+        "title": "Bolehkah saya menyemak status akaun yang diinsuranskan?"
+      },
+      "what": {
+        "text": "Setiap kontrak insurans Bitcoin meliputi akaun dompet tertentu. Anda boleh menginsuranskan berbilang akaun dengan mengambil beberapa polisi insurans. Akaun yang diinsuranskan terhad kepada menggunakan alamat Bitcoin \"Segwit Asli\".",
+        "title": "Adakah keseluruhan dompet BitBox diinsuranskan?"
+      },
+      "who": {
+        "text": "Insurans ditawarkan oleh Bitsurance, broker insurans yang dibina oleh bitcoiners. Mereka bekerja dengan insurans ELEMENT untuk menyediakan insurans Bitcoin. Kedua-dua syarikat berpangkalan di Jerman.",
+        "title": "Siapa yang menginsuranskan bitcoin saya?"
+      },
+      "why": {
+        "text": "Bitsurance melindungi beberapa risiko penjagaan diri yang tidak dalam skop walaupun dompet paling selamat, mis. pecah rumah, peras ugut atau pemusnahan dompet. Ia adalah keputusan peribadi anda jika anda memerlukan perlindungan insurans untuk risiko ini.",
+        "title": "Adakah saya memerlukan insurans Bitcoin?"
+      }
+    },
+    "device": {
+      "attestation": {
+        "link": {
+          "text": "Baca lebih lanjut mengenai semakan ketulenan"
+        },
+        "text": "BitBoxApp melakukan semakan pengesahan pada BitBox untuk mengesahkan sama ada peranti itu tulen. Semakan dilakukan secara tempatan dan tidak bersambung ke mana-mana pelayan.",
+        "title": "Bagaimanakah semakan ketulenan berfungsi?"
+      },
+      "name": {
+        "text": "Ini adalah nama dompet dan sandaran anda. Nama itu digunakan untuk sandaran masa hadapan dan boleh digunakan untuk membantu membezakan antara dompet yang berbeza. Ia boleh ditukar pada bila-bila masa tetapi ambil perhatian bahawa sandaran yang dibuat sebelum perubahan masih akan menggunakan nama sebelumnya.",
+        "title": "Apakah nama BitBox digunakan?"
+      },
+      "secure-chip": {
+        "link": {
+          "text": "Baca lebih lanjut mengenai cip selamat"
+        },
+        "text": "Maklumat ini menunjukkan nombor model cip selamat, cip paling terkini ialah ATECC608B dengan ciri keselamatan yang dipertingkatkan berbanding model lama.",
+        "title": "Mengapa tunjukkan model cip selamat?"
+      }
+    },
+    "guideTitle": {
+      "account": "Panduan akaun",
+      "accountInformation": "Panduan maklumat akaun",
+      "accountSummary": "Panduan ringkasan akaun",
+      "advancedSettings": "Panduan tetapan lanjutan",
+      "appearance": "Panduan penampilan",
+      "buySell": "Panduan pasaran",
+      "insurance": "Panduan insurans",
+      "manageAccount": "Panduan mengurus akaun",
+      "manageDevice": "Urus panduan peranti",
+      "receive": "Panduan Menerima",
+      "send": "Panduan Menghantar",
+      "walletConnect": "Panduan WalletConnect"
     },
     "receive": {
       "address": {
-        "text": "Berikan kepada orang lain untuk menghantarkan anda beberapa syiling.\n(Sentiasa sahkan alamat secara mandiri, contohnya dengan panggilan telefon.)",
+        "text": "Anda boleh memberikan alamat kepada orang lain untuk menghantar beberapa syiling kepada anda. Cuma pastikan mereka menghantar ke alamat yang betul.",
         "title": "Apa yang boleh saya lakukan dengan alamat?"
       },
       "addressChange": {
-        "text": "Selepas alamat digunakan dalam sebuah transaksi, alamat baru akan ditambah ke senarai untuk menggantikannya. Setiap masa terdapat 20 alamat yang belum digunakan dalam senarai.",
+        "text": "Sebaik sahaja anda berurus niaga, alamat baharu ditambahkan secara automatik pada senarai supaya sentiasa ada 20 alamat tersedia yang tidak pernah menerima sebarang syiling.",
         "title": "Bila alamat berubah?"
       },
+      "addressFormats": {
+        "text": "Secara lalai, jenis alamat ialah Segwit Asli. Jenis alamat ini digunakan secara meluas oleh dompet/pertukaran lain dan memberikan anda kadar yuran terbaik untuk transaksi harian. Walau bagaimanapun, anda juga boleh memilih untuk menghantar kepada Taproot (Bitcoin sahaja), yang merupakan jenis alamat terbaharu, tetapi mungkin belum disokong secara meluas lagi. Sebagai alternatif, jika anda menghadapi masalah menghantar kepada Native Segwit (jenis lalai), anda boleh cuba bertukar kepada jenis alamat Wrapped Segwit yang lebih lama yang mungkin serasi dengan lebih banyak dompet/pertukaran.",
+        "title": "Bilakah saya menggunakan \"Tukar jenis alamat\"?"
+      },
       "howVerify": {
-        "text": "Klik ikon BitBox pada bar sisi di sebelah kiri dan lihat bahagian Pemasangan. Panduan akan dikemas kini dan anda boleh terus mengikuti arahan dari sana.",
+        "text": "Anda boleh mengesahkan alamat terus pada BitBox semasa proses hantar/terima.",
         "title": "Bagaimana saya dapat mengesahkan alamat dengan selamat?"
       },
+      "plugout": {
+        "text": "Tidak, sebaik sahaja anda menghantar syiling ke alamat BitBox anda, anda tidak perlu membiarkan BitBox anda dipalamkan. Anda bebas untuk memutuskan sambungan BitBox anda.",
+        "title": "Adakah saya perlu membiarkan BitBox saya dipalamkan semasa menerima?"
+      },
+      "why20": {
+        "text": "Semasa permulaan apl menjana alamat yang diperoleh daripada benih anda untuk melihat sama ada mereka telah menerima dana. Memandangkan apl boleh menjana bilangan alamat yang hampir tidak terhingga, ia boleh menghabiskan masa bertahun-tahun untuk menentukan baki. Untuk mengehadkan carian ini ia berhenti selepas ia melihat 20 alamat yang tidak pernah menerima dana. Ini ialah \"had jurang\" dan 20 ialah piawaian de-facto walaupun bilangannya adalah sewenang-wenangnya. Ini ialah 20 alamat yang boleh anda pilih.",
+        "title": "Mengapa hanya 20 alamat?"
+      },
       "whyMany": {
-        "text": "Untuk sebab-sebab privasi dan keselamatan, anda tidak perlu menyerahkan alamat yang sama dua kali. Klik 'Berikut' untuk mendapatkan alamat baru untuk tujuan yang berbeza. Anda boleh menjana hingga 20 alamat dalam satu masa. Semua alamat diperoleh dari biji backup tunggal anda. (Bayangkan alamat seperti nombor invois.)",
-        "title": "Mengapa terdapat banyak alamat?"
+        "text": "Untuk mengekalkan privasi dan keselamatan, jangan sekali-kali memberikan alamat yang sama dua kali. Jika anda telah menggunakan alamat, klik pada anak panah kanan untuk alamat baharu. Anda boleh menjana sehingga 20 alamat pada satu masa. Fikirkan alamat seperti nombor invois. Semua alamat diperoleh daripada benih sandaran tunggal anda.",
+        "title": "Mengapa begitu banyak alamat?"
       },
       "whyVerify": {
-        "text": "Salah satu sebab untuk membeli wallet hardware seperti BitBox ialah anda tidak boleh mempercayai komputer anda kerana permukaan serangan yang besar. Oleh itu, anda tidak boleh mempercayai komputer anda untuk menjana dan memaparkan alamat yang sahih. Butang untuk mengesahkan alamat dengan selamat membuat BitBox menghantar alamat ke telefon mudah alih yang dipasangkan, dari mana anda juga boleh mengimbas dan mengesahkan kod QR.",
+        "text": "Anda tidak seharusnya mempercayai komputer anda untuk menjana dan memaparkan alamat sahih. Permukaan serangan yang besar menjadikannya lebih terdedah daripada dompet perkakasan. Alamat boleh disahkan terus pada paparan BitBox.",
         "title": "Mengapa saya perlu mengesahkan alamat dengan selamat?"
       }
     },
     "send": {
+      "change": {
+        "text": "Perubahan akan dikembalikan ke alamat Taproot jika anda mempunyai sekurang-kurangnya satu Taproot UTXO. Jika anda menggunakan kawalan syiling, perubahan akan dikembalikan ke alamat Taproot jika terdapat sekurang-kurangnya satu Taproot UTXO antara UTXO yang dipilih. Dalam semua kes lain, perubahan dikembalikan ke alamat Segwit Asli.",
+        "title": "Bagaimanakah output perubahan ditentukan?"
+      },
       "fee": {
         "text": "Yuran ini didasarkan pada saiz data transaksi dan bukan jumlahnya. Sasaran yuran dikira oleh algoritma pengiraan yuran Bitcoin Core untuk setiap keutamaan rangkaian yang anda pilih. Mereka ditunjukkan jika mereka mempunyai nilai yang berbeza dari sasaran di bawah.\nEkonomi: 24 blok (sekitar 4 jam untuk Bitcoin, 1 jam untuk Litecoin)\nRendah: 12 blok (sekitar 2 jam untuk Bitcoin, 30 minit untuk Litecoin)\nNormal: 6 blok (sekitar 1 jam untuk Bitcoin, 15 minit untuk Litecoin)\nTinggi: 2 blok (sekitar 20 minit untuk Bitcoin, 5 minit untuk Litecoin)\n(Blok mengambil purata sepuluh minit untuk Bitcoin (2.5 minit di Litecoin) untuk melombong dan beban rangkaian mungkin berbeza-beza untuk tempoh di atas.)",
         "title": "Bagaimanakah bayaran ditentukan?"
+      },
+      "plugout": {
+        "text": "Tidak, sebaik sahaja anda membuat transaksi, anda tidak perlu membiarkan BitBox anda dipalamkan. Anda bebas untuk memutuskan sambungan BitBox anda.",
+        "title": "Adakah saya perlu membiarkan BitBox saya dipalamkan semasa menghantar?"
       },
       "priority": {
         "text": "Semakin tinggi yuran yang anda bayar, semakin cepat transaksi anda disahkan oleh rangkaian.",
@@ -484,47 +1234,54 @@
         "title": "Mengapa ada yuran rangkaian?"
       }
     },
-    "settings-electrum": {
-      "what": {
-        "text": "Adalah mungkin untuk menggerakkan dompet anda dengan nod penuh anda sendiri sebagai ganti menggunakan server Shift.",
-        "title": "Apakah ini?"
-      }
-    },
     "settings": {
-      "btc-p2pkh": {
-        "text": "Ini menggunakan format transaksi lama, yang telah digantikan oleh alamat dan format daripada Segwit. Jika dahulu anda menggunakan BitBox dengan aplikasi desktop lama, ini adalah akaun yang mengandung duit syiling anda sekarang. Untuk menjimatkan bayaran pada masa hadapan, pindahkan ke akaun Bitcoin dengan transaksi ke alamat dalam akaun Bitcoin atau Bitcoin bech32.",
-        "title": "Apa itu Bitcoin Legacy?"
-      },
-      "btc-p2sh": {
-        "link": {
-          "text": "Segregated Witness Benefits",
-          "url": "http://bitcoincore.org/en/2016/01/26/segwit-benefits/"
-        },
-        "text": "Ini adalah akaun segerak yang serasi (p2sh-p2wpkh). Ia menggunakan format transaksi baru yang menjimatkan yuran rangkaian anda. Format alamat adalah serupa dengan Legacy, dan dengan itu boleh digunakan dengan semua wallet / pertukaran / perkhidmatan Bitcoin yang sedia ada.",
-        "title": "Apa itu akaun Bitcoin?"
-      },
-      "btc-p2wpkh": {
-        "link": {
-          "text": "Pengambilan Bech32",
-          "url": "https://en.bitcoin.it/wiki/Bech32_adoption"
-        },
-        "text": "Untuk meraih faedah penuh yuran rangkaian Segwit yang lebih murah, Bitcoin bech32 harus digunakan. Ia menggunakan format alamat baru bernama bech32, akan tetapi format ini belum boleh diterima di mana-mana.",
-        "title": "Apa itu Bitcoin bech32?"
-      },
-      "moreCoins": {
-        "text": "Kami akan mengintegrasikan lebih banyak altcoin selain Litecoin dalam beberapa versi yang akan datang. Sekiranya anda mencari duit syiling tertentu, sila syorkan kepada kami melalui hubungan di bawah.",
-        "title": "Dapatkah anda menambah lebih banyak syiling?"
+      "sats": {
+        "text": "Satoshi (pendek kata 'sat') ialah unit terkecil Bitcoin. Satu Satoshi ialah seratus juta bitcoin (0.00000001 BTC). Ia dinamakan sempena pencipta Bitcoin, Satoshi Nakamoto.",
+        "title": "Apa itu Satoshi?"
       },
       "servers": {
         "text": "Aplikasi ini berkomunikasi dengan server Shift Crypto untuk memeriksa kemas kini, memuat transaksi, dan menghantar maklumat ke aplikasi mudah alih yang telah dipasangkan.\nDi samping itu, ia mengambil kadar pertukaran terkini dari CoinGecko. (Penukaran dikira secara tempatan, tiada wang anda yang dihantar)",
         "title": "Server mana yang digunakan aplikasi ini?"
+      }
+    },
+    "settings-electrum": {
+      "connection": {
+        "text": "Jika anda berhasrat untuk menyambung ke nod anda sahaja apabila anda berada di rangkaian yang sama (cth. wifi rumah anda), maka menggunakan komunikasi rangkaian biasa sudah memadai.\nDalam kes ini, adalah dinasihatkan bahawa pelayan Electrum anda menyediakan sijil TLS untuk menyulitkan komunikasi.\nJika anda berhasrat untuk menyambung ke nod anda dari mana-mana sahaja, menggunakan Tor ialah pilihan yang lebih baik. Tiada sijil TLS diperlukan dalam kes itu.",
+        "title": "Sekiranya saya menggunakan clearnet TCP, TLS atau Tor?"
       },
-      "whyMultipleAccounts": {
-        "text": "Beberapa mata wang kriptografi mempunyai pelbagai alamat dan format transaksi. Alamat ini telah dipisahkan ke dalam akaun tambahan.",
-        "title": "$t(settings.expert.splitAccounts)"
+      "instructions": {
+        "link": {
+          "text": "Panduan untuk menyambungkan nod anda"
+        },
+        "text": "Untuk tutorial penuh, sila lawati panduan kami:",
+        "title": "Bagaimanakah cara saya menyambungkan BitBoxApp saya ke nod penuh saya sendiri?"
+      },
+      "options": {
+        "text": "Terdapat pelbagai pilihan untuk menjalankan nod anda sendiri seperti membeli peranti siap, membina sendiri atau menjalankan Bitcoin Core.\nJika anda ingin menyambungkan BitBoxApp anda ke nod anda, pastikan ia menjalankan pelayan Electrum. Ini ialah program khusus yang membolehkan apl dompet berkomunikasi dengan nod penuh anda.\nPilihan yang disokong termasuk Electrs, Electrum Personal Server (EPS) atau Bitcoin Wallet Tracker (BTW).",
+        "title": "Apakah pilihan yang ada untuk menjalankan nod?"
+      },
+      "tor": {
+        "text": "Tor adalah singkatan kepada 'The Onion Router', iaitu perisian percuma dan sumber terbuka yang menawarkan banyak faedah privasi dan amat berguna apabila menggunakan Bitcoin.\nJika anda berhasrat untuk menyambung ke nod anda melalui Tor, pastikan Tor dipasang pada komputer anda dan kemudian dayakan Proksi Tor dalam tetapan BitBoxApp.\nPada kebanyakan sistem pengendalian terdapat dua cara untuk menjalankan Tor:\n1. Pelayar Tor: muat turun dan buka Pelayar Tor. Ini akan membolehkan BitBoxApp menyambung ke rangkaian Tor dengan menetapkan port 9150 dalam tetapan proksi Tor.\n2. Perkhidmatan latar belakang Tor: pasang daemon Tor, yang sentiasa berjalan di latar belakang. BitBoxApp kemudiannya boleh menyambung dengan menetapkan port 9050 dalam tetapan proksi Tor.",
+        "title": "Apakah Tor, proksi Tor dan port mana yang harus saya gunakan?"
+      },
+      "what": {
+        "text": "Adalah mungkin untuk menggerakkan dompet anda dengan nod penuh anda sendiri sebagai ganti menggunakan server Shift.",
+        "title": "Apakah ini?"
+      },
+      "why": {
+        "text": "Menjalankan nod anda sendiri tidak perlu tetapi meningkatkan privasi dan mengurangkan keperluan untuk mempercayai orang lain.\nPertama, ini bermakna anda menggunakan Bitcoin secara lebih peribadi kerana BitBoxApp tidak akan menyambung ke pelayan kami untuk mengambil sejarah transaksi anda; sebaliknya ia akan mengambil maklumat tersebut daripada nod anda sendiri.\nKedua, menjalankan nod anda sendiri bermakna nod anda mengesahkan semua transaksi itu sendiri, memastikan peraturan konsensus dikuatkuasakan.",
+        "title": "Mengapa saya perlu menjalankan nod saya sendiri?"
       }
     },
     "title": "Panduan",
+    "toggle": {
+      "close": "Tutup panduan",
+      "open": "Panduan"
+    },
+    "trackingModePortfolioChart": {
+      "text": "Pada desktop, tuding kursor pada carta. Pada mudah alih, pegang jari anda pada carta dan seret secara mendatar.",
+      "title": "Bagaimana untuk melihat nilai sejarah pada carta?"
+    },
     "unlock": {
       "forgotDevicePassword": {
         "text": "Anda perlu menetapkan semula peranti dan memulihkan wallet dari backup dengan menggunakan kata laluan pemulihan.",
@@ -536,14 +1293,9 @@
       }
     },
     "waiting": {
-      "deviceNotRecognized": {
-        "text": "Peranti mesti berkelip sekali apabila dimasukkan. Pastikan ia dimasukkan ke arah yang betul. Jika anda menghadapi masalah, sila hubungi kami melalui pautan di bawah.",
-        "title": "Peranti saya tidak diketahui"
-      },
       "getDevice": {
         "link": {
-          "text": "Pesan sebuah BitBox",
-          "url": "https://shiftcrypto.shop/"
+          "text": "Pesan sebuah BitBox"
         },
         "text": "Anda boleh membeli BitBox di kedai online kami:",
         "title": "Bagaimana saya boleh mendapatkan peranti?"
@@ -554,34 +1306,44 @@
       },
       "lostDevice": {
         "link": {
-          "text": "Pusat Backup",
-          "url": "https://shiftcrypto.ch/backup"
+          "text": "Pusat sandaran"
         },
         "text": "Anda boleh memulihkan akaun anda pada BitBox baru atau dengan pusat backup kami.",
         "title": "Saya kehilangan peranti saya. Bagaimana sekarang?"
       },
       "useWithoutDevice": {
-        "text": "Maaf, ini belum mungkin pada masa ini.",
+        "text": "Ya, anda boleh mengingati dompet dalam tetapan urus akaun. Dengan cara ini anda boleh melihat portfolio anda tanpa menggunakan BitBox.",
         "title": "Bolehkah saya menggunakan aplikasi tanpa peranti?"
       },
       "welcome": {
         "text": "Terima kasih kerana menggunakan aplikasi ini yang dibina oleh Shift Crypto dari Switzerland. Ia masih dalam versi beta dan kami menghargai apa-apa input yang anda perlu bagikan. Sila berikan maklum balas menggunakan pautan di bahagian bawah.",
-        "title": "Selamat datang ke aplikasi BitBox!"
+        "title": "Selamat datang ke BitBoxApp!"
+      },
+      "worksWithIos": {
+        "link": {
+          "text": "Pesan BitBox02 Nova"
+        },
+        "text": "Hanya BitBox02 Nova berfungsi dengan iOS. BitBox02 biasa boleh digunakan dengan semua platform lain. Untuk membeli BitBox02 Nova, sila lawati kedai kami.",
+        "title": "BitBox manakah yang berfungsi dengan iOS?"
+      }
+    },
+    "walletConnect": {
+      "noPreviousConnections": {
+        "text": "Jika anda menggunakan telefon/komputer baharu dengan BitBoxApp, maka anda perlu menyambung semula ke DApps. Anda kemudian akan melihat syiling anda pada dapp semula seperti biasa.",
+        "title": "Saya tidak melihat sambungan saya sebelum ini."
+      },
+      "supportedNetworks": {
+        "text": "Pada masa ini, hanya mainnet Ethereum disokong menggunakan WalletConnect dalam BitBoxApp. Untuk menggunakan rantaian serasi EVM lain, sila gunakan dompet sambungan penyemak imbas Rabby.",
+        "title": "Apakah rangkaian yang disokong?"
+      },
+      "whatIsWalletConnect": {
+        "text": "WalletConnect ialah protokol komunikasi untuk aplikasi web3. Ia membolehkan anda menyambung dengan mudah ke DApps berasaskan Ethereum dan dompet web tanpa menggunakan aplikasi pihak ketiga, yang amat berguna untuk pengguna Android BitBoxApp.",
+        "title": "Apakah itu WalletConnect?"
       }
     }
   },
   "headerssync": {
     "blocksSynced": "{{blocks}} blok telah disegerakkan"
-  },
-  "hiddenWallet": {
-    "info1HTML": "Untuk tujuan penafian yang munasabah, wallet tersembunyi boleh dibuat dengan kombinasi kata laluan pemulihan dan kata laluan peranti yang <strong> berbeza </strong>.",
-    "info2HTML": "Tentukan kata laluan peranti dan kata laluan pemulihan yang anda mahu kaitkan dengan wallet tersembunyi anda di bawah ini. Kata laluan peranti dan kata laluan pemulihan mestilah <strong> berbeza </strong> daripada yang anda tentukan untuk wallet utama anda.",
-    "passwordLabel": "Kata laluan pemulihan tersembunyi",
-    "passwordPlaceholder": "Sila ulangi kata laluan pemulihan tersembunyi",
-    "pinLabel": "Kata laluan peranti tersembunyi",
-    "pinRepeatLabel": "Ulangi kata laluan peranti tersembunyi",
-    "pinRepeatPlaceholder": "Sila ulangi kata laluan peranti tersembunyi",
-    "success": "Dompet tersembunyi berjaya dibuat. Pasang ulang BitBox anda untuk membuka kuncinya."
   },
   "initialize": {
     "create": "Tetapkan kata laluan peranti",
@@ -590,7 +1352,6 @@
       "e102": "Kata laluan peranti mestilah mengandung sekurang-kurangnya 4 aksara."
     },
     "info": {
-      "button": "Teruskan",
       "description1": "Pilih kata laluan peranti anda. Ini akan digunakan untuk membuka kunci BitBox anda.",
       "description2": "Anda boleh menggunakan nombor, huruf dan simbol. Kata laluan yang lebih panjang memberikan keselamatan yang lebih tinggi",
       "description3": "Jika anda kehilangan kata laluan peranti, anda perlu menetapkan semula peranti anda dan memulihkan backup wallet anda.",
@@ -607,53 +1368,188 @@
   "language": {
     "title": "Pilih Bahasa"
   },
-  "legacyhiddenwallet": {
-    "disable": "Matikan Legacy Hidden Wallet",
-    "enable": "Aktifkan Legacy Hidden Wallet",
-    "successDisable": "Berjaya melumpuhkan legacy hidden wallet",
-    "successEnable": "Berjaya menyahaktifkan wallet legacy tersembunyi. Pasang semula BitBox anda dan masukkan kata laluan peranti tersembunyi untuk mengakses wallet legacy tersembunyi warisan."
-  },
   "loading": "memuatkan ...",
-  "notification": {
-    "newTxs_0": "{{count}} transaksi baru di: {{accountName}}"
+  "manageAccounts": {
+    "accountHidden": "Akaun ini telah disembunyikan daripada akaun jam tangan anda sahaja. Untuk melihatnya semula, sila palamkan BitBox anda.",
+    "editAccount": "Sunting",
+    "editAccountNameTitle": "Sunting nama akaun",
+    "noAccounts": "tiada akaun ditemui",
+    "settings": {
+      "hideTokens": "Sembunyikan token",
+      "showTokens": "Tunjukkan token ({{activeTokenCount}})"
+    },
+    "settingsButtonDescription": "Tambah dan tunjukkan/sembunyikan akaun",
+    "title": "Urus akaun",
+    "watchAccount": "Tonton akaun",
+    "watchAccountDescription": "Akaun ini adalah sebahagian daripada akaun watch-only anda sahaja. Anda boleh menyembunyikannya daripada akaun jam tangan anda menggunakan togol."
   },
-  "pairing": {
-    "aborted": {
-      "text": "Pemasangan telah ditinggalkan oleh aplikasi mudah alih.",
-      "title": "Ditinggalkan"
+  "mobile": {
+    "usingMobileDataWarning": "Penggunaan data mudah alih: apl ini boleh memuat turun sehingga beberapa ratus megabait data pengepala blockchain selepas membuka kunci akaun. Sila sambung ke Wi-Fi untuk mengelak daripada menggunakan data mudah alih. Selepas menolaknya, mesej ini tidak akan ditunjukkan lagi."
+  },
+  "newSettings": {
+    "about": {
+      "appVersion": {
+        "title": "Versi aplikasi"
+      },
+      "feedbackLink": {
+        "description": "Jika anda mempunyai maklum balas umum",
+        "title": "Maklum balas"
+      },
+      "supportLink": {
+        "description": "Jika anda mempunyai masalah atau memerlukan bantuan",
+        "title": "Sokongan"
+      }
     },
-    "button": "Pasangkan Aplikasi Mudah Alih",
-    "confirm": "Adakah anda pasti mahu memasangkan BitBox anda? Ambil perhatian bahawa selepas itu, telefon bimbit diperlukan untuk melakukan transaksi.",
-    "connectOnly": {
-      "button": "Sambungkan aplikasi mudah alih",
-      "title": "Imbas dengan aplikasi mudah alih kami dengan memilih item menu 'Sambung ke aplikasi desktop baharu'"
+    "advancedSettings": {
+      "authentication": {
+        "description": "Kunci akses kepada aplikasi dengan kunci skrin/cap jari.",
+        "title": "Kunci skrin"
+      },
+      "coinControl": {
+        "description": "Pilih UTXO yang merupakan sebahagian daripada transaksi untuk membantu meningkatkan privasi."
+      },
+      "customFees": {
+        "description": "Membolehkan anda memasukkan yuran anda sendiri semasa menghantar."
+      },
+      "restartInTestnet": {
+        "description": "Teroka dan uji ciri dengan menggunakan testnet."
+      },
+      "torProxy": {
+        "description": "Sambungkan melalui Tor untuk privasi yang lebih baik."
+      }
     },
+    "appearance": {
+      "activeCurrencies": {
+        "description": "Mata wang tambahan ini boleh ditogol pada halaman akaun anda.",
+        "title": "Mata wang aktif"
+      },
+      "darkmode": {
+        "description": "Lihat BitBoxApp dalam mod gelap."
+      },
+      "defaultCurrency": {
+        "description": "Pilih mata wang lalai anda",
+        "title": "Mata wang lalai"
+      },
+      "enableAccount": {
+        "description": "Melumpuhkan akaun anda bermakna ia tidak akan muncul dalam bar sisi atau portfolio. Anda sentiasa boleh mendayakannya semula dari sini. Syiling pada akaun ini tidak akan terjejas dan akan kekal selamat.",
+        "title": "Dayakan/lumpuhkan akaun"
+      },
+      "hideAmounts": {
+        "description": "Memaparkan togol untuk menyembunyikan baki anda dan amaun untuk meningkatkan privasi anda apabila menggunakan apl di khalayak ramai.",
+        "hideAmounts": "Sembunyikan jumlah",
+        "showAmounts": "Tunjukkan jumlah",
+        "title": "Benarkan menyembunyikan jumlah"
+      },
+      "language": {
+        "description": "Bahasa yang anda mahu BitBoxApp gunakan.",
+        "title": "Bahasa"
+      },
+      "remebmerWallet": {
+        "enable": {
+          "description": "Anda kini boleh melihat akaun yang dikaitkan dengan dompet ini tanpa memasukkan peranti BitBox anda. Walau bagaimanapun, BitBox masih diperlukan untuk membuat transaksi dan memaparkan alamat terima.",
+          "title": "Dompet teringat"
+        },
+        "name": "Ingat dompet",
+        "warning": "Ini akan mengeluarkan dompet anda yang diingati. Untuk melihatnya semula, anda perlu memasukkan BitBox untuk dompet ini. Sebarang syiling pada dompet ini tidak terjejas. Adakah anda mahu meneruskan?",
+        "warningTitle": "Lumpuhkan ingat dompet"
+      },
+      "toggleSats": {
+        "description": "Dayakan atau lumpuhkan Satoshis."
+      }
+    }
+  },
+  "note": {
+    "input": {
+      "description": "(pilihan)",
+      "placeholder": "Tambah Nota…"
+    },
+    "title": "Catatan"
+  },
+  "notification": {
+    "newTxs_other": "{{count}} transaksi baharu dalam: {{accountName}}"
+  },
+  "novaConnectionIssues": {
+    "connectionIssueTips": "Petua isu sambungan",
+    "description1": "Hanya BitBox02 Nova yang serasi dengan iOS. Untuk BitBox02, gunakan Windows, macOS, Android atau Linux. Anda boleh membeli BitBox02 Nova di kedai dalam talian kami:",
+    "description2": "Skrin sepatutnya menyala. Jika skrin tidak dihidupkan, maka peranti tidak menerima kuasa.",
+    "description3": "Pastikan BitBox02 Nova dekat dengan iPhone/iPad anda. Kami mengesyorkan anda memasangkan BitBox02 Nova terus ke peranti anda.",
+    "description4": "BitBox02 Nova bersambung dengan iOS melalui Bluetooth. Bluetooth boleh dilumpuhkan/didayakan daripada tetapan BitBoxApp pada platform lain.",
+    "link1": "Pesan BitBox02 Nova",
+    "link2": "Hubungi sokongan",
+    "stillHavingIssues": "Masih mengalami masalah?",
+    "title1": "Hanya gunakan BitBox02 Nova dengan iOS",
+    "title2": "Pastikan BitBox02 Nova dikuasakan",
+    "title3": "Pastikan BitBox02 Nova dalam julat",
+    "title4": "Pastikan Bluetooth tidak dinyahaktifkan pada BitBox02 Nova"
+  },
+  "passphrase": {
+    "considerations": {
+      "button": "Pertimbangan sandaran",
+      "message": "Frasa laluan menambah lapisan perlindungan pada sandaran dompet anda (kad mikroSD atau perkataan pemulihan). Jika seseorang mempunyai akses kepada sandaran anda, mereka juga memerlukan frasa laluan untuk mengakses dompet anda.\n\nWalau bagaimanapun, ini bermakna anda perlu <strong>kedua-dua frasa laluan + sandaran dompet</strong> untuk memulihkan dompet berdaya frasa laluan anda, sekiranya BitBox anda hilang atau rosak. Jika anda terlupa atau kehilangan frasa laluan anda, anda akan kehilangan akses kepada semua syiling pada dompet itu.\n\nApabila menyimpan frasa laluan anda, pertimbangkan untuk meletakkannya di lokasi yang berasingan daripada sandaran anda. Dengan cara itu jika seseorang menjumpai sandaran anda, mereka juga tidak menemui frasa laluan anda.",
+      "title": "Pertimbangan sandaran"
+    },
+    "disable": "Lumpuhkan frasa laluan",
+    "disableInfo": {
+      "button": "Lumpuhkan",
+      "message": "Selepas melumpuhkan frasa laluan, anda tidak lagi akan diminta untuk memasukkan frasa laluan selepas membuka kunci BitBox anda. Oleh itu, anda akan memasukkan dompet lalai anda.\n\nMana-mana syiling pada dompet frasa laluan anda masih ada pada dompet itu, namun anda tidak akan dapat mengaksesnya kerana selepas membuka kunci BitBox anda, anda akan membuka dompet lalai anda.\n\nUntuk mengakses dompet frasa laluan anda sekali lagi, hanya dayakan semula ciri frasa laluan dan masukkan frasa laluan yang berkaitan selepas membuka kunci BitBox.\n\n<strong>Petua:</strong> Anda masih boleh memasukkan dompet asal anda dengan membiarkan frasa laluan kosong."
+    },
+    "enable": "Dayakan frasa laluan",
     "error": {
-      "text": "Ada yang salah. Sila mulakan lagi.",
-      "title": "Ada yang salah"
+      "e104": "Menukar tetapan frasa laluan telah digugurkan."
     },
-    "reconnectOnly": {
-      "button": "Sambung semula aplikasi mudah alih"
+    "how": {
+      "button": "Macam mana rupanya",
+      "message": "Frasa laluan tidak berfungsi seperti kata laluan yang anda gunakan. Jika anda tersalah taip frasa laluan anda, anda tidak akan dimaklumkan. Ini kerana <strong>setiap frasa laluan mencipta dompet yang berbeza, namun sah</strong>. Ini bermakna anda boleh menggunakan berbilang frasa laluan untuk seberapa banyak dompet yang anda mahukan. Tetapi setiap dompet hanya boleh diakses apabila menaip frasa laluan yang sepadan.\n\nApabila memasangkan BitBox anda, anda akan digesa untuk kata laluan peranti seperti biasa. Selepas itu, anda akan diminta untuk memasukkan frasa laluan pada peranti.\n\nSelepas memasukkan frasa laluan, anda akan ditunjukkan frasa laluan yang anda masukkan. Ini supaya anda boleh mengesahkan anda memasukkannya dengan betul.",
+      "title": "Bagaimanakah ia berfungsi"
     },
-    "start": {
-      "hideAppQRCode": "Sembunyikan QR Code",
-      "revealAppQRCode": "Tunjukkan QR Code",
-      "step1": "Jika anda tidak mempunyai aplikasi mudah alih, anda boleh mengimbas kod QR untuk Apple App Store atau Google Play Store.",
-      "step2": "Imbas dengan aplikasi mudah alih kami, yang anda dapati di bawah nama 'Digital Bitbox 2FA' di kedai aplikasi untuk iOS dan Android:"
+    "intro": {
+      "message": "Frasa laluan menyediakan lapisan keselamatan tambahan di atas dompet anda.\nMari belajar bagaimana ia berfungsi.",
+      "title": "Sediakan frasa laluan"
     },
-    "started": {
-      "text": "Kini sila ikuti arahan dalam aplikasi mudah alih.",
-      "title": "Hebat"
+    "progressDisable": {
+      "message": "Sahkan pada BitBox anda yang anda mahu <strong>melumpuhkan</strong> frasa laluan pilihan.",
+      "title": "Sahkan pada peranti"
     },
-    "success": {
-      "text": "Selamat, anda berjaya memasangkan BitBox anda dengan aplikasi mudah alih!",
-      "title": "Berjaya"
+    "progressEnable": {
+      "message": "Sahkan pada BitBox anda yang anda mahu <strong>membolehkan</strong> frasa laluan pilihan.",
+      "title": "Sahkan pada peranti"
     },
-    "timeout": {
-      "text": "Pemasanganan ini berakhir selepas dua minit. Mula semula jika anda masih mahu memasangkan aplikasi mudah alih.",
-      "title": "Berakhir"
+    "successDisabled": {
+      "message": "Ungkapan laluan pilihan <strong>berjaya didayakan</strong>!\nAnda akan diminta untuk memberikan frasa laluan mulai sekarang.",
+      "messageEnd": "Sila pasang semula BitBox sekarang.",
+      "title": "Ungkapan laluan didayakan"
     },
-    "title": "Memasang telefon bimbit"
+    "successEnabled": {
+      "message": "Ungkapan laluan pilihan <strong>berjaya dilumpuhkan</strong>!\n\nAnda tidak akan diminta untuk memberikan frasa laluan lagi.",
+      "messageEnd": "Sila pasang semula BitBox anda sekarang.",
+      "tips": "Petua",
+      "tipsList": [
+        "Kami cadangkan menghantar sejumlah kecil ke dompet frasa laluan terlebih dahulu. Kemudian cabut dan pasang semula BitBox dan masukkan kata laluan dan frasa laluan anda. Jika anda memasukkan frasa laluan dengan betul, anda sepatutnya melihat syiling dalam dompet anda.",
+        "Jika anda ingin memasukkan dompet asal anda tanpa frasa laluan, anda masih boleh melakukan ini dengan memasukkan apa-apa apabila digesa untuk memasukkan frasa laluan. Atau anda boleh melumpuhkan ciri frasa laluan."
+      ],
+      "title": "Ungkapan laluan dilumpuhkan"
+    },
+    "summary": {
+      "button": "Dayakan frasa laluan",
+      "title": "Ringkasan",
+      "understand": "Saya faham cara frasa laluan berfungsi dan risiko yang berkaitan dengannya.",
+      "understandList": [
+        "Frasa laluan ialah lapisan keselamatan tambahan di atas sandaran anda.",
+        "Memasukkan frasa laluan yang berbeza akan sentiasa menghasilkan dompet yang berbeza.",
+        "Untuk memulihkan dompet anda yang anda perlukan <strong>kedua-dua frasa laluan dan sandaran</strong>.",
+        "Jika anda terlupa frasa laluan anda, anda boleh <strong>tidak lagi mengakses syiling anda</strong>."
+      ]
+    },
+    "what": {
+      "button": "Ketahui cara ini berfungsi",
+      "message": "Dompet dicipta (diperolehi) daripada nombor rawak yang sangat besar, juga dikenali sebagai benih. Benih ini dicipta apabila anda mula-mula menyediakan BitBox anda dan disandarkan dengan kad microSD atau perkataan pemulihan. Sesiapa sahaja yang mempunyai akses kepada benih mempunyai kawalan penuh ke atas dana pada dompet itu.\n\nFrasa laluan ialah <strong>rahsia pilihan</strong>, ditambah kepada benih. Apabila menggunakan frasa laluan, setiap frasa laluan mencipta dompet baharu berdasarkan benih + frasa laluan (rahsia pilihan). Frasa laluan boleh jadi apa-apa sahaja: huruf, perkataan, aksara khas atau malah boleh kosong. Dompet lalai sebenarnya berasal daripada benih + frasa laluan kosong.\n\nFrasa laluan adalah sebahagian daripada standard BIP39, yang bermaksud ia serasi dengan semua dompet yang menyokong standard yang sama.",
+      "title": "Apakah frasa laluan?"
+    },
+    "why": {
+      "button": "Mengapa menggunakan frasa laluan",
+      "message": "BitBox melindungi benih daripada pengekstrakan daripada peranti itu sendiri, tetapi sandaran (kad mikroSD atau perkataan pemulihan) memberikan akses penuh kepada dompet. Itulah sebabnya ia harus disimpan di lokasi yang selamat!\n\nMemandangkan frasa laluan mencipta dompet baharu menggunakan benih sedia ada anda, frasa laluan-dompet memerlukan kedua-dua anda <strong>sandaran DAN frasa laluan untuk memulihkan</strong>. Faedah ini ialah jika seseorang menemui sandaran anda, mereka masih memerlukan frasa laluan untuk mengakses dompet frasa laluan.\n\nSelain itu, ciri frasa laluan membolehkan anda membuat berbilang dompet pada peranti yang sama, atau \"dompet tersembunyi\" sebagai tambahan kepada dompet lalai.",
+      "title": "Mengapa menggunakan frasa laluan?"
+    }
   },
   "password": {
     "show": "Tunjukkan {{label}}",
@@ -662,42 +1558,47 @@
       "paste": "untuk menampal teks, aktifkan \"SHOW {{label}}\""
     }
   },
-  "random": {
-    "button": "Menjana Nombor Rawak",
-    "description": "BitBox anda telah menjana nombor rawak {{bits}}-bit berikut:"
-  },
   "receive": {
+    "bitsuranceWarning": "Ini ialah akaun yang diinsuranskan, bermakna ia hanya boleh menerima kepada Native Segwit. Ini supaya anda tidak menerima secara tidak sengaja kepada Wrapped Segwit atau Taproot, yang tidak diinsuranskan.",
+    "changeScriptType": "Tukar jenis alamat",
     "label": "Alamat anda",
-    "showFull": "Tunjukkan dan sahkan alamat lengkap",
-    "title": "Dapatkan syiling",
+    "onlyThisCoin": {
+      "description": "Untuk menerima token lain, dayakannya dalam tetapan. Jika anda mendepositkan token lain, ia mungkin tidak boleh diakses.",
+      "warning": "Pastikan hanya menerima {{coinName}} pada alamat ini."
+    },
+    "qrCodeCopiedMessage": "Disalin!",
+    "scriptType": {
+      "p2tr": "Akar Tunjang (format terbaharu)",
+      "p2wpkh": "Segwit asli (lalai)"
+    },
+    "selectAccount": "Pilih akaun",
+    "taprootWarning": "Nota: Taproot ialah ciri Bitcoin baharu dan belum diterima pakai secara meluas. Dana yang diterima pada alamat Taproot mungkin tidak kelihatan dalam dompet jam tangan pihak ketiga sahaja. Banyak dompet dan pertukaran belum dapat dihantar ke alamat Taproot.",
+    "title": "Terima {{accountName}}",
     "verify": "Sahkan alamat dengan selamat",
-    "verifyInstruction": "Sila sahkan bahawa alamat berikut sepadan dengan yang dipaparkan pada peranti anda.",
-    "warning": {
-      "secureOutput": "Sila pasangkan BitBox anda dengan peranti mobile anda untuk menghidupkan pengesahan alamat selamat. Pergi ke 'Urus Peranti' pada bar sisi."
-    }
+    "verifyBitBox02": "Sahkan alamat pada BitBox",
+    "verifyInstruction": "Sila sahkan bahawa alamat berikut sepadan dengan yang dipaparkan pada peranti anda."
   },
   "reset": {
-    "description": "Semua data pada peranti akan dihapus. Itu termasuk Private Key anda!",
+    "description": "Semua data akan dipadamkan daripada peranti ini. Itu termasuk Kunci Peribadi anda!",
     "notReset": "Peranti BELUM ditetapkan semula.",
-    "title": "Tetapkan semula peranti",
-    "understand": "Saya mempunyai backup dan mengetahui kata laluan pemulihan saya"
+    "title": "Peranti tetapan semula kilang",
+    "understand": "Saya mempunyai backup dan mengetahui kata laluan pemulihan saya",
+    "understandBB02": "Saya mempunyai sandaran yang sah"
   },
   "securityInformation": {
     "create": {
-      "button": "Teruskan",
-      "description1": "Sebelum menetapkan peranti anda, disarankan agar anda dalam persekitaran yang selamat.",
+      "description1": "Kami mengesyorkan anda menyediakan peranti anda dalam persekitaran yang selamat, bermakna anda berada jauh daripada orang lain yang boleh melihat kata laluan yang anda pilih.",
       "description2": "Anda akan diminta untuk membuat dua kata laluan.",
       "description3": "Yang pertama adalah <strong> kata laluan peranti </strong> yang digunakan untuk membuka peranti BitBox anda dan boleh diubah kemudian.",
       "description4": "Yang kedua ialah <strong>kata laluan pemulihan</strong> yang digunakan untuk membuka wallet anda. Kata laluan ini tidak boleh diubah kemudian.",
-      "description5": "Wallet yang anda buat akan dibackupkan kepada fail pada kad micro SD yang disediakan. Ini boleh digunakan dalam kecemasan untuk memulihkan wang anda menggunakan <strong> kata laluan pemulihan </strong> anda.",
-      "title": "Maklumat Keselamatan"
+      "description5": "Dompet yang anda buat akan disandarkan ke fail pada kad mikroSD yang disediakan. Ini boleh digunakan semasa kecemasan untuk mendapatkan semula dana anda menggunakan anda <strong>kata laluan pemulihan</strong>.",
+      "title": "Maklumat keselamatan"
     },
     "restore": {
-      "button": "Teruskan",
-      "description1": "Anda akan diminta untuk memasukkan kad micro SD yang digunakan untuk menyimpan backup.",
+      "description1": "Anda akan diminta untuk memasukkan kad microSD yang anda gunakan untuk menyimpan sandaran anda.",
       "description2": "Untuk memulihkan peranti, anda memerlukan kata laluan pemulihan anda.",
       "description3": "Sila berhati-hati semasa memasukkan kata laluan pemulihan. Sebarang kata laluan yang anda masukkan akan membuat wallet yang sah. Jika anda memasukkan kata laluan yang salah, anda mungkin akan mendapatkan baki wallet yang tidak anda harapkan.",
-      "title": "Maklumat Keselamatan"
+      "title": "Maklumat keselamatan"
     }
   },
   "seed": {
@@ -706,18 +1607,18 @@
       "password-change": "Saya TIDAK dapat menukar kata laluan pemulihan di kemudian hari",
       "password-required": "Kata laluan pemulihan diperlukan untuk memulihkan dompet dari backup"
     },
-    "create": "Buat Wallet",
+    "create": "Buat dompet",
     "creating": "Membuat dompet",
     "description": "Saya faham bahawa:",
     "error": {
       "e102": "Kata laluan mestilah terdiri daripada sekurang-kurangnya 4 aksara.",
-      "e200": "Anda perlu memasukkan kad micro SD ke dalam BitBox anda untuk membuat wallet, agar backup boleh dibuat secara automatik."
+      "e200": "Anda perlu memasukkan kad microSD ke dalam BitBox anda untuk membuat dompet, jadi sandaran boleh dibuat secara automatik."
     },
     "info": {
       "button": "Tetapkan kata laluan pemulihan sekarang",
-      "description1": "Masukkan kad micro SD ke dalam BitBox",
+      "description1": "Masukkan kad mikroSD ke dalam BitBox",
       "description2": "Pilih kata laluan pemulihan untuk wallet dan pilih \"Tetapkan kata laluan pemulihan sekarang\"",
-      "description3": "Backup ke kad micro SD dan kata laluan pemulihan anda adalah satu-satunya cara untuk mendapatkan semula wang anda, sekiranya peranti BitBox hilang atau dicuri.",
+      "description3": "Sandaran kepada kad microSD dan kata laluan pemulihan anda adalah satu-satunya kaedah untuk mendapatkan semula dana anda sekiranya peranti BitBox hilang atau dicuri.",
       "description4": "Anda tidak dapat mengganti kata laluan pemulihan anda di kemudian hari tanpa memindahkan wang anda.",
       "title": "Buat wallet baru"
     },
@@ -726,17 +1627,16 @@
       "repeatPlaceholder": "Ulangi kata laluan pemulihan"
     },
     "walletName": {
-      "label": "Nama Wallet"
+      "label": "Nama dompet"
     }
   },
   "seedRestore": {
     "error": {
-      "e200": "Untuk memulihkan wallet dari backup memerlukan kad micro SD."
+      "e200": "Memulihkan dompet daripada sandaran memerlukan kad microSD."
     },
     "info": {
-      "button": "Teruskan",
-      "description1": "Masukkan kad micro SD ke BitBox dan klik \"Teruskan\"",
-      "description2": "Pilih backup pada dan klik \"Simpan semula\"",
+      "description1": "Masukkan kad mikroSD ke dalam BitBox dan klik \"Teruskan\"",
+      "description2": "Pilih sandaran dan klik \"Pulihkan\"",
       "description3": "Masukkan kata laluan pemulihan",
       "description4": "Anda perlu mengesahkan untuk memahami bahawa kata laluan salah akan membuat dompet yang berbeza.",
       "title": "Bagaimana cara memulihkan wallet dari backup"
@@ -745,33 +1645,34 @@
   "send": {
     "abort": "Transaksi telah ditinggalkan.",
     "address": {
-      "label": "Alamat Penerima",
+      "label": "Alamat penerima",
       "placeholder": "Masukkan alamat"
     },
     "amount": {
       "label": "Jumlah",
       "placeholder": "Masukkan jumlah"
     },
-    "button": "Tandatangan dan Hantar",
+    "availableBalance": "Baki yang ada",
+    "button": "Semakan",
+    "buyEth": "Beli ETH",
     "coincontrol": {
-      "address": "Alamat",
+      "addressReused": "Alamat digunakan semula",
+      "change": "Berubah",
       "outpoint": "Outpoint",
-      "title": "Hantar dari Output"
+      "title": "Hantar dari output"
     },
     "confirm": {
-      "selected-coins": "Syiling yang dipilih",
-      "title": "Sahkan Transaksi",
+      "infoMessage": "Sahkan dengan teliti jumlah dan alamat adalah betul pada BitBox",
+      "selected-coins": "Syiling terpilih",
+      "title": "Sahkan dan hantar transaksi",
+      "to": "Kepada",
       "total": "Jumlah"
     },
-    "customFee": {
-      "label": "Yuran yang telah ditukarkan",
-      "placeholder": "Yuran yang telah ditukarkan"
-    },
-    "data": {
-      "label": "Data Pilihan",
-      "placeholder": "Masukkan data heksadesimal"
-    },
+    "edit": "Edit transaksi",
     "error": {
+      "erc20InsufficientGasFunds": "Anda tidak mempunyai Ether yang mencukupi untuk membayar transaksi ERC20 ini. Sila tambahkan Eter pada dompet anda dan cuba lagi.",
+      "feeTooLow": "bayaran terlalu rendah",
+      "feesNotAvailable": "Tidak dapat menganggarkan bayaran",
       "insufficientFunds": "Dana tidak mencukupi",
       "invalidAddress": "alamat tidak sah",
       "invalidAmount": "jumlah tidak sah",
@@ -779,38 +1680,64 @@
     },
     "fee": {
       "customPlaceholder": "Masukkan jumlah",
-      "label": "Yuran Rangkaian",
+      "label": "Bayaran rangkaian",
       "placeholder": "Tidak tersedia"
     },
     "feeTarget": {
+      "customLabel": "Kadar bayaran",
+      "customLabel_eth": "Harga gas",
       "description": {
-        "economy": "24 blok (sekitar 4 jam untuk Bitcoin, 1 jam untuk Litecoin)",
-        "high": "2 blok (sekitar 20 minit untuk Bitcoin, 5 minit untuk Litecoin)",
-        "low": "12 blok (sekitar 2 jam untuk Bitcoin, 30 minit untuk Litecoin)",
-        "normal": "6 blok (sekitar 1 jam untuk Bitcoin, 15 minit untuk Litecoin)"
+        "economy": "4 jam (24 blok)",
+        "economy_eth": "30 minit atau kurang",
+        "economy_ltc": "1 jam (24 blok)",
+        "high": "20 minit (2 blok)",
+        "high_eth": "30 saat atau kurang",
+        "high_ltc": "5 minit (2 blok)",
+        "low": "2 jam (12 blok)",
+        "low_eth": "5 minit atau kurang",
+        "low_ltc": "30 minit (12 blok)",
+        "mEconomy": "-",
+        "mFastest": "10 minit (blok seterusnya)",
+        "mHalfHour": "20 minit (3 blok)",
+        "mHour": "30 minit (3 blok)",
+        "normal": "1 jam (6 blok)",
+        "normal_eth": "2 minit atau kurang",
+        "normal_ltc": "15 minit (6 blok)"
       },
+      "estimate": "Anggaran masa pengesahan:",
       "label": {
+        "custom": "Adat",
         "economy": "ekonomi",
-        "high": "tinggi",
-        "low": "rendah",
-        "normal": "normal"
+        "high": "Tinggi",
+        "low": "Rendah",
+        "mEconomy": "Tiada keutamaan",
+        "mFastest": "Tinggi",
+        "mHalfHour": "Medium",
+        "mHour": "Rendah",
+        "normal": "Normal"
       },
-      "placeholder": "Mengira bayaran anggaran ..."
+      "placeholder": "Mengira yuran…"
     },
     "maximum": "Hantar semua",
-    "scanQR": "Imbas Kod QR",
-    "signprogress": {
-      "description": "Ini adalah transaksi yang mengandung banyak data. Untuk menandatangani transaksi dengan sepenuhnya, anda akan diminta untuk mengesahkan sebanyak {{steps}} kali.",
-      "label": "Kemajuan"
+    "maximumSelectedCoins": "Hantar syiling terpilih",
+    "newTransaction": "Transaksi baru",
+    "noFeeTargets": "Anggaran kadar yuran tidak tersedia pada masa ini. Sila cuba sebentar lagi atau masukkan yuran tersuai.",
+    "priority": "Keutamaan",
+    "scanQR": "Imbas kod QR",
+    "scanQRNoCameraMessage": "Kamera tidak ditemui. Sila pastikan peranti anda menyokong kamera dan kebenaran ditetapkan dengan betul.",
+    "sendToAccount": {
+      "placeholder": "Pilih akaun",
+      "title": "Hantar ke akaun"
     },
     "success": "Transaksi telah ditandatangani dan dihantar.",
-    "title": "Hantar syiling",
-    "toggleCoinControl": "Toggle Kawalan Syiling"
+    "title": "Hantar {{accountName}}",
+    "toggleCoinControl": "Kawalan syiling",
+    "transactionDetails": "Butiran transaksi"
   },
   "settings": {
-    "accounts": {
-      "title": "Akaun aktif"
-    },
+    "about": "Tentang aplikasi",
+    "advancedSettings": "Tetapan lanjutan",
+    "appearance": "Penampilan",
     "electrum": {
       "add": "Tambah server",
       "add-server": "Tambah",
@@ -828,60 +1755,162 @@
       "step1-text": "Masukkan titik akhir.",
       "step2": "2",
       "step2-text": "Masukkan sijil dari rantai sijil server. Secara alternatif, muat turun sijil jauh dan bandingkan secara visual.",
+      "step2-text-tcp": "Anda boleh melangkau langkah ini jika anda tidak mahu menggunakan TLS.",
       "step3": "3",
       "step3-text": "Semak sambungan dan tambahkan server.",
       "step4": "4",
       "step4-text": "Mulakan semula wallet anda. Jika anda tidak menyingkirkan server standard, nod anda akan ditambah sebagai redundansi.",
-      "title-btc": "Bitcoin Electrum Server",
-      "title-ltc": "Litecoin Electrum Server",
-      "title-tbtc": "Bitcoin Testnet Electrum Server",
-      "title-tltc": "Litecoin Testnet Electrum Server"
+      "title-btc": "Pelayan Bitcoin Electrum",
+      "title-ltc": "Pelayan Litecoin Electrum",
+      "title-tbtc": "Pelayan Bitcoin Testnet Electrum",
+      "title-tltc": "Pelayan Litecoin Testnet Electrum"
     },
     "expert": {
       "coinControl": "Hidupkan kawalan syiling",
       "electrum": {
+        "description": "Anda boleh menyambung ke nod penuh Electrum anda sendiri.",
         "title": "Sambung nod penuh anda sendiri"
       },
-      "title": "Tetapan Pakar"
+      "exportLogs": {
+        "description": "Eksport fail log untuk membantu menyelesaikan masalah (troubleshooting) dan sokongan.",
+        "title": "Log eksport"
+      },
+      "fee": "Dayakan yuran tersuai",
+      "restartInTestnet": "Mod Testnet",
+      "setProxyAddress": "Tetapkan alamat proksi",
+      "title": "Tetapan pakar",
+      "useProxy": "Dayakan proksi tor",
+      "useSats": "Paparkan nilai BTC dalam Satoshis"
+    },
+    "general": "Umum",
+    "header": {
+      "home": "Rumah"
+    },
+    "info": {
+      "out-of-date": "Kemas kini baharu tersedia",
+      "title": "info",
+      "up-to-date": "Apl anda adalah terkini",
+      "version": "Versi Apl"
+    },
+    "more": "Lagi",
+    "notes": {
+      "export": {
+        "description": "Buat sandaran nota transaksi dan nama akaun anda.",
+        "success": "Nota berjaya dieksport.",
+        "title": "Eksport nota"
+      },
+      "import": {
+        "accountNames_other": "{{count}} nama akaun telah diimport.",
+        "description": "Pulihkan nota transaksi dan nama akaun anda daripada fail sandaran yang dibuat sebelum ini.",
+        "title": "Import nota",
+        "tooLarge": "Fail terlalu besar.",
+        "transactionNotes_other": "{{count}} rekod transaksi telah diimport."
+      },
+      "title": "Urus nota"
+    },
+    "restart": "Sila mulakan semula BitBoxApp untuk perubahan berkuat kuasa.",
+    "services": {
+      "title": "Perkhidmatan"
     },
     "success": "Sila cabut dan pasang kembali BitBox agar perubahan dapat berlaku.",
     "title": "Tetapan"
   },
   "setup": "Menetapkan peranti",
   "sidebar": {
-    "addAccount": "Tambah akaun",
-    "bitboxBase": "Base BitBox",
-    "device": "Urus Peranti",
+    "device": "Urus peranti",
     "leave": "Tinggalkan",
     "settings": "Tetapan"
   },
   "success": {
     "create": {
-      "info1": "Dompet anda telah dibackupkan dengan selamat ke kad micro SD. Tarik keluar kad micro SD dan simpan dengan selamat.",
+      "info1": "Dompet anda telah disandarkan dengan selamat ke Kad microSD. Keluarkan dan pastikan ia selamat.",
       "info2": "Anda telah membuat kata laluan peranti yang selamat yang dapat membuka BitBox.",
       "info3": "Anda telah membuat kata laluan pemulihan yang selamat untuk wallet anda yang dapat membuka wang anda dan mengembalikan backup anda.",
       "summary": "Berikut adalah ringkasan dari apa yang telah anda lakukan",
       "title": "Berjaya"
     },
-    "getstarted": "Bermula",
+    "getstarted": "Mulakan",
     "restore": {
       "summary": "Anda telah berjaya memulihkan wallet dari backup anda.",
       "title": "Berjaya"
     }
   },
+  "testWallet": {
+    "connect": {
+      "description": "Dompet ujian perisian untuk diuji tanpa peranti dalam Testnet.",
+      "title": "Dompet ujian"
+    },
+    "disconnect": {
+      "description": "Mengalih keluar dompet ujian perisian.",
+      "title": "Putuskan sambungan dompet ujian"
+    },
+    "prompt": {
+      "button": "Buka",
+      "passwordLabel": "Uji Kata Laluan",
+      "title": "Buka kunci dompet ujian"
+    }
+  },
+  "testnet": {
+    "activate": {
+      "description": "Mulakan semula apl dalam mod testnet untuk meneroka dan menguji ciri.",
+      "prompt": "Sila tutup apl dan mulakan semula untuk memasuki mod testnet",
+      "title": "Mulakan mod testnet"
+    },
+    "deactivate": {
+      "description": "Mulakan semula apl untuk keluar dari mod testnet.",
+      "prompt": "Sila tutup apl untuk keluar dari mod testnet",
+      "title": "Keluar dari mod testnet"
+    }
+  },
   "transaction": {
     "confirmation": "Pengesahan",
+    "details": {
+      "activity": "Aktiviti",
+      "address": "Alamat",
+      "amount": "Jumlah",
+      "date": "Tarikh",
+      "fiatAmount": "Jumlah Fiat",
+      "status": "Status",
+      "title": "butiran transaksi",
+      "type": "taip"
+    },
     "explorer": "ID Transaksi",
-    "explorerTitle": "Buka dalam blok Explorer luaran",
+    "explorerTitle": "Buka dalam penjelajah blok luaran",
     "fee": "Yuran",
     "fiatHistorical": "Sejarah",
     "gas": "Gas",
-    "pending": "Transaksi Menunggu",
+    "no-results": "Tiada transaksi ditemui sepadan \"{{searchTerm}}\"",
+    "pending": "Transaksi belum selesai",
     "size": "Saiz",
+    "status": {
+      "complete": "lengkap",
+      "failed": "Gagal",
+      "pending": "Yang belum selesai",
+      "pending_receive": "Transaksi masuk",
+      "pending_send": "Urus niaga keluar",
+      "pending_send_to_self": "Transaksi Menunggu"
+    },
+    "statusShort": {
+      "complete": "lengkap",
+      "failed": "Gagal",
+      "pending": "Yang belum selesai",
+      "pending_receive": "Masuk",
+      "pending_send": "Keluar",
+      "pending_send_to_self": "Yang belum selesai"
+    },
+    "tx": {
+      "receive_complete": "Diterima kepada",
+      "receive_failed": "Gagal menerima ke",
+      "receive_pending": "Diterima kepada",
+      "send_complete": "Dihantar ke",
+      "send_failed": "Gagal menghantar ke",
+      "send_pending": "Dihantar ke"
+    },
     "vsize": "Saiz maya",
     "weight": "Berat"
   },
   "transactions": {
+    "errorLoadTransactions": "Terdapat ralat semasa memuatkan urus niaga",
     "placeholder": "Belum ada transaksi."
   },
   "unknownError": "Kesalahan yang tidak diketahui muncul: {{errorMessage}}",
@@ -899,23 +1928,64 @@
     "unlocking": "Membuka ..."
   },
   "upgradeFirmware": {
-    "button": "Tingkatkan firmware",
-    "description": "Apakah anda mahu menaik taraf Firmware dari versi {{currentVersion}} ke {{newVersion}}?",
-    "label": "Peningkatan firmware diperlukan untuk BitBox anda.",
+    "button": "Tingkatkan perisian tegar",
+    "description": "Adakah anda ingin menaik taraf perisian tegar daripada versi {{currentVersion}} kepada {{newVersion}}?",
+    "label": "BitBox anda memerlukan peningkatan perisian tegar.",
     "locked": "Untuk menaik taraf dari {{currentVersion}} ke {{newVersion}}, sila buat sentuhan panjang.",
-    "title": "Tingkatkan Firmware",
+    "title": "Tingkatkan perisian tegar",
     "unlocked": "Bootloader terbuka. Untuk meneruskan, sila:",
     "unlocked1": "Tarik keluar dan pasang ulang BitBox anda",
     "unlocked2": "LED akan menyala apabila BitBox anda terpasang kembali",
     "unlocked3": "Tekan butang sentuh apabila LED menyala"
   },
+  "walletConnect": {
+    "connect": {
+      "button": "Sambung",
+      "dappLabel": "Masukkan alamat URI dapp",
+      "invalidPairingUri": "Uri gandingan tidak sah"
+    },
+    "dashboard": {
+      "allSessions": "Semua sesi",
+      "disclaimer": "Walletconnect ialah protokol untuk menyambung ke Dapps berasaskan Ethereum. Dapps ini dijalankan oleh perkhidmatan pihak ketiga, jadi hanya sambungkan kepada dapps yang anda percayai dan pastikan anda sentiasa mengetahui perkara yang anda tandatangani semasa membuat transaksi.",
+      "newConnection": "Sambungan baharu",
+      "noConnectedSessions": "Tiada akaun disambungkan ke mana-mana dapp pada masa ini.",
+      "unspecifiedAccount": "Akaun tidak ditentukan"
+    },
+    "pairingRequest": {
+      "approve": "Luluskan Sambungan",
+      "reject": "Tolak",
+      "title": "Permintaan sambungan baharu daripada"
+    },
+    "pairingSuccess": "Dapp berjaya disambungkan. Anda boleh teruskan di laman web dapp.",
+    "signingRequest": {
+      "chain": "Rantai",
+      "dapp": "Dapp",
+      "data": "Data",
+      "dataParsingError": "Gagal menghuraikan data",
+      "decodeError": "Gagal menyahkod mesej",
+      "method": {
+        "sendTransaction": "Tandatangan dan hantar transaksi",
+        "signMessage": "Tandatangan mesej",
+        "signTransaction": "Tandatangani transaksi",
+        "signTypedData": "Tandatangani data yang ditaip"
+      },
+      "successfullySigned": "Permintaan berjaya ditandatangani",
+      "walletConnectRequest": "Permintaan WalletConnect"
+    },
+    "useNewUri": "URI ini telah digunakan untuk mencuba sambungan. Sila gunakan URI baharu.",
+    "walletConnect": "WalletConnect"
+  },
   "warning": {
-    "receivePairing": "Sila pasangkan BitBox untuk membolehkan pengesahan alamat dengan selamat. Pergi ke 'Uruskan Peranti' pada bar sisi.",
-    "sdcard": "Pastikan kad micro SD disimpan berasingan dari BitBox, kecuali jika anda mahu mengurus backup.",
-    "sendPairing": "Sila pasang BitBox untuk mengesahkan butiran transaksi dengan selamat. Pergi ke 'Urus Peranti' di bar sisi."
+    "coincontrol": "Satu atau lebih UTXO mempunyai alamat yang digunakan semula. Berjaga jaga bahawa penerima akan melihat semua UTXO yang dikaitkan dengan alamat tersebut.",
+    "offline": "Anda sedang di luar talian. Anda tidak akan dapat menghantar transaksi atau melihat kadar pertukaran terkini.",
+    "sdcard": "Simpan kad mikroSD secara berasingan daripada BitBox, melainkan anda mahu menguruskan sandaran.",
+    "testnet": "Anda menggunakan mod Testnet. Transaksi dan syiling di sini tidak benar dan tidak mempunyai nilai. Hanya gunakan untuk tujuan ujian."
   },
   "welcome": {
-    "insertDevice": "Sila sambungkan peranti anda untuk memulakan",
+    "connect": "Sambungkan BitBox anda",
+    "getStarted": "Mari mulakan dengan memasang perisian tegar pada BitBox anda.",
+    "loadingAccounts": "Memuatkan akaun",
+    "message": "Sila sambungkan BitBox anda dan ketik bahagian tepi untuk meneruskan.",
     "title": "Selamat datang"
   }
 }

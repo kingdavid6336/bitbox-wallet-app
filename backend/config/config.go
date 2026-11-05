@@ -1,27 +1,17 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package config
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/locker"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/rates"
+	utilconfig "github.com/BitBoxSwiss/bitbox-wallet-app/util/config"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/locker"
 )
 
 // ServerInfo holds information about the backend server(s).
@@ -29,6 +19,13 @@ type ServerInfo struct {
 	Server  string `json:"server"`
 	TLS     bool   `json:"tls"`
 	PEMCert string `json:"pemCert"`
+}
+
+func (s *ServerInfo) String() string {
+	if s.TLS {
+		return s.Server + ":s"
+	}
+	return s.Server + ":p"
 }
 
 // btcCoinConfig holds configurations specific to a btc-based coin.
@@ -66,14 +63,18 @@ type Backend struct {
 	DeprecatedLitecoinActive bool `json:"litecoinActive"`
 	DeprecatedEthereumActive bool `json:"ethereumActive"`
 
+	Authentication bool `json:"authentication"`
+
 	BTC  btcCoinConfig `json:"btc"`
 	TBTC btcCoinConfig `json:"tbtc"`
 	RBTC btcCoinConfig `json:"rbtc"`
 	LTC  btcCoinConfig `json:"ltc"`
 	TLTC btcCoinConfig `json:"tltc"`
 	ETH  ethCoinConfig `json:"eth"`
-	TETH ethCoinConfig `json:"teth"`
-	RETH ethCoinConfig `json:"reth"`
+
+	// Removed in v4.35 - don't reuse these two keys.
+	TETH struct{} `json:"teth"`
+	RETH struct{} `json:"reth"`
 
 	// FiatList contains all enabled fiat currencies.
 	// These are used in the UI as well as by RateUpdater to fetch historical exchange rates.
@@ -87,6 +88,21 @@ type Backend struct {
 	// or set to empty by the frontend if its value matches native locale
 	// as reported by the OS.
 	UserLanguage string `json:"userLanguage"`
+
+	// BtcUnit is the unit used to represent Bitcoin amounts. See `coin.BtcUnit` for details.
+	BtcUnit coin.BtcUnit `json:"btcUnit"`
+
+	// LightningDebugLogs enables SDK debug logging instead of warnings.
+	// Changing it requires restarting the app.
+	LightningDebugLogs bool `json:"lightningDebugLogs"`
+
+	// StartInTestnet represents whether the app should launch in testnet on the next start.
+	// It resets to `false` after the app starts.
+	StartInTestnet bool `json:"startInTestnet"`
+
+	// Gap limits optionally forces gap limits for receive/change addresses used in bitcoin accounts
+	GapLimitReceive int `json:"gapLimitReceive"`
+	GapLimitChange  int `json:"gapLimitChange"`
 }
 
 // DeprecatedCoinActive returns the Active setting for a coin by code.  This call is should not be
@@ -98,7 +114,7 @@ func (backend Backend) DeprecatedCoinActive(code coin.Code) bool {
 		return backend.DeprecatedBitcoinActive
 	case coin.CodeLTC, coin.CodeTLTC:
 		return backend.DeprecatedLitecoinActive
-	case coin.CodeETH, coin.CodeTETH, coin.CodeRETH, coin.CodeERC20TEST:
+	case coin.CodeETH, coin.CodeSEPETH:
 		return backend.DeprecatedEthereumActive
 	default:
 		panic(fmt.Sprintf("unknown code %s", code))
@@ -110,6 +126,29 @@ type AppConfig struct {
 	Backend  Backend     `json:"backend"`
 	Frontend interface{} `json:"frontend"`
 }
+
+var (
+	oldDefaultBTCElectrumServers = []string{
+		"btc1.shiftcrypto.io:443",
+		"btc2.shiftcrypto.io:443",
+	}
+	defaultBTCElectrumServers = []string{
+		"btc1.shiftcrypto.io:443",
+		"btc2.shiftcrypto.io:443",
+		"btc3.shiftcrypto.io:443",
+		"btc4.shiftcrypto.io:443",
+	}
+	oldDefaultLTCElectrumServers = []string{
+		"ltc1.shiftcrypto.io:443",
+		"ltc2.shiftcrypto.io:443",
+	}
+	defaultLTCElectrumServers = []string{
+		"ltc1.shiftcrypto.io:443",
+		"ltc2.shiftcrypto.io:443",
+		"ltc3.shiftcrypto.io:443",
+		"ltc4.shiftcrypto.io:443",
+	}
+)
 
 // O=Shift Crypto, CN=ShiftCrypto R1
 // Serial: d35011c382968211cd4e29fefc144891.
@@ -135,23 +174,13 @@ func NewDefaultAppConfig() AppConfig {
 				UseProxy:     false,
 				ProxyAddress: "",
 			},
+			Authentication:           false,
 			DeprecatedBitcoinActive:  true,
 			DeprecatedLitecoinActive: true,
 			DeprecatedEthereumActive: true,
 
 			BTC: btcCoinConfig{
-				ElectrumServers: []*ServerInfo{
-					{
-						Server:  "btc1.shiftcrypto.io:443",
-						TLS:     true,
-						PEMCert: shiftRootCA,
-					},
-					{
-						Server:  "btc2.shiftcrypto.io:443",
-						TLS:     true,
-						PEMCert: shiftRootCA,
-					},
-				},
+				ElectrumServers: newShiftElectrumServers(defaultBTCElectrumServers),
 			},
 			TBTC: btcCoinConfig{
 				ElectrumServers: []*ServerInfo{
@@ -174,21 +203,15 @@ func NewDefaultAppConfig() AppConfig {
 						TLS:     false,
 						PEMCert: "",
 					},
+					{
+						Server:  "127.0.0.1:52002",
+						TLS:     false,
+						PEMCert: "",
+					},
 				},
 			},
 			LTC: btcCoinConfig{
-				ElectrumServers: []*ServerInfo{
-					{
-						Server:  "ltc1.shiftcrypto.io:443",
-						TLS:     true,
-						PEMCert: shiftRootCA,
-					},
-					{
-						Server:  "ltc2.shiftcrypto.io:443",
-						TLS:     true,
-						PEMCert: shiftRootCA,
-					},
-				},
+				ElectrumServers: newShiftElectrumServers(defaultLTCElectrumServers),
 			},
 			TLTC: btcCoinConfig{
 				ElectrumServers: []*ServerInfo{
@@ -207,16 +230,12 @@ func NewDefaultAppConfig() AppConfig {
 			ETH: ethCoinConfig{
 				DeprecatedActiveERC20Tokens: []string{},
 			},
-			TETH: ethCoinConfig{
-				DeprecatedActiveERC20Tokens: []string{},
-			},
-			RETH: ethCoinConfig{
-				DeprecatedActiveERC20Tokens: []string{},
-			},
 			// Copied from frontend/web/src/components/rates/rates.tsx.
-			FiatList: []string{"USD", "EUR", "CHF"},
-			MainFiat: "USD",
+			FiatList: []string{rates.USD.String(), rates.EUR.String(), rates.CHF.String()},
+			MainFiat: rates.USD.String(),
+			BtcUnit:  coin.BtcUnitDefault,
 		},
+		Frontend: make(map[string]interface{}),
 	}
 }
 
@@ -229,20 +248,28 @@ type Config struct {
 	accountsConfigFilename string
 	accountsConfig         AccountsConfig
 	accountsConfigLock     locker.Locker
+
+	lightningConfigFilename string
+	lightningConfig         LightningConfig
+	lightningConfigLock     locker.Locker
 }
 
 // NewConfig creates a new Config, stored in the given location. The filename must be writable, but
 // does not have to exist.
-func NewConfig(appConfigFilename string, accountsConfigFilename string) (*Config, error) {
+func NewConfig(appConfigFilename string, accountsConfigFilename string, lightningConfigFilename string) (*Config, error) {
 	config := &Config{
 		appConfigFilename: appConfigFilename,
 		appConfig:         NewDefaultAppConfig(),
 
 		accountsConfigFilename: accountsConfigFilename,
-		accountsConfig:         newDefaultAccountsonfig(),
+		accountsConfig:         newDefaultAccountsConfig(),
+
+		lightningConfigFilename: lightningConfigFilename,
+		lightningConfig:         newDefaultLightningConfig(),
 	}
 	config.load()
 	appconf := config.appConfig
+	lightningConf := config.lightningConfig
 	migrateFiatList(&appconf)
 	migrateFiatCode(&appconf)
 	migrateElectrumX(&appconf)
@@ -250,13 +277,16 @@ func NewConfig(appConfigFilename string, accountsConfigFilename string) (*Config
 	if err := config.SetAppConfig(appconf); err != nil {
 		return nil, errp.WithStack(err)
 	}
+	if err := config.ModifyAccountsConfig(migrateActiveTokens); err != nil {
+		return nil, errp.WithStack(err)
+	}
+	if err := config.ModifyLightningConfig(func(cfg *LightningConfig) error {
+		*cfg = lightningConf
+		return nil
+	}); err != nil {
+		return nil, errp.WithStack(err)
+	}
 	return config, nil
-}
-
-// SetBtcOnly sets non-bitcoin accounts in the config to false.
-func (config *Config) SetBtcOnly() {
-	config.appConfig.Backend.DeprecatedLitecoinActive = false
-	config.appConfig.Backend.DeprecatedEthereumActive = false
 }
 
 // SetBTCElectrumServers sets the BTC configuration to the provided electrumIP and electrumCert.
@@ -286,18 +316,25 @@ func (config *Config) SetTBTCElectrumServers(electrumAddress, electrumCert strin
 }
 
 func (config *Config) load() {
-	jsonBytes, err := ioutil.ReadFile(config.appConfigFilename)
+	jsonBytes, err := os.ReadFile(config.appConfigFilename)
 	if err != nil {
 		return
 	}
 	if err := json.Unmarshal(jsonBytes, &config.appConfig); err != nil {
 		return
 	}
-	jsonBytes, err = ioutil.ReadFile(config.accountsConfigFilename)
+	jsonBytes, err = os.ReadFile(config.accountsConfigFilename)
 	if err != nil {
 		return
 	}
 	if err := json.Unmarshal(jsonBytes, &config.accountsConfig); err != nil {
+		return
+	}
+	jsonBytes, err = os.ReadFile(config.lightningConfigFilename)
+	if err != nil {
+		return
+	}
+	if err := json.Unmarshal(jsonBytes, &config.lightningConfig); err != nil {
 		return
 	}
 }
@@ -315,20 +352,59 @@ func (config *Config) SetAppConfig(appConfig AppConfig) error {
 	return config.save(config.appConfigFilename, config.appConfig)
 }
 
-// AccountsConfig returns the accounts config.
-func (config *Config) AccountsConfig() AccountsConfig {
-	defer config.accountsConfigLock.RLock()()
-	return config.accountsConfig
-}
-
-// ModifyAccountsConfig calls f with the current config, allowing f to make any changes, and
+// ModifyAppConfig calls f with the current config, allowing f to make any changes, and
 // persists the result if f returns nil error.  It propagates the f's error as is.
-func (config *Config) ModifyAccountsConfig(f func(*AccountsConfig) error) error {
-	defer config.accountsConfigLock.Lock()()
-	if err := f(&config.accountsConfig); err != nil {
+func (config *Config) ModifyAppConfig(f func(*AppConfig) error) error {
+	defer config.appConfigLock.Lock()()
+	if err := f(&config.appConfig); err != nil {
 		return err
 	}
-	return config.save(config.accountsConfigFilename, config.accountsConfig)
+	return config.save(config.appConfigFilename, config.appConfig)
+}
+
+// AccountsSnapshot returns a coherent copy of the account and keystore records. Mutable metadata
+// and membership slices are detached; immutable signing configurations may be shared.
+func (config *Config) AccountsSnapshot() AccountsConfig {
+	defer config.accountsConfigLock.RLock()()
+	return cloneAccountsConfig(config.accountsConfig)
+}
+
+// ModifyAccountsConfig calls f with a detached copy of the current config and publishes it after it
+// has been persisted. It propagates f's error as is.
+func (config *Config) ModifyAccountsConfig(f func(*AccountsConfig) error) error {
+	defer config.accountsConfigLock.Lock()()
+	accountsConfig := cloneAccountsConfig(config.accountsConfig)
+	if err := f(&accountsConfig); err != nil {
+		return err
+	}
+	if err := config.save(config.accountsConfigFilename, accountsConfig); err != nil {
+		return err
+	}
+	config.accountsConfig = accountsConfig
+	return nil
+}
+
+// LightningConfig returns the lightning config.
+func (config *Config) LightningConfig() LightningConfig {
+	defer config.lightningConfigLock.RLock()()
+	return config.lightningConfig
+}
+
+// ModifyLightningConfig calls f with the current config, allowing f to make any changes, and
+// persists the result if f returns nil error. It propagates f's error as is.
+func (config *Config) ModifyLightningConfig(f func(*LightningConfig) error) error {
+	defer config.lightningConfigLock.Lock()()
+	backup, err := json.Marshal(config.lightningConfig)
+	if err != nil {
+		return errp.WithStack(err)
+	}
+	if err := f(&config.lightningConfig); err != nil {
+		if rollbackErr := json.Unmarshal(backup, &config.lightningConfig); rollbackErr != nil {
+			return errp.Newf("modify lightning config failed: %v; rollback failed: %v", err, rollbackErr)
+		}
+		return err
+	}
+	return config.save(config.lightningConfigFilename, config.lightningConfig)
 }
 
 func (config *Config) save(filename string, conf interface{}) error {
@@ -336,7 +412,10 @@ func (config *Config) save(filename string, conf interface{}) error {
 	if err != nil {
 		return errp.WithStack(err)
 	}
-	return errp.WithStack(ioutil.WriteFile(filename, jsonBytes, 0644)) // #nosec G306
+	if err := os.WriteFile(filename, jsonBytes, 0600); err != nil {
+		return errp.WithStack(err)
+	}
+	return utilconfig.EnsurePrivateFile(filename)
 }
 
 // migrateFiatList moves fiatList from appconf.Frontend to appconf.Backend.
@@ -381,6 +460,16 @@ func migrateElectrumX(appconf *AppConfig) {
 	migrateBTCCoinConfig(&appconf.Backend.TBTC)
 	migrateBTCCoinConfig(&appconf.Backend.LTC)
 	migrateBTCCoinConfig(&appconf.Backend.TLTC)
+	migrateDefaultElectrumServers(
+		&appconf.Backend.BTC,
+		oldDefaultBTCElectrumServers,
+		defaultBTCElectrumServers,
+	)
+	migrateDefaultElectrumServers(
+		&appconf.Backend.LTC,
+		oldDefaultLTCElectrumServers,
+		defaultLTCElectrumServers,
+	)
 }
 
 func migrateBTCCoinConfig(conf *btcCoinConfig) {
@@ -412,6 +501,47 @@ func migrateBTCCoinConfig(conf *btcCoinConfig) {
 			item.PEMCert = shiftRootCA
 		}
 	}
+}
+
+func newShiftElectrumServers(servers []string) []*ServerInfo {
+	result := make([]*ServerInfo, 0, len(servers))
+	for _, server := range servers {
+		result = append(result, &ServerInfo{
+			Server:  server,
+			TLS:     true,
+			PEMCert: shiftRootCA,
+		})
+	}
+	return result
+}
+
+func migrateDefaultElectrumServers(conf *btcCoinConfig, oldServers, newServers []string) {
+	if !matchesShiftElectrumServers(conf, oldServers) {
+		return
+	}
+	conf.ElectrumServers = newShiftElectrumServers(newServers)
+}
+
+func matchesShiftElectrumServers(conf *btcCoinConfig, expected []string) bool {
+	if len(conf.ElectrumServers) != len(expected) {
+		return false
+	}
+
+	remaining := make(map[string]struct{}, len(expected))
+	for _, server := range expected {
+		remaining[server] = struct{}{}
+	}
+
+	for _, server := range conf.ElectrumServers {
+		if server == nil || !server.TLS || server.PEMCert != shiftRootCA {
+			return false
+		}
+		if _, ok := remaining[server.Server]; !ok {
+			return false
+		}
+		delete(remaining, server.Server)
+	}
+	return len(remaining) == 0
 }
 
 // migrateUserLanguage moves userLanguage field from frontend to backend.

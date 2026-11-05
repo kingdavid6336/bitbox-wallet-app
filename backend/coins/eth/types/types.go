@@ -1,16 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package types
 
@@ -18,10 +6,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"math/big"
+	"strings"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/eth/erc20"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth/erc20"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -41,8 +30,34 @@ type TransactionWithMetadata struct {
 	// Only applies if Height > 0.
 	// false if contract execution failed, otherwise true.
 	Success bool
-	// Number of broadcast attempts.
-	BroadcastAttempts uint16
+	// Tip height at which the receipt was last checked successfully.
+	LastReceiptCheckHeight uint64
+	NonceConsumed          bool
+}
+
+// FeeTarget contains the gas price for a specific fee target.
+type FeeTarget struct {
+	// Code is the identifier for the UI.
+	TargetCode accounts.FeeTargetCode
+	// GasTipCap is the maxPriorityFeePerGas as specified by EIP-1559, in Wei.
+	GasTipCap *big.Int
+	// GasFeeCap is the maxFeePerGas (base fee + priority fee) as specified by EIP-1559, in Wei.
+	GasFeeCap *big.Int
+}
+
+// Code returns the btc fee target.
+func (f *FeeTarget) Code() accounts.FeeTargetCode {
+	return f.TargetCode
+}
+
+// FormattedFeeRate returns a string showing the fee rate.
+func (f *FeeTarget) FormattedFeeRate() string {
+	if f.GasFeeCap == nil {
+		return ""
+	}
+	factor := big.NewInt(1e9)
+	s := new(big.Rat).SetFrac(f.GasFeeCap, factor).FloatString(9)
+	return strings.TrimRight(strings.TrimRight(s, "0"), ".") + " Gwei"
 }
 
 // MarshalJSON implements json.Marshaler. Used for DB serialization.
@@ -52,22 +67,24 @@ func (txh *TransactionWithMetadata) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	return json.Marshal(map[string]interface{}{
-		"tx":                txSerialized,
-		"height":            txh.Height,
-		"gasUsed":           hexutil.Uint64(txh.GasUsed),
-		"success":           txh.Success,
-		"broadcastAttempts": txh.BroadcastAttempts,
+		"tx":                     txSerialized,
+		"height":                 txh.Height,
+		"gasUsed":                hexutil.Uint64(txh.GasUsed),
+		"success":                txh.Success,
+		"lastReceiptCheckHeight": txh.LastReceiptCheckHeight,
+		"nonceConsumed":          txh.NonceConsumed,
 	})
 }
 
 // UnmarshalJSON implements json.Unmarshaler. Used for DB serialization.
 func (txh *TransactionWithMetadata) UnmarshalJSON(input []byte) error {
 	m := struct {
-		TransactionRLP    []byte         `json:"tx"`
-		Height            uint64         `json:"height"`
-		GasUsed           hexutil.Uint64 `json:"gasUsed"`
-		Success           bool           `json:"success"`
-		BroadcastAttempts uint16         `json:"broadcastAttempts"`
+		TransactionRLP         []byte         `json:"tx"`
+		Height                 uint64         `json:"height"`
+		GasUsed                hexutil.Uint64 `json:"gasUsed"`
+		Success                bool           `json:"success"`
+		LastReceiptCheckHeight uint64         `json:"lastReceiptCheckHeight"`
+		NonceConsumed          bool           `json:"nonceConsumed"`
 	}{}
 	if err := json.Unmarshal(input, &m); err != nil {
 		return err
@@ -79,44 +96,52 @@ func (txh *TransactionWithMetadata) UnmarshalJSON(input []byte) error {
 	txh.Height = m.Height
 	txh.GasUsed = uint64(m.GasUsed)
 	txh.Success = m.Success
-	txh.BroadcastAttempts = m.BroadcastAttempts
+	txh.LastReceiptCheckHeight = m.LastReceiptCheckHeight
+	txh.NonceConsumed = m.NonceConsumed
 	return nil
+}
+
+// TokenTransfer decodes ERC20 transfer calldata. It does not identify the contract as an ERC20 token.
+func (txh *TransactionWithMetadata) TokenTransfer() (common.Address, *big.Int, bool) {
+	data := txh.Transaction.Data()
+	if len(data) != 68 ||
+		!bytes.Equal(data[:4], []byte{0xa9, 0x05, 0x9c, 0xbb}) ||
+		!bytes.Equal(data[4:16], make([]byte, 12)) || txh.Transaction.Value().Sign() != 0 {
+		return common.Address{}, nil, false
+	}
+	return common.BytesToAddress(data[16:36]), new(big.Int).SetBytes(data[36:]), true
 }
 
 // TransactionData returns the tx data to be shown to the user.
 func (txh *TransactionWithMetadata) TransactionData(
-	tipHeight uint64, erc20Token *erc20.Token) *accounts.TransactionData {
-	data := txh.Transaction.Data()
-	if erc20Token == nil && len(data) > 0 {
-		panic("invalid config")
-	}
-
+	tipHeight uint64, erc20Token *erc20.Token, accountAddress string) *accounts.TransactionData {
 	amount := coin.NewAmount(txh.Transaction.Value())
 	address := txh.Transaction.To().Hex()
 
 	if erc20Token != nil {
-		// ERC20 transfer.
-
-		// An ERC20-Token transfer looks like this:
-		// - Data is <0xa9059cbb><32 bytes address><32 bytes big endian amount>
-		// - Tx value is 0 (contract invocation).
-		if *txh.Transaction.To() != erc20Token.ContractAddress() ||
-			len(data) != 68 ||
-			!bytes.Equal(data[:4], []byte{0xa9, 0x05, 0x9c, 0xbb}) ||
-			txh.Transaction.Value().Cmp(big.NewInt(0)) != 0 {
-			panic("invalid erc20 tx")
+		recipient, value, ok := txh.TokenTransfer()
+		if !ok || *txh.Transaction.To() != erc20Token.ContractAddress() {
+			return nil
 		}
-		data := txh.Transaction.Data()
-		amount = coin.NewAmount(new(big.Int).SetBytes(data[len(data)-32:]))
-		address = common.BytesToAddress(data[4+32-common.AddressLength : 4+32]).Hex()
+		amount = coin.NewAmount(value)
+		address = recipient.Hex()
 	}
 
 	numConfirmations := txh.numConfirmations(tipHeight)
 	nonce := txh.Transaction.Nonce()
+
+	var txType accounts.TxType
+	if address == accountAddress {
+		txType = accounts.TxTypeSendSelf
+	} else {
+		txType = accounts.TxTypeSend
+	}
+
 	return &accounts.TransactionData{
 		Fee: txh.fee(),
 		// ERC20 token transaction pay fees in Ether.
 		FeeIsDifferentUnit:       erc20Token != nil,
+		IsErc20:                  erc20Token != nil,
 		Timestamp:                nil,
 		TxID:                     txh.TxID(),
 		InternalID:               txh.TxID(),
@@ -124,7 +149,7 @@ func (txh *TransactionWithMetadata) TransactionData(
 		NumConfirmations:         numConfirmations,
 		NumConfirmationsComplete: NumConfirmationsComplete,
 		Status:                   txh.status(numConfirmations),
-		Type:                     accounts.TxTypeSend,
+		Type:                     txType,
 		Amount:                   amount,
 		Addresses: []accounts.AddressAndAmount{{
 			Address: address,
@@ -155,7 +180,7 @@ func (txh *TransactionWithMetadata) gas() uint64 {
 
 func (txh *TransactionWithMetadata) numConfirmations(tipHeight uint64) int {
 	confs := 0
-	if txh.Height > 0 {
+	if txh.Height > 0 && tipHeight >= txh.Height {
 		confs = int(tipHeight - txh.Height + 1)
 	}
 	return confs

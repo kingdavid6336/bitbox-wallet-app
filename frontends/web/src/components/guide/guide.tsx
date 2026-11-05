@@ -1,113 +1,68 @@
-/**
- * Copyright 2018 Shift Devices AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import { share } from '../../decorators/share';
-import { Store } from '../../decorators/store';
-import { translate, TranslateProps } from '../../decorators/translate';
-import { setConfig } from '../../utils/config';
-import { apiGet } from '../../utils/request';
-import A from '../anchor/anchor';
-import * as style from './guide.module.css';
+import { ReactNode, useContext, useLayoutEffect } from 'react';
+import { t } from 'i18next';
+import { useTranslation } from 'react-i18next';
+import { A } from '@/components/anchor/anchor';
+import { CloseXWhite } from '@/components/icon';
+import { AppContext } from '@/contexts/AppContext';
+import { Button } from '@/components/forms';
+import style from './guide.module.css';
+import { getFeedbackLink, getSupportLink } from '@/utils/url_constants';
 
-export interface SharedProps {
-    shown: boolean;
-    activeSidebar: boolean;
-    sidebarStatus: string;
-    guideExists: boolean;
-}
+export type TProps = {
+  children?: ReactNode;
+  title?: string;
+};
 
-export const store = new Store<SharedProps>({
-    shown: false,
-    activeSidebar: false,
-    sidebarStatus: '',
-    guideExists: false,
-});
+const Guide = ({ children, title = t('guide.title') }: TProps) => {
+  const { guideShown, toggleGuide, setGuideExists } = useContext(AppContext);
 
-apiGet('config').then(({ frontend }) => {
-    if (frontend && frontend.guideShown != null) { // eslint-disable-line eqeqeq
-        store.setState({ shown: frontend.guideShown });
-    } else {
-        store.setState({ shown: true });
-    }
-});
+  useLayoutEffect(() => {
+    setGuideExists(true);
+    return () => {
+      setGuideExists(false);
+    };
+  }, [setGuideExists]);
 
-function setGuideShown(shown: boolean) {
-    store.setState({ shown });
-    setConfig({ frontend: { guideShown: shown } });
-}
+  const { t } = useTranslation();
+  return (
+    <div className={style.wrapper}>
+      <div
+        data-testid="guide-overlay"
+        className={[style.overlay, guideShown && style.show].join(' ')}
+        onClick={toggleGuide}
+      ></div>
+      <div className={[style.guide, guideShown && style.show].join(' ')}>
+        <div className={[style.header, 'flex flex-row flex-between flex-items-center'].join(' ')}>
+          <h2>{title}</h2>
 
-export function toggle() {
-    setGuideShown(!store.state.shown);
-}
+          <Button transparent className={style.close} onClick={toggleGuide}>
+            <CloseXWhite />
+          </Button>
+        </div>
+        <div className={style.content}>
+          {children}
+          <div className={style.appendix}>
+            {t('guide.appendix.feedback.text')}
+            {' '}
+            <A className={style.link} href={getFeedbackLink()}>
+              {t('guide.appendix.feedback.link')}
+            </A>
+            <br />
+            <br />
+            {t('guide.appendix.text')}
+            {' '}
+            <A className={style.link} href={getSupportLink()}>
+              {t('guide.appendix.link')}
+            </A>
+            <br />
+            <br />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
-export function show() {
-    setGuideShown(true);
-}
-
-export function hide() {
-    setGuideShown(false);
-}
-
-type Props = SharedProps & TranslateProps;
-
-class Guide extends Component<Props> {
-    public componentDidMount() {
-        store.setState({ guideExists: true });
-    }
-
-    public componentWillUnmount() {
-        store.setState({ guideExists: false });
-    }
-
-    public render(
-        { shown, t, children }: RenderableProps<Props>,
-    ) {
-        return (
-            <div className={style.wrapper}>
-                <div className={[style.overlay, shown && style.show].join(' ')} onClick={toggle}></div>
-                <div className={[style.guide, shown && style.show].join(' ')}>
-                    <div className={[style.header, 'flex flex-row flex-between flex-items-center'].join(' ')}>
-                        <h2>{t('guide.title')}</h2>
-                        <a href="#" className={style.close} onClick={toggle}>
-                            {t('guide.toggle.close')}
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                        </a>
-                    </div>
-                    <div className={style.content}>
-                        {children}
-                        <div className={style.entry}>
-                            {t('guide.appendix.text')} <A href={t('guide.appendix.href')}>{t('guide.appendix.link')}</A>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-}
-
-const HOC = translate()(share<SharedProps, TranslateProps>(store)(Guide));
-export { HOC as Guide };
+export { Guide };

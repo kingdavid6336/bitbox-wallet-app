@@ -6,8 +6,8 @@ package mining
 
 import (
 	"github.com/btcsuite/btcd/blockchain"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 )
 
 const (
@@ -29,7 +29,7 @@ type Policy struct {
 	// generating a block template.
 	BlockMaxWeight uint32
 
-	// BlockMinWeight is the minimum block size to be used when generating
+	// BlockMinSize is the minimum block size to be used when generating
 	// a block template.
 	BlockMinSize uint32
 
@@ -112,7 +112,7 @@ func CalcPriority(tx *wire.MsgTx, utxoView *blockchain.UtxoViewpoint, nextBlockH
 	// A compressed pubkey pay-to-script-hash redemption with a maximum len
 	// signature is of the form:
 	// [OP_DATA_73 <73-byte sig> + OP_DATA_35 + {OP_DATA_33
-	// <33 byte compresed pubkey> + OP_CHECKSIG}]
+	// <33 byte compressed pubkey> + OP_CHECKSIG}]
 	//
 	// Thus 1 + 73 + 1 + 1 + 33 + 1 = 110
 	overhead := 0

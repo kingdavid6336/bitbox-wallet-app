@@ -1,0 +1,240 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package mobileserver
+
+import (
+	"io"
+	"log"
+	"sync"
+
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/bridgecommon"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/usb"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/config"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/logging"
+	"github.com/sirupsen/logrus"
+)
+
+var (
+	once sync.Once
+)
+
+const (
+	// AuthResultOk exports backend.AuthResultOk.
+	AuthResultOk string = string(backend.AuthResultOk)
+	// AuthResultErr exports backend.AuthResultErr.
+	AuthResultErr string = string(backend.AuthResultErr)
+	// AuthResultCancel exports backend.AuthResultCancel.
+	AuthResultCancel string = string(backend.AuthResultCancel)
+	// AuthResultMissing exports backend.AuthResultMissing.
+	AuthResultMissing string = string(backend.AuthResultMissing)
+)
+
+func init() {
+	fixTimezone()
+}
+
+// the Go*-named interfaces are implemented in Java for the mobile client. The "Go" prefix is so
+// that the code is more readable in Java (interfaces coming from Go-land). The implemented
+// interfaces are than translated to implement backend.Environment (see see backendEnvironment
+// struct).
+
+// GoReadWriteCloserInterface adapts io.ReadWriteCloser's Read method to return the byte read byte slice
+// instead of the .Read([]byte) pattern. This is as gomobile bind seems to make a copy of passed
+// slices instead of writing directly to it, so the byte slice never makes it back to Go-land.
+type GoReadWriteCloserInterface interface {
+	Read(n int) ([]byte, error)
+	io.Writer
+	io.Closer
+}
+
+// GoDeviceInfoInterface adapts usb.DeviceInfo's Open method to return the adapted ReadWriteCloser.
+type GoDeviceInfoInterface interface {
+	IsBluetooth() bool
+	VendorID() int
+	ProductID() int
+	UsagePage() int
+	Interface() int
+	Serial() string
+	Product() string
+	Identifier() string
+	Open() (GoReadWriteCloserInterface, error)
+}
+
+// GoEnvironmentInterface adapts backend.Environment to return only one DeviceInfo instead of a
+// slice of them, as a slice of interfaces does not seem to be supported by gomobile yet.
+type GoEnvironmentInterface interface {
+	NotifyUser(string)
+	DeviceInfo() GoDeviceInfoInterface
+	SystemOpen(string) error
+	UsingMobileData() bool
+	NativeLocale() string
+	GetSaveFilename(string) string
+	SetDarkTheme(bool)
+	DetectDarkTheme() bool
+	Auth()
+	OnAuthSettingChanged(bool)
+	CanEncryptLightningMnemonic() bool
+	StoreLightningEncryptionKey(string, string) error
+	LoadLightningEncryptionKey(string) (string, error)
+	DeleteLightningEncryptionKey(string) error
+	BluetoothConnect(string)
+	UserAgentPlatform() string
+}
+
+// readWriteCloser implements io.ReadWriteCloser, translating from GoReadWriteCloserInterface. All methods
+// are as-is except for Read().
+type readWriteCloser struct {
+	GoReadWriteCloserInterface
+}
+
+// Read implements io.ReadWriteCloser, translating GoReadWriteCloserInterface.Read, which returns a slice
+// instead receiving it as an argument.
+func (r readWriteCloser) Read(readBytesOut []byte) (int, error) {
+	readBytes, err := r.GoReadWriteCloserInterface.Read(len(readBytesOut))
+	if err != nil {
+		return 0, err
+	}
+	copy(readBytesOut, readBytes)
+	return len(readBytes), nil
+}
+
+// deviceInfo implements usb.DeviceInfo, translating from GoDeviceInfoInterface. All methods are as-is except
+// for the Open method.
+type deviceInfo struct {
+	GoDeviceInfoInterface
+}
+
+// Open implements usb.DeviceInfo.
+func (d deviceInfo) Open() (io.ReadWriteCloser, error) {
+	device, err := d.GoDeviceInfoInterface.Open()
+	if err != nil {
+		return nil, err
+	}
+	return readWriteCloser{device}, nil
+}
+
+// GoAPIInterface is used to pas api (GET/POST) responses and websocket push notifications to
+// Android/iOS.
+type GoAPIInterface interface {
+	bridgecommon.NativeCommunication
+}
+
+// BackendCall bridges GET/POST calls (serverless, directly calling the backend handlers).
+func BackendCall(queryID int, jsonQuery string) {
+	bridgecommon.BackendCall(queryID, jsonQuery)
+}
+
+// HandleURI wraps bridgecommon.HandleURI.
+func HandleURI(uri string) {
+	bridgecommon.HandleURI(uri)
+}
+
+// UsingMobileDataChanged exposes `bridgecommon.UsingMobileDataChanged` to Java/Kotlin.
+func UsingMobileDataChanged() {
+	bridgecommon.UsingMobileDataChanged()
+}
+
+// SetOnline exposes `bridgecommon.SetOnline` to Java/Kotlin.
+func SetOnline(online bool) {
+	bridgecommon.SetOnline(online)
+}
+
+// UsbUpdate exposes `bridgecommon.UsbUpdate` to Java/Kotlin.
+func UsbUpdate() {
+	bridgecommon.UsbUpdate()
+}
+
+type goLogHook struct {
+}
+
+func (hook goLogHook) Levels() []logrus.Level {
+	return []logrus.Level{
+		logrus.PanicLevel,
+		logrus.FatalLevel,
+		logrus.ErrorLevel,
+		logrus.WarnLevel,
+		logrus.InfoLevel,
+		logrus.DebugLevel,
+	}
+}
+
+func (hook goLogHook) Fire(entry *logrus.Entry) error {
+	log.Print(entry.String())
+	return nil
+}
+
+// initialize configures shared process state before either a widget or the wallet uses it.
+func initialize(dataDir string) {
+	once.Do(func() {
+		config.SetAppDir(dataDir)
+
+		// log via builtin log package, as that is redirected to Android's logcat.
+		logging.Get().AddHook(goLogHook{})
+	})
+}
+
+// Serve serves the BitBoxApp API for use in a mobile client. It is called when the application
+// is started or wakes up from sleep.
+func Serve(dataDir string, testnet bool, environment GoEnvironmentInterface, goAPI GoAPIInterface) {
+	initialize(dataDir)
+
+	bridgecommon.Serve(
+		testnet,
+		false,
+		nil,
+		goAPI,
+		&bridgecommon.BackendEnvironment{
+			NotifyUserFunc: environment.NotifyUser,
+			DeviceInfosFunc: func() []usb.DeviceInfo {
+				i := environment.DeviceInfo()
+				if i == nil {
+					return []usb.DeviceInfo{}
+				}
+				return []usb.DeviceInfo{deviceInfo{i}}
+			},
+			SystemOpenFunc:                   environment.SystemOpen,
+			UsingMobileDataFunc:              environment.UsingMobileData,
+			NativeLocaleFunc:                 environment.NativeLocale,
+			NumberFormatFunc:                 func() *backend.NumberFormat { return nil },
+			GetSaveFilenameFunc:              environment.GetSaveFilename,
+			SetDarkThemeFunc:                 environment.SetDarkTheme,
+			DetectDarkThemeFunc:              environment.DetectDarkTheme,
+			AuthFunc:                         environment.Auth,
+			OnAuthSettingChangedFunc:         environment.OnAuthSettingChanged,
+			CanEncryptLightningMnemonicFunc:  environment.CanEncryptLightningMnemonic,
+			StoreLightningEncryptionKeyFunc:  environment.StoreLightningEncryptionKey,
+			LoadLightningEncryptionKeyFunc:   environment.LoadLightningEncryptionKey,
+			DeleteLightningEncryptionKeyFunc: environment.DeleteLightningEncryptionKey,
+			BluetoothConnectFunc:             environment.BluetoothConnect,
+			UserAgentPlatformFunc:            environment.UserAgentPlatform,
+		},
+	)
+}
+
+// Shutdown is cleaning up after Serve. It is called when the application is closed or goes to
+// sleep.
+func Shutdown() {
+	bridgecommon.Shutdown()
+}
+
+// TriggerAuth triggers an auth required notification towards the frontend.
+func TriggerAuth() {
+	bridgecommon.TriggerAuth()
+}
+
+// AuthResult triggers an auth feedback notification (auth-ok/auth-err/..) towards the frontend,
+// depending on the input value.
+func AuthResult(result string) {
+	bridgecommon.AuthResult(backend.AuthResultType(result))
+}
+
+// ManualReconnect wraps bridgecommon.ManualReconnect.
+func ManualReconnect() {
+	bridgecommon.ManualReconnect()
+}
+
+// BluetoothSetState wraps bridgecommon.BluetoothSetState.
+func BluetoothSetState(jsonState string) error {
+	return bridgecommon.BluetoothSetState(jsonState)
+}

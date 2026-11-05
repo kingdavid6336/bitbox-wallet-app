@@ -1,106 +1,225 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { ReactNode } from 'react';
+import { FullscreenBanners } from '@/components/banners/fullscreen';
+import { useDarkmode } from '@/hooks/darkmode';
+import { LanguageSwitch } from '@/components/language/language';
+import { Version } from '@/components/layout/version';
+import { AppLogo, AppLogoInverted, SwissMadeOpenSource, SwissMadeOpenSourceDark } from '@/components/icon/logo';
+import { AnimatedChecked, Abort, Close } from '@/components/icon/icon';
+import { UseBackButton } from '@/hooks/backbutton';
+import style from './view.module.css';
+
+type TViewProps = {
+  dialog?: boolean;
+  fitContent?: boolean;
+  fullscreen?: boolean;
+  children: ReactNode;
+  minHeight?: string;
+  onClose?: () => void;
+  scrollableContent?: boolean;
+  textCenter?: boolean;
+  verticallyCentered?: boolean;
+  width?: string;
+  withBottomBar?: boolean;
+  withMobileSafetyMargin?: boolean;
+};
+
 /**
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * View component is used as a container component to wrap ViewHeader, ViewContent and ViewButtons
+ * @param dialog wether to render the view as a dialog
+ * @param fitContent tries to squeeze the whole view into the visible area, if true the icon specified through ViewContent withIcon will shrink if the visible area is bigger than the window height
+ * @param fullscreen wether the View container should cover the whole window
+ * @param minHeight optional minimum height, useful for keeping content area same size through multiple views
+ * @param onClose if a callback is provided it will render a close button that triggers the callback
+ * @param scrollableContent keeps the view within the visible area so that a scrollable element in the content area scrolls instead of the page, which keeps the buttons in view, implies fitContent
+ * @param textCenter centers all text content in the view
+ * @param verticallyCentered centers all text content in the view, has no effect in dialog mode
+ * @param width can be used to overwrite the default width of the inner area
+ * @param withBottomBar enables a footer with some logo and language switch
+ * @param withMobileSafetyMargin adds a small horizontal inset on mobile
  */
-
-import { h, RenderableProps } from 'preact';
-import { AppLogo } from '../icon';
-import { Footer } from '../layout';
-import { SwissMadeOpenSource } from '../icon/logo';
-import { Close } from '../icon/icon';
-import * as style from './view.module.css';
-
-type Props = {
-    center?: boolean;
-    onClose?: () => void;
-    position?: 'fill' | 'fullscreen';
-    width?: string;
-    withBottomBar?: boolean;
-}
-
-export function View({
-    center = false,
-    children,
-    onClose,
-    position = 'fill',
-    width,
-    withBottomBar,
-}: RenderableProps<Props>) {
-    const styles = width ? { style: `width: ${width}` } : undefined;
-    return (
-        <div className={position === 'fullscreen' ? style.fullscreen : style.fill}>
-            <div
-                className={center ? `${style.inner} ${style.center}` : style.inner}
-                {...styles}>
-                {children}
+export const View = ({
+  dialog = false,
+  fitContent = false,
+  fullscreen,
+  children,
+  minHeight,
+  onClose,
+  scrollableContent = false,
+  textCenter,
+  verticallyCentered = false,
+  width,
+  withBottomBar,
+  withMobileSafetyMargin = false,
+}: TViewProps) => {
+  const { isDarkMode } = useDarkmode();
+  const containerClasses = `
+    ${style[fullscreen ? 'fullscreen' : 'fill'] || ''}
+    ${scrollableContent && style.scrollableContent || ''}
+    ${verticallyCentered && style.verticallyCentered || ''}
+    ${dialog && style.dialog || ''}
+    ${withMobileSafetyMargin && style.withMobileSafetyMargin || ''}
+  `;
+  let classNames = style.inner;
+  if (fitContent || scrollableContent) {
+    classNames += ` ${style.fit || ''}`;
+  }
+  if (textCenter) {
+    classNames += ` ${style.textCenter || ''}`;
+  }
+  const inlineStyles = {
+    ...(minHeight && { minHeight }),
+    ...(width && { width }),
+  };
+  return (
+    <div className={containerClasses}>
+      {fullscreen && (
+        <div className={style.banners}>
+          <FullscreenBanners />
+        </div>
+      )}
+      <div
+        className={classNames}
+        style={inlineStyles}>
+        {children}
+      </div>
+      {onClose && (
+        <>
+          <UseBackButton handler={() => {
+            onClose();
+            return false;
+          }} />
+          <button className={style.closeButton} onClick={onClose}>
+            <Close />
+          </button>
+        </>
+      )}
+      {withBottomBar && (
+        <div style={{ marginTop: 'auto' }}>
+          <footer className={style.footer}>
+            {isDarkMode ? (<SwissMadeOpenSourceDark />) : (<SwissMadeOpenSource />)}
+            <div className="m-right-half hide-on-small">
+              <Version />
             </div>
-            {onClose && (
-                <button className={style.closeButton} onClick={onClose}>
-                    <Close />
-                </button>
-            )}
-            {withBottomBar && (
-                <div style="margin-top: auto;">
-                    <Footer>
-                        <SwissMadeOpenSource />
-                    </Footer>
-                </div>
-            )}
+            <LanguageSwitch />
+          </footer>
         </div>
-    );
-}
+      )}
+    </div>
+  );
+};
 
-type ViewContentProps = {
-    fullWidth?: boolean;
-}
+type TViewContentProps = {
+  children: ReactNode;
+  fullWidth?: boolean;
+  minHeight?: string;
+  textAlign?: 'center' | 'left';
+  withIcon?: 'success' | 'error';
+};
 
-export function ViewContent({
-    children,
-    fullWidth,
-}: RenderableProps<ViewContentProps>) {
-    const classes = `${style.content} ${fullWidth ? style.fullWidth : ''}`;
+const ViewIcon = ({
+  withIcon,
+}: Pick<TViewContentProps, 'withIcon'>) => {
+  switch (withIcon) {
+  case 'error':
     return (
-        <div className={classes}>{children}</div>
+      <Abort className={style.largeIcon} />
     );
-}
-
-type HeaderProps = {
-    small?: boolean;
-    title: string;
-    withAppLogo?: boolean;
-}
-
-export function ViewHeader({
-    children,
-    small,
-    title,
-    withAppLogo,
-}: RenderableProps<HeaderProps>) {
-    const headerStyles = small ? `${style.header} ${style.smallHeader}` : style.header;
+  case 'success':
     return (
-        <header className={headerStyles}>
-            {withAppLogo && <AppLogo />}
-            <h1 className={style.title}>{title}</h1>
-            {children}
-        </header>
+      <AnimatedChecked className={style.largeIcon} />
     );
-}
+  }
+  return null;
+};
 
-export function ViewButtons({ children }) {
-    return (
-        <div className={style.buttons}>
-            {children}
-        </div>
-    );
-}
+/**
+ * ViewContent useful for all sorts of content, text, images, grids and forms
+ * @param fullWidth useful to present content on small screen on the full width of the screen
+ * @param minHeight can be used to set a minimum content height to keep the same height over multiple views
+ * @param textAlign allows overwriting text alignment in the content area
+ * @param withIcon supports success icon currently, but could support other icons in the future
+ */
+export const ViewContent = ({
+  children,
+  fullWidth,
+  minHeight,
+  textAlign,
+  withIcon,
+  ...props
+}: TViewContentProps) => {
+  const align = textAlign && style[`text-${textAlign}`] || '';
+  const containerWidth = fullWidth && style.fullWidth || '';
+  const classes = `${style.content || ''} ${containerWidth} ${align}`;
+  return (
+    <div
+      className={classes}
+      style={minHeight ? { minHeight } : {}}
+      {...props}>
+      <ViewIcon withIcon={withIcon} />
+      {children}
+    </div>
+  );
+};
+
+type THeaderProps = {
+  small?: boolean;
+  title?: ReactNode;
+  withAppLogo?: boolean;
+  children?: ReactNode;
+  className?: string;
+};
+
+/**
+ * ViewHeader component to render the view's title and a byline
+ * @param small option to reduce the size of the header
+ * @param title the title of the view
+ * @param withAppLogo if true includes the BitBoxApp logo before the title
+ */
+export const ViewHeader = ({
+  children,
+  small,
+  title,
+  withAppLogo,
+  className = ''
+}: THeaderProps) => {
+  const { isDarkMode } = useDarkmode();
+  const headerStyles = (
+    small ? `
+    ${style.header || ''}
+    ${style.smallHeader || ''}
+  ` : style.header
+  );
+  return (
+    <header className={`${headerStyles || ''} ${className || ''}`}>
+      {withAppLogo && (
+        isDarkMode ? <AppLogoInverted /> : <AppLogo />
+      )}
+      {title && (
+        <h1 className={style.title}>{title}</h1>
+      )}
+      {children}
+    </header>
+  );
+};
+
+type TViewButtonsProps = {
+  reverseRow?: boolean;
+  children?: ReactNode;
+};
+
+/**
+ * ViewButtons component use as container for buttons
+ */
+export const ViewButtons = ({ reverseRow, children }: TViewButtonsProps) => {
+  const classNames = `
+    ${style.buttons || ''}
+    ${reverseRow && style.reverseRow || ''}
+  `;
+  return (
+    <div className={classNames}>
+      {children}
+    </div>
+  );
+};

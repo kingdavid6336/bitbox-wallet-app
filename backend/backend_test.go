@@ -1,44 +1,556 @@
-// Copyright 2021 Shift Crypto AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package backend
 
 import (
+	"context"
+	"math/big"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc"
-	coinpkg "github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
-	keystoremock "github.com/digitalbitbox/bitbox-wallet-app/backend/keystore/mocks"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/keystore/software"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/signing"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts"
+	accountsMocks "github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/mocks"
+	accounttypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/arguments"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/addresses"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/blockchain"
+	blockchainMocks "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/blockchain/mocks"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/types"
+	coinpkg "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth/erc20"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth/rpcclient/mocks"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/config"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/devices/usb"
+	keystoremock "github.com/BitBoxSwiss/bitbox-wallet-app/backend/keystore/mocks"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/keystore/software"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/lightning"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/signing"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/test"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
+func TestMain(m *testing.M) {
+	test.TstSetupLogging()
+	os.Exit(m.Run())
+}
+
+func mustKeypath(keypath string) signing.AbsoluteKeypath {
+	kp, err := signing.NewAbsoluteKeypath(keypath)
+	if err != nil {
+		panic(err)
+	}
+	return kp
+}
+
+func keystoreHelper1() *software.Keystore {
+	// From mnemonic: wisdom minute home employ west tail liquid mad deal catalog narrow mistake
+	rootKey := test.TstMustXKey("xprv9s21ZrQH143K3gie3VFLgx8JcmqZNsBcBc6vAdJrsf4bPRhx69U8qZe3EYAyvRWyQdEfz7ZpyYtL8jW2d2Lfkfh6g2zivq8JdZPQqxoxLwB")
+	return software.NewKeystore(rootKey)
+}
+
+func keystoreHelper2() *software.Keystore {
+	// From mnemonic: lava scare swap mystery lawsuit army rubber clean mean bronze keen volcano
+	rootKey := test.TstMustXKey("xprv9s21ZrQH143K3cfe2832UrUDA5jmFWvm3acoempvZofxin26VdqjosJfTjHsVgjgszDYHiEgepM7J7U9N7HpayNZDRPUoxGKQbJCuHzgnuy")
+	return software.NewKeystore(rootKey)
+}
+
+var rootFingerprint1 = []byte{0x55, 0x55, 0x55, 0x55}
+
+var rootFingerprint2 = []byte{0x66, 0x66, 0x66, 0x66}
+
+// A keystore with a similar config to a BitBox02 Multi - supporting unified and multiple accounts,
+// no legacy P2PKH.
+func makeBitBox02Multi() *keystoremock.KeystoreMock {
+	ksHelper := keystoreHelper1()
+	return &keystoremock.KeystoreMock{
+		ObserveFunc: func(func(observable.Event)) func() {
+			return func() {}
+		},
+		NameFunc: func() (string, error) {
+			return "Mock name", nil
+		},
+		RootFingerprintFunc: func() ([]byte, error) {
+			return rootFingerprint1, nil
+		},
+		SupportsCoinFunc: func(coin coinpkg.Coin) bool {
+			return true
+		},
+		SupportsAccountFunc: func(coin coinpkg.Coin, meta interface{}) bool {
+			switch coin.(type) {
+			case *btc.Coin:
+				scriptType := meta.(signing.ScriptType)
+				return scriptType != signing.ScriptTypeP2PKH
+			default:
+				return true
+			}
+		},
+		ExtendedPublicKeyFunc: ksHelper.ExtendedPublicKey,
+		BTCXPubsFunc:          ksHelper.BTCXPubs,
+	}
+}
+
+// A keystore with a similar config to a BitBox02 Bitcon-only - supporting unified and multiple
+// accounts, no legacy P2PKH.
+func makeBitBox02BTCOnly() *keystoremock.KeystoreMock {
+	ks := makeBitBox02Multi()
+	ks.SupportsCoinFunc = func(coin coinpkg.Coin) bool {
+		return coin.Code() == coinpkg.CodeBTC || coin.Code() == coinpkg.CodeTBTC || coin.Code() == coinpkg.CodeRBTC
+	}
+	ks.SupportsAccountFunc = func(coin coinpkg.Coin, meta interface{}) bool {
+		switch coin.(type) {
+		case *btc.Coin:
+			scriptType := meta.(signing.ScriptType)
+			return coin.Code() == coinpkg.CodeBTC && scriptType != signing.ScriptTypeP2PKH
+		default:
+			return false
+		}
+	}
+	return ks
+}
+
+func MockBtcAccount(t *testing.T, config *accounts.AccountConfig, coin *btc.Coin, gapLimits *types.GapLimits, log *logrus.Entry) *accountsMocks.InterfaceMock {
+	t.Helper()
+	return &accountsMocks.InterfaceMock{
+		ObserveFunc: func(func(observable.Event)) func() {
+			return func() {}
+		},
+		CoinFunc: func() coinpkg.Coin {
+			return coin
+		},
+		ConfigFunc: func() *accounts.AccountConfig {
+			return config
+		},
+		InitializeFunc: func() error {
+			return nil
+		},
+		TransactionsFunc: func() (accounts.OrderedTransactions, error) {
+			return nil, nil
+		},
+		BalanceFunc: func() (*accounts.Balance, error) {
+			return &accounts.Balance{}, nil
+		},
+		FatalErrorFunc: func() bool {
+			return false
+		},
+		GetUnusedReceiveAddressesFunc: func() ([]accounts.AddressList, error) {
+			result := []accounts.AddressList{}
+			for _, signingConfig := range config.SigningConfigurations {
+				scriptType := signingConfig.ScriptType()
+				if scriptType == signing.ScriptTypeP2WPKHP2SH {
+					// We don't support wrapped segwit in receive flows anymore.
+					continue
+				}
+				addressChain := addresses.NewAddressChain(
+					signingConfig,
+					coin.Net(), 20, false,
+					func(*addresses.AccountAddress) (bool, error) {
+						return false, nil
+					},
+					log)
+				addresses, err := addressChain.EnsureAddresses()
+				require.NoError(t, err)
+				result = append(result, accounts.AddressList{
+					ScriptType: &scriptType,
+					Addresses: []accounts.Address{
+						addresses[0],
+					},
+				})
+
+			}
+			return result, nil
+		},
+		CloseFunc:  func() {},
+		SyncedFunc: func() bool { return true },
+	}
+}
+
+func MockEthAccount(config *accounts.AccountConfig, coin *eth.Coin, log *logrus.Entry) *accountsMocks.InterfaceMock {
+	return &accountsMocks.InterfaceMock{
+		ObserveFunc: func(func(observable.Event)) func() {
+			return func() {}
+		},
+		CoinFunc: func() coinpkg.Coin {
+			return coin
+		},
+		ConfigFunc: func() *accounts.AccountConfig {
+			return config
+		},
+		InitializeFunc: func() error {
+			return nil
+		},
+		TransactionsFunc: func() (accounts.OrderedTransactions, error) {
+			return nil, nil
+		},
+		FatalErrorFunc: func() bool { return false },
+		GetUnusedReceiveAddressesFunc: func() ([]accounts.AddressList, error) {
+			return []accounts.AddressList{
+				{
+					Addresses: []accounts.Address{
+						eth.Address{
+							Address: crypto.PubkeyToAddress(
+								*config.SigningConfigurations[0].PublicKey().ToECDSA()),
+						},
+					},
+				},
+			}, nil
+		},
+		CloseFunc:  func() {},
+		SyncedFunc: func() bool { return true },
+	}
+}
+
+func TestIsWhitelistedSystemOpenURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		allowed bool
+	}{
+		{
+			name:    "allows exact host and path",
+			url:     "https://bitbox.swiss/download/",
+			allowed: true,
+		},
+		{
+			name:    "allows support domain without path",
+			url:     "https://support.bitbox.swiss/de_DE/",
+			allowed: true,
+		},
+		{
+			name:    "allows uppercase host",
+			url:     "https://SUPPORT.BITBOX.SWISS/de_DE/",
+			allowed: true,
+		},
+		{
+			name:    "allows uppercase scheme",
+			url:     "HTTPS://support.bitbox.swiss/de_DE/",
+			allowed: true,
+		},
+		{
+			name:    "allows default https port",
+			url:     "https://bitbox.swiss:443/download/",
+			allowed: true,
+		},
+		{
+			name:    "allows exact app settings URL",
+			url:     "app-settings:",
+			allowed: true,
+		},
+		{
+			name:    "allows Spark website",
+			url:     "https://www.spark.money/",
+			allowed: true,
+		},
+		{
+			name:    "allows Breez SDK website",
+			url:     "https://breez.technology/sdk/",
+			allowed: true,
+		},
+		{
+			name:    "allows path below whitelist entry without trailing slash",
+			url:     "https://bitsurance.eu/support/faq",
+			allowed: true,
+		},
+		{
+			name:    "blocks host prefix bypass",
+			url:     "https://support.bitbox.swiss.evil.example/de_DE/",
+			allowed: false,
+		},
+		{
+			name:    "blocks path prefix bypass",
+			url:     "https://mempool.space/txevil/123",
+			allowed: false,
+		},
+		{
+			name:    "blocks path prefix bypass without trailing slash",
+			url:     "https://bitsurance.eu/supportevil/123",
+			allowed: false,
+		},
+		{
+			name:    "blocks path traversal out of whitelisted path",
+			url:     "https://bitsurance.eu/support/../evil",
+			allowed: false,
+		},
+		{
+			name:    "blocks app settings URL suffix",
+			url:     "app-settings:evil",
+			allowed: false,
+		},
+		{
+			name:    "blocks non-default port",
+			url:     "https://bitbox.swiss:444/download/",
+			allowed: false,
+		},
+		{
+			name:    "blocks userinfo",
+			url:     "https://attacker.example@bitbox.swiss/download/",
+			allowed: false,
+		},
+		{
+			name:    "blocks wrong scheme",
+			url:     "http://bitbox.swiss/download/",
+			allowed: false,
+		},
+		{
+			name:    "blocks malformed URL",
+			url:     "://bitbox.swiss/download/",
+			allowed: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.allowed, isWhitelistedSystemOpenURL(tt.url))
+		})
+	}
+}
+
+type environment struct{}
+
+func (e environment) NotifyUser(msg string) {
+}
+
+func (e environment) DeviceInfos() []usb.DeviceInfo {
+	return []usb.DeviceInfo{}
+}
+
+func (e environment) SystemOpen(url string) error {
+	return nil
+}
+
+func (e environment) UsingMobileData() bool {
+	return false
+}
+
+func (e environment) NativeLocale() string {
+	return ""
+}
+
+func (e environment) NumberFormat() *NumberFormat {
+	return nil
+}
+
+func (e environment) GetSaveFilename(string) string {
+	return ""
+}
+
+func (e environment) SetDarkTheme(bool) {
+	// nothing to do here.
+}
+
+func (e environment) DetectDarkTheme() bool {
+	return false
+}
+
+func (e environment) Auth() {}
+
+func (e environment) OnAuthSettingChanged(bool) {}
+
+func (e environment) CanEncryptLightningMnemonic() bool { return false }
+
+func (e environment) StoreLightningEncryptionKey(string, string) error { return nil }
+
+func (e environment) LoadLightningEncryptionKey(string) (string, error) { return "", nil }
+
+func (e environment) DeleteLightningEncryptionKey(string) error { return nil }
+
+func (e environment) BluetoothConnect(string) {}
+
+func (e environment) UserAgentPlatform() string {
+	return "linux"
+}
+
+type mockTransactionsSource struct {
+}
+
+func (m *mockTransactionsSource) Transactions(
+	blockTipHeight *big.Int,
+	address common.Address, endBlock *big.Int, erc20Token *erc20.Token) (
+	[]*accounts.TransactionData, error) {
+	return []*accounts.TransactionData{}, nil
+}
+
+func newBackend(t *testing.T, testing, regtest bool) *Backend {
+	t.Helper()
+	return newBackendWithDevServers(t, testing, regtest, true)
+}
+
+func newBackendWithDevServers(t *testing.T, testing, regtest, devServers bool) *Backend {
+	t.Helper()
+	b, err := NewBackend(
+		arguments.NewArguments(
+			test.TstTempDir("appfolder"),
+			testing, regtest,
+			devServers,
+			&types.GapLimits{Receive: 20, Change: 6}),
+		environment{},
+	)
+	b.tstCheckAccountUsed = func(accounts.Interface) bool {
+		return false
+	}
+	b.ratesUpdater.SetCoingeckoURL("unused") // avoid hitting real API
+
+	b.makeBtcAccount = func(config *accounts.AccountConfig, coin *btc.Coin, gapLimits *types.GapLimits, getAddress func(coinpkg.Code, blockchain.ScriptHashHex) (*addresses.AccountAddress, error), log *logrus.Entry) accounts.Interface {
+		return MockBtcAccount(t, config, coin, gapLimits, log)
+	}
+	b.makeEthAccount = func(config *accounts.AccountConfig, coin *eth.Coin, log *logrus.Entry) accounts.Interface {
+		return MockEthAccount(config, coin, log)
+	}
+
+	// avoid hitting real API for BTC coins.
+	for _, code := range []coinpkg.Code{
+		coinpkg.CodeBTC,
+		coinpkg.CodeTBTC,
+		coinpkg.CodeRBTC,
+		coinpkg.CodeLTC,
+		coinpkg.CodeTLTC,
+	} {
+		c, err := b.Coin(code)
+		require.NoError(t, err)
+		c.(*btc.Coin).TstSetMakeBlockchain(func() blockchain.Interface {
+			return &blockchainMocks.BlockchainMock{}
+		})
+	}
+
+	// avoid hitting real API for ETH coins.
+	for _, code := range []coinpkg.Code{
+		coinpkg.CodeETH,
+		coinpkg.CodeSEPETH,
+	} {
+		c, err := b.Coin(code)
+		require.NoError(t, err)
+		c.(*eth.Coin).TstSetClient(&mocks.InterfaceMock{
+			EstimateGasFunc: func(ctx context.Context, call ethereum.CallMsg) (uint64, error) {
+				return 21000, nil
+			},
+			BlockNumberFunc: func(ctx context.Context) (*big.Int, error) {
+				return big.NewInt(100), nil
+			},
+			BalanceFunc: func(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
+				return big.NewInt(1e18), nil
+			},
+			PendingNonceAtFunc: func(ctx context.Context, account common.Address) (uint64, error) {
+				return 0, nil
+			},
+		})
+		c.(*eth.Coin).TstSetTransactionsSource(&mockTransactionsSource{})
+	}
+	require.NoError(t, err)
+	return b
+}
+
+func TestDevicesRegisteredReturnsSnapshot(t *testing.T) {
+	b := newBackend(t, testnetDisabled, regtestDisabled)
+	defer b.Close()
+
+	unlock := b.devicesLock.Lock()
+	b.devices["device-id"] = nil
+	unlock()
+
+	devices := b.DevicesRegistered()
+	delete(devices, "device-id")
+
+	require.Contains(t, b.DevicesRegistered(), "device-id")
+}
+
+func TestClearCachePreservesUserData(t *testing.T) {
+	b := newBackend(t, false, false)
+	defer b.Close()
+	oldRatesUpdater := b.ratesUpdater
+	oldBTCCoin, err := b.Coin(coinpkg.CodeBTC)
+	require.NoError(t, err)
+
+	cacheFile := filepath.Join(b.arguments.CacheDirectoryPath(), "dummy-cache-file")
+	require.NoError(t, os.WriteFile(cacheFile, []byte("cache"), 0600))
+
+	lightningFile := filepath.Join(b.arguments.LightningDirectoryPath(), "dummy-breez-database")
+	require.NoError(t, os.WriteFile(lightningFile, []byte("lightning"), 0600))
+
+	noteFile := filepath.Join(b.arguments.NotesDirectoryPath(), "dummy-note-file")
+	require.NoError(t, os.WriteFile(noteFile, []byte("note"), 0600))
+	contact, err := b.Lightning().Contacts().Save(lightning.Contact{Address: "nora@example.com"})
+	require.NoError(t, err)
+
+	require.FileExists(t, b.arguments.AppConfigFilename())
+	require.FileExists(t, b.arguments.AccountsConfigFilename())
+
+	require.NoError(t, b.ClearCache())
+	newBTCCoin, err := b.Coin(coinpkg.CodeBTC)
+	require.NoError(t, err)
+	lightningRatesUpdater, lightningBTCCoin := b.lightning.TstRuntimeDependencies()
+
+	require.NotSame(t, oldRatesUpdater, b.ratesUpdater)
+	require.NotSame(t, oldBTCCoin, newBTCCoin)
+	require.Same(t, b.ratesUpdater, lightningRatesUpdater)
+	require.Same(t, newBTCCoin, lightningBTCCoin)
+	require.NoFileExists(t, cacheFile)
+	require.DirExists(t, filepath.Join(b.arguments.CacheDirectoryPath(), "exchangerates"))
+	require.FileExists(t, lightningFile)
+	require.FileExists(t, noteFile)
+	require.FileExists(t, b.arguments.AppConfigFilename())
+	require.FileExists(t, b.arguments.AccountsConfigFilename())
+	contacts, err := b.Lightning().Contacts().List(contact.Address)
+	require.NoError(t, err)
+	require.Equal(t, []lightning.Contact{*contact}, contacts.Contacts)
+	require.Equal(t, &contact.ID, contacts.MatchingContactID)
+}
+
+func TestLightningContactsPreservedAcrossWallets(t *testing.T) {
+	b := newBackend(t, false, false)
+	defer b.Close()
+	service := b.Lightning()
+	store := service.Contacts()
+	contact, err := store.Save(lightning.Contact{Address: "nora@example.com"})
+	require.NoError(t, err)
+
+	for _, code := range []accounttypes.Code{"v0-wallet1-ln-0", "v0-wallet2-ln-0"} {
+		require.NoError(t, b.Lightning().SetAccount(&config.LightningAccountConfig{Code: code}))
+		require.NoError(t, b.Lightning().Deactivate())
+		require.Same(t, service, b.Lightning())
+		require.Same(t, store, service.Contacts())
+		contacts, err := store.List(contact.Address)
+		require.NoError(t, err)
+		require.Equal(t, []lightning.Contact{*contact}, contacts.Contacts)
+		contacts, err = lightning.NewContacts(b.arguments.NotesDirectoryPath()).List(contact.Address)
+		require.NoError(t, err)
+		require.Equal(t, []lightning.Contact{*contact}, contacts.Contacts)
+		require.Equal(t, &contact.ID, contacts.MatchingContactID)
+	}
+}
+
 func TestRegisterKeystore(t *testing.T) {
 	// From mnemonic: wisdom minute home employ west tail liquid mad deal catalog narrow mistake
-	rootKey1 := mustXKey("xprv9s21ZrQH143K3gie3VFLgx8JcmqZNsBcBc6vAdJrsf4bPRhx69U8qZe3EYAyvRWyQdEfz7ZpyYtL8jW2d2Lfkfh6g2zivq8JdZPQqxoxLwB")
+	rootKey1 := test.TstMustXKey("xprv9s21ZrQH143K3gie3VFLgx8JcmqZNsBcBc6vAdJrsf4bPRhx69U8qZe3EYAyvRWyQdEfz7ZpyYtL8jW2d2Lfkfh6g2zivq8JdZPQqxoxLwB")
 	keystoreHelper1 := software.NewKeystore(rootKey1)
 	// From mnemonic: lava scare swap mystery lawsuit army rubber clean mean bronze keen volcano
-	rootKey2 := mustXKey("xprv9s21ZrQH143K3cfe2832UrUDA5jmFWvm3acoempvZofxin26VdqjosJfTjHsVgjgszDYHiEgepM7J7U9N7HpayNZDRPUoxGKQbJCuHzgnuy")
+	rootKey2 := test.TstMustXKey("xprv9s21ZrQH143K3cfe2832UrUDA5jmFWvm3acoempvZofxin26VdqjosJfTjHsVgjgszDYHiEgepM7J7U9N7HpayNZDRPUoxGKQbJCuHzgnuy")
 	keystoreHelper2 := software.NewKeystore(rootKey2)
+
+	rootFingerprint1 := []byte{0x55, 0x055, 0x55, 0x55}
+	rootFingerprint2 := []byte{0x66, 0x066, 0x66, 0x66}
 
 	// A keystore with a similar config to a BitBox02 - supporting unified accounts, no legacy
 	// P2PKH.
 	ks1 := &keystoremock.KeystoreMock{
+		ObserveFunc: func(func(observable.Event)) func() {
+			return func() {}
+		},
+		NameFunc: func() (string, error) {
+			return "Mock keystore 1", nil
+		},
 		RootFingerprintFunc: func() ([]byte, error) {
-			return []byte{0x55, 0x055, 0x55, 0x55}, nil
+			return rootFingerprint1, nil
+		},
+		SupportsCoinFunc: func(coin coinpkg.Coin) bool {
+			return true
 		},
 		SupportsAccountFunc: func(coin coinpkg.Coin, meta interface{}) bool {
 			switch coin.(type) {
@@ -48,15 +560,22 @@ func TestRegisterKeystore(t *testing.T) {
 			default:
 				return true
 			}
-		},
-		SupportsUnifiedAccountsFunc: func() bool {
-			return true
 		},
 		ExtendedPublicKeyFunc: keystoreHelper1.ExtendedPublicKey,
+		BTCXPubsFunc:          keystoreHelper1.BTCXPubs,
 	}
 	ks2 := &keystoremock.KeystoreMock{
+		ObserveFunc: func(func(observable.Event)) func() {
+			return func() {}
+		},
+		NameFunc: func() (string, error) {
+			return "Mock keystore 2", nil
+		},
 		RootFingerprintFunc: func() ([]byte, error) {
-			return []byte{0x66, 0x066, 0x66, 0x66}, nil
+			return rootFingerprint2, nil
+		},
+		SupportsCoinFunc: func(coin coinpkg.Coin) bool {
+			return true
 		},
 		SupportsAccountFunc: func(coin coinpkg.Coin, meta interface{}) bool {
 			switch coin.(type) {
@@ -67,148 +586,84 @@ func TestRegisterKeystore(t *testing.T) {
 				return true
 			}
 		},
-		SupportsUnifiedAccountsFunc: func() bool {
-			return true
-		},
 		ExtendedPublicKeyFunc: keystoreHelper2.ExtendedPublicKey,
+		BTCXPubsFunc:          keystoreHelper2.BTCXPubs,
 	}
 
 	b := newBackend(t, testnetDisabled, regtestDisabled)
 	defer b.Close()
 
-	require.Len(t, b.Accounts(), 0)
-	require.Len(t, b.Config().AccountsConfig().Accounts, 0)
+	checkShownAccountsLen(t, b, 0, 0)
 
-	// Registering a new keystore persists a set of initial default accounts.
+	// Registering a new keystore persists a set of initial default accounts and the keystore.
 	b.registerKeystore(ks1)
 	require.Equal(t, ks1, b.Keystore())
-	require.Len(t, b.Accounts(), 3)
-	require.Len(t, b.Config().AccountsConfig().Accounts, 3)
-	require.NotNil(t, b.Config().AccountsConfig().Lookup("v0-55555555-btc-0"))
-	require.NotNil(t, b.Config().AccountsConfig().Lookup("v0-55555555-ltc-0"))
-	require.NotNil(t, b.Config().AccountsConfig().Lookup("v0-55555555-eth-0"))
-	require.Equal(t, "Bitcoin", b.Config().AccountsConfig().Accounts[0].Name)
-	require.Equal(t, "Litecoin", b.Config().AccountsConfig().Accounts[1].Name)
-	require.Equal(t, "Ethereum", b.Config().AccountsConfig().Accounts[2].Name)
+	checkShownAccountsLen(t, b, 3, 3)
+	accountsConfig := accountsSnapshot(t, b)
+	require.NotNil(t, accountsConfig.Lookup("v0-55555555-btc-0"))
+	require.NotNil(t, accountsConfig.Lookup("v0-55555555-ltc-0"))
+	require.NotNil(t, accountsConfig.Lookup("v0-55555555-eth-0"))
+	require.NotNil(t, b.Accounts().lookup("v0-55555555-btc-0"))
+	require.NotNil(t, b.Accounts().lookup("v0-55555555-ltc-0"))
+	require.NotNil(t, b.Accounts().lookup("v0-55555555-eth-0"))
+	watchedBTCAccount := b.Accounts().lookup("v0-55555555-btc-0").Account
+	require.Equal(t, "Bitcoin", accountsConfig.Accounts[0].Name)
+	require.Equal(t, "Litecoin", accountsConfig.Accounts[1].Name)
+	require.Equal(t, "Ethereum", accountsConfig.Accounts[2].Name)
 
-	// Deregistering the keystore removes the loaded accounts, but not the persisted accounts.
+	require.Len(t, accountsConfig.Keystores, 1)
+	require.Equal(t, "Mock keystore 1", accountsConfig.Keystores[0].Name)
+	require.Equal(t, rootFingerprint1, []byte(accountsConfig.Keystores[0].RootFingerprint))
+	// LastConnected might not be `time.Now()` anymore as some time may have passed in the unit
+	// tests, but we check that it was set and recent.
+	require.Less(t, time.Since(accountsConfig.Keystores[0].LastConnected), 10*time.Second)
+
+	// Deregistering the keystore leaves the loaded accounts (watchonly), and leaves the persisted
+	// accounts and keystores.
+	// Enable watch-only for the keystore.
+	require.NoError(t, b.SetWatchonly(rootFingerprint1, true))
+
 	b.DeregisterKeystore()
-	require.Len(t, b.Accounts(), 0)
-	require.Len(t, b.Config().AccountsConfig().Accounts, 3)
+	checkShownAccountsLen(t, b, 3, 3)
+	require.Same(t, watchedBTCAccount, b.Accounts().lookup("v0-55555555-btc-0").Account)
+	accountsConfig = accountsSnapshot(t, b)
+	require.Len(t, accountsConfig.Keystores, 1)
 
 	// Registering the same keystore again loads the previously persisted accounts and does not
 	// automatically persist more accounts.
-	b.DeregisterKeystore()
 	b.registerKeystore(ks1)
-	require.Len(t, b.Accounts(), 3)
-	require.Len(t, b.Config().AccountsConfig().Accounts, 3)
+	checkShownAccountsLen(t, b, 3, 3)
+	require.Same(t, watchedBTCAccount, b.Accounts().lookup("v0-55555555-btc-0").Account)
+	accountsConfig = accountsSnapshot(t, b)
+	require.Len(t, accountsConfig.Keystores, 1)
 
 	// Registering another keystore persists a set of initial default accounts and loads them.
 	b.DeregisterKeystore()
 	b.registerKeystore(ks2)
-	require.Len(t, b.Accounts(), 3)
-	require.Len(t, b.Config().AccountsConfig().Accounts, 6)
-	require.NotNil(t, b.Config().AccountsConfig().Lookup("v0-66666666-btc-0"))
-	require.NotNil(t, b.Config().AccountsConfig().Lookup("v0-66666666-ltc-0"))
-	require.NotNil(t, b.Config().AccountsConfig().Lookup("v0-66666666-eth-0"))
-}
+	require.NoError(t, b.SetWatchonly(rootFingerprint2, true))
 
-func lookup(accts []accounts.Interface, code accounts.Code) accounts.Interface {
-	for _, acct := range accts {
-		if acct.Config().Code == code {
-			return acct
-		}
-	}
-	return nil
-}
+	checkShownAccountsLen(t, b, 6, 6)
+	require.Same(t, watchedBTCAccount, b.Accounts().lookup("v0-55555555-btc-0").Account)
+	accountsConfig = accountsSnapshot(t, b)
+	require.NotNil(t, accountsConfig.Lookup("v0-66666666-btc-0"))
+	require.NotNil(t, accountsConfig.Lookup("v0-66666666-ltc-0"))
+	require.NotNil(t, accountsConfig.Lookup("v0-66666666-eth-0"))
+	require.NotNil(t, b.Accounts().lookup("v0-66666666-btc-0"))
+	require.NotNil(t, b.Accounts().lookup("v0-66666666-ltc-0"))
+	require.NotNil(t, b.Accounts().lookup("v0-66666666-eth-0"))
+	require.Len(t, accountsConfig.Keystores, 2)
+	require.Equal(t, "Mock keystore 2", accountsConfig.Keystores[1].Name)
+	require.Equal(t, rootFingerprint2, []byte(accountsConfig.Keystores[1].RootFingerprint))
 
-// TestAccounts performs a series of typical actions related accounts.
-// 1) Register a keystore, which automatically adds some default accounts
-// 2) Add a second BTC account
-// 3) Activate some ETH tokens
-// 4) Deactivate an ETH token
-// 5) Rename an account
-// 6) Deactivate an account.
-// 7) Rename an inactive account.
-func TestAccounts(t *testing.T) {
-	// From mnemonic: wisdom minute home employ west tail liquid mad deal catalog narrow mistake
-	rootKey := mustXKey("xprv9s21ZrQH143K3gie3VFLgx8JcmqZNsBcBc6vAdJrsf4bPRhx69U8qZe3EYAyvRWyQdEfz7ZpyYtL8jW2d2Lfkfh6g2zivq8JdZPQqxoxLwB")
-	keystoreHelper := software.NewKeystore(rootKey)
+	b.DeregisterKeystore()
 
-	ks := &keystoremock.KeystoreMock{
-		RootFingerprintFunc: func() ([]byte, error) {
-			return []byte{0x55, 0x055, 0x55, 0x55}, nil
-		},
-		SupportsAccountFunc: func(coin coinpkg.Coin, meta interface{}) bool {
-			switch coin.(type) {
-			case *btc.Coin:
-				scriptType := meta.(signing.ScriptType)
-				return scriptType != signing.ScriptTypeP2PKH
-			default:
-				return true
-			}
-		},
-		SupportsUnifiedAccountsFunc: func() bool {
-			return true
-		},
-		SupportsMultipleAccountsFunc: func() bool {
-			return true
-		},
-		ExtendedPublicKeyFunc: keystoreHelper.ExtendedPublicKey,
-	}
-
-	b := newBackend(t, testnetDisabled, regtestDisabled)
-	defer b.Close()
-
-	require.Len(t, b.Accounts(), 0)
-	require.Len(t, b.Config().AccountsConfig().Accounts, 0)
-
-	// 1) Registering a new keystore persists a set of initial default accounts.
-	b.registerKeystore(ks)
-	require.Len(t, b.Accounts(), 3)
-	require.Len(t, b.Config().AccountsConfig().Accounts, 3)
-	require.NotNil(t, b.Config().AccountsConfig().Lookup("v0-55555555-btc-0"))
-	require.NotNil(t, b.Config().AccountsConfig().Lookup("v0-55555555-ltc-0"))
-	require.NotNil(t, b.Config().AccountsConfig().Lookup("v0-55555555-eth-0"))
-
-	// 2) Add a second BTC account
-	acctCode, err := b.CreateAndPersistAccountConfig(coinpkg.CodeBTC, "A second Bitcoin account", ks)
-	require.NoError(t, err)
-	require.Equal(t, accounts.Code("v0-55555555-btc-1"), acctCode)
-	require.Len(t, b.Accounts(), 4)
-	require.Len(t, b.Config().AccountsConfig().Accounts, 4)
-
-	// 3) Activate some ETH tokens
-	require.NoError(t, b.SetTokenActive("v0-55555555-eth-0", "eth-erc20-usdt", true))
-	require.NoError(t, b.SetTokenActive("v0-55555555-eth-0", "eth-erc20-bat", true))
-	require.Equal(t,
-		[]string{"eth-erc20-usdt", "eth-erc20-bat"},
-		b.Config().AccountsConfig().Lookup("v0-55555555-eth-0").ActiveTokens,
-	)
-	require.Len(t, b.Accounts(), 6)
-	require.Equal(t, accounts.Code("v0-55555555-eth-0-eth-erc20-usdt"), b.Accounts()[4].Config().Code)
-	require.Equal(t, accounts.Code("v0-55555555-eth-0-eth-erc20-bat"), b.Accounts()[5].Config().Code)
-
-	// 4) Deactivate an ETH token
-	require.NoError(t, b.SetTokenActive("v0-55555555-eth-0", "eth-erc20-usdt", false))
-	require.Equal(t,
-		[]string{"eth-erc20-bat"},
-		b.Config().AccountsConfig().Lookup("v0-55555555-eth-0").ActiveTokens,
-	)
-	require.Len(t, b.Accounts(), 5)
-	require.Equal(t, accounts.Code("v0-55555555-eth-0-eth-erc20-bat"), b.Accounts()[4].Config().Code)
-
-	// 5) Rename an account
-	require.NoError(t, b.RenameAccount("v0-55555555-eth-0", "My ETH"))
-	require.Equal(t, "My ETH", b.Config().AccountsConfig().Lookup("v0-55555555-eth-0").Name)
-	require.Equal(t, "My ETH", lookup(b.Accounts(), "v0-55555555-eth-0").Config().Name)
-
-	// 6) Deactivate an ETH account - it also deactivates the tokens.
-	require.NoError(t, b.SetAccountActive("v0-55555555-eth-0", false))
-	require.False(t, lookup(b.Accounts(), "v0-55555555-eth-0").Config().Active)
-
-	// 7) Rename an inactive account.
-	require.NoError(t, b.RenameAccount("v0-55555555-eth-0", "My ETH Renamed"))
-	require.Equal(t, "My ETH Renamed", b.Config().AccountsConfig().Lookup("v0-55555555-eth-0").Name)
-	require.Equal(t, "My ETH Renamed", lookup(b.Accounts(), "v0-55555555-eth-0").Config().Name)
+	// Stop watching the first keystore while no keystore is connected.
+	require.NoError(t, b.SetWatchonly(rootFingerprint1, false))
+	checkShownAccountsLen(t, b, 3, 6)
+	require.Nil(t, b.Accounts().lookup("v0-55555555-btc-0"))
+	require.Nil(t, b.Accounts().lookup("v0-55555555-ltc-0"))
+	require.Nil(t, b.Accounts().lookup("v0-55555555-eth-0"))
+	require.NotNil(t, b.Accounts().lookup("v0-66666666-btc-0"))
+	require.NotNil(t, b.Accounts().lookup("v0-66666666-ltc-0"))
+	require.NotNil(t, b.Accounts().lookup("v0-66666666-eth-0"))
 }

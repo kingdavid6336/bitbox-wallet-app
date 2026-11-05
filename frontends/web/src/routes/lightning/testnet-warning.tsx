@@ -1,0 +1,93 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { ReactNode, useContext, useLayoutEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocation } from 'wouter';
+import { Dialog, DialogButtons, DialogScrollContent } from '@/components/dialog/dialog';
+import { Button, Checkbox } from '@/components/forms';
+import { Header, Main } from '@/components/layout';
+import { Message } from '@/components/message/message';
+import { AppContext } from '@/contexts/AppContext';
+import styles from './testnet-warning.module.css';
+
+type TWarningProps = {
+  onAccept: () => void;
+  onCancel: () => void;
+};
+
+const LightningTestnetWarning = ({ onAccept, onCancel }: TWarningProps) => {
+  const { t } = useTranslation();
+  const [understood, setUnderstood] = useState(false);
+
+  return (
+    <Main>
+      <Header title={t('lightning.accountLabel')} />
+      <Dialog open title={t('lightning.accountLabel')} onClose={onCancel}>
+        <DialogScrollContent>
+          <Message type="warning">
+            <strong>{t('lightning.testnetWarning.title')}</strong>
+            <p>{t('lightning.testnetWarning.message')}</p>
+          </Message>
+          <div className={styles.acknowledgement}>
+            <Checkbox
+              id="lightning-testnet-warning-understood"
+              checked={understood}
+              onChange={event => setUnderstood(event.target.checked)}
+              label={t('generic.iHaveReadTheInformation')}
+            />
+          </div>
+        </DialogScrollContent>
+        <DialogButtons>
+          <Button primary disabled={!understood} onClick={onAccept}>
+            {t('button.done')}
+          </Button>
+        </DialogButtons>
+      </Dialog>
+    </Main>
+  );
+};
+
+type TProps = {
+  active: boolean;
+  onCancel?: () => void;
+  children: ReactNode;
+};
+
+export const LightningTestnetGuard = ({ active, onCancel, children }: TProps) => {
+  const { isTesting, sessionConfig, updateSessionConfig, setHideTestnetBanner } = useContext(AppContext);
+  const [, navigate] = useLocation();
+
+  // Embedded Lightning payments keep their host route, but still use mainnet funds.
+  useLayoutEffect(() => {
+    if (!active) {
+      return;
+    }
+    setHideTestnetBanner(true);
+    return () => setHideTestnetBanner(false);
+  }, [active, setHideTestnetBanner]);
+
+  if (!active) {
+    return children;
+  }
+  if (isTesting === undefined) {
+    return null;
+  }
+  if (!isTesting || sessionConfig.lightningTestnetWarningAccepted) {
+    return children;
+  }
+
+  const cancel = () => {
+    if (window.history.length > 1) {
+      history.back();
+    } else {
+      navigate('/', { replace: true });
+    }
+  };
+
+  return (
+    <LightningTestnetWarning
+      onAccept={() => updateSessionConfig({ lightningTestnetWarningAccepted: true })}
+      onCancel={onCancel ?? cancel}
+    />
+  );
+};

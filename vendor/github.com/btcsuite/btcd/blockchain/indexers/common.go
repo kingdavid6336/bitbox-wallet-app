@@ -12,8 +12,8 @@ import (
 	"errors"
 
 	"github.com/btcsuite/btcd/blockchain"
+	"github.com/btcsuite/btcd/btcutil/v2"
 	"github.com/btcsuite/btcd/database"
-	"github.com/btcsuite/btcutil"
 )
 
 var (

@@ -9,13 +9,14 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/btcsuite/btcd/address/v2"
 	"github.com/btcsuite/btcd/blockchain"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
 	"github.com/btcsuite/btcd/database"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/txscript/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 )
 
 const (
@@ -36,7 +37,7 @@ const (
 	// consumes.  It consists of the address key + 1 byte for the level.
 	levelKeySize = addrKeySize + 1
 
-	// levelOffset is the offset in the level key which identifes the level.
+	// levelOffset is the offset in the level key which identifies the level.
 	levelOffset = levelKeySize - 1
 
 	// addrKeyTypePubKeyHash is the address type in an address key which
@@ -62,6 +63,11 @@ const (
 	// as p2wsh are distinct from p2sh addresses since they use a new
 	// script template, as well as a 32-byte data push.
 	addrKeyTypeWitnessScriptHash = 3
+
+	// addrKeyTypeTaprootPubKey is the address type in an address key that
+	// represents a pay-to-taproot address. We use this to denote addresses
+	// related to the segwit v1 that are encoded in the bech32m format.
+	addrKeyTypeTaprootPubKey = 4
 
 	// Size of a transaction entry.  It consists of 4 bytes block id + 4
 	// bytes offset + 4 bytes length.
@@ -153,7 +159,7 @@ func serializeAddrIndexEntry(blockID uint32, txLoc wire.TxLoc) []byte {
 
 // deserializeAddrIndexEntry decodes the passed serialized byte slice into the
 // provided region struct according to the format described in detail above and
-// uses the passed block hash fetching function in order to conver the block ID
+// uses the passed block hash fetching function in order to convert the block ID
 // to the associated block hash.
 func deserializeAddrIndexEntry(serialized []byte, region *database.BlockRegion,
 	fetchBlockHash fetchBlockHashFunc) error {
@@ -536,27 +542,27 @@ func dbRemoveAddrIndexEntries(bucket internalBucket, addrKey [addrKeySize]byte,
 
 // addrToKey converts known address types to an addrindex key.  An error is
 // returned for unsupported types.
-func addrToKey(addr btcutil.Address) ([addrKeySize]byte, error) {
+func addrToKey(addr address.Address) ([addrKeySize]byte, error) {
 	switch addr := addr.(type) {
-	case *btcutil.AddressPubKeyHash:
+	case *address.AddressPubKeyHash:
 		var result [addrKeySize]byte
 		result[0] = addrKeyTypePubKeyHash
 		copy(result[1:], addr.Hash160()[:])
 		return result, nil
 
-	case *btcutil.AddressScriptHash:
+	case *address.AddressScriptHash:
 		var result [addrKeySize]byte
 		result[0] = addrKeyTypeScriptHash
 		copy(result[1:], addr.Hash160()[:])
 		return result, nil
 
-	case *btcutil.AddressPubKey:
+	case *address.AddressPubKey:
 		var result [addrKeySize]byte
 		result[0] = addrKeyTypePubKeyHash
 		copy(result[1:], addr.AddressPubKeyHash().Hash160()[:])
 		return result, nil
 
-	case *btcutil.AddressWitnessScriptHash:
+	case *address.AddressWitnessScriptHash:
 		var result [addrKeySize]byte
 		result[0] = addrKeyTypeWitnessScriptHash
 
@@ -565,13 +571,23 @@ func addrToKey(addr btcutil.Address) ([addrKeySize]byte, error) {
 		// all address entries within the database uniform and compact,
 		// we use a hash160 here to reduce the size of the salient data
 		// push to 20-bytes.
-		copy(result[1:], btcutil.Hash160(addr.ScriptAddress()))
+		copy(result[1:], address.Hash160(addr.ScriptAddress()))
 		return result, nil
 
-	case *btcutil.AddressWitnessPubKeyHash:
+	case *address.AddressWitnessPubKeyHash:
 		var result [addrKeySize]byte
 		result[0] = addrKeyTypeWitnessPubKeyHash
 		copy(result[1:], addr.Hash160()[:])
+		return result, nil
+
+	case *address.AddressTaproot:
+		var result [addrKeySize]byte
+		result[0] = addrKeyTypeTaprootPubKey
+
+		// Taproot outputs are actually just the 32-byte public key.
+		// Similar to the P2WSH outputs, we'll map these to 20-bytes
+		// via the hash160.
+		copy(result[1:], address.Hash160(addr.ScriptAddress()))
 		return result, nil
 	}
 
@@ -719,7 +735,7 @@ func (idx *AddrIndex) indexBlock(data writeIndexData, block *btcutil.Block,
 				idx.indexPkScript(data, pkScript, txIdx)
 
 				// With an input indexed, we'll advance the
-				// stxo coutner.
+				// stxo counter.
 				stxoIndex++
 			}
 		}
@@ -805,7 +821,7 @@ func (idx *AddrIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 // that involve a given address.
 //
 // This function is safe for concurrent access.
-func (idx *AddrIndex) TxRegionsForAddress(dbTx database.Tx, addr btcutil.Address,
+func (idx *AddrIndex) TxRegionsForAddress(dbTx database.Tx, addr address.Address,
 	numToSkip, numRequested uint32, reverse bool) ([]database.BlockRegion, uint32, error) {
 
 	addrKey, err := addrToKey(addr)
@@ -931,7 +947,7 @@ func (idx *AddrIndex) RemoveUnconfirmedTx(hash *chainhash.Hash) {
 // Unsupported address types are ignored and will result in no results.
 //
 // This function is safe for concurrent access.
-func (idx *AddrIndex) UnconfirmedTxnsForAddress(addr btcutil.Address) []*btcutil.Tx {
+func (idx *AddrIndex) UnconfirmedTxnsForAddress(addr address.Address) []*btcutil.Tx {
 	// Ignore unsupported address types.
 	addrKey, err := addrToKey(addr)
 	if err != nil {
@@ -975,4 +991,16 @@ func NewAddrIndex(db database.DB, chainParams *chaincfg.Params) *AddrIndex {
 // exists.
 func DropAddrIndex(db database.DB, interrupt <-chan struct{}) error {
 	return dropIndex(db, addrIndexKey, addrIndexName, interrupt)
+}
+
+// AddrIndexInitialized returns true if the address index has been created previously.
+func AddrIndexInitialized(db database.DB) bool {
+	var exists bool
+	db.View(func(dbTx database.Tx) error {
+		bucket := dbTx.Metadata().Bucket(addrIndexKey)
+		exists = bucket != nil
+		return nil
+	})
+
+	return exists
 }

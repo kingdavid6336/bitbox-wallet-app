@@ -1,0 +1,103 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { useContext } from 'react';
+import type { CoinUnit, ConversionUnit, TAmountWithConversions } from '@/api/account';
+import { RatesContext } from '@/contexts/RatesContext';
+import { Amount } from '@/components/amount/amount';
+import { isBitcoinCoin, isBitcoinCoinBased } from '@/utils/coin';
+import style from './amount-with-unit.module.css';
+
+type TAmountWithUnitProps = {
+  amount: TAmountWithConversions | undefined;
+  enableRotateUnit?: boolean;
+  sign?: string;
+  alwaysShowAmounts?: boolean;
+  convertToFiat?: boolean;
+  removeTrailingZeros?: boolean;
+  amountClassName?: string;
+  unitClassName?: string;
+  maxDecimals?: number;
+  wrap?: boolean;
+};
+
+export const AmountWithUnit = ({
+  amount,
+  enableRotateUnit,
+  sign,
+  convertToFiat,
+  removeTrailingZeros,
+  alwaysShowAmounts = false,
+  amountClassName = '',
+  unitClassName = '',
+  maxDecimals,
+  wrap = false,
+}: TAmountWithUnitProps) => {
+  const { rotateDefaultCurrency, defaultCurrency, rotateBtcUnit } = useContext(RatesContext);
+
+  if (!amount) {
+    return null;
+  }
+  let displayedAmount: string = '';
+  let displayedUnit: CoinUnit | ConversionUnit;
+  let onClick: () => Promise<void>;
+
+  if (convertToFiat) {
+    // amount.conversions[defaultCurrency] can be empty in recent transactions.
+    if (amount?.conversions && !!amount.conversions[defaultCurrency]) {
+      displayedAmount = amount.conversions[defaultCurrency];
+    }
+    displayedUnit = defaultCurrency;
+    onClick = rotateDefaultCurrency;
+  } else {
+    displayedAmount = amount.amount;
+    displayedUnit = amount.unit;
+    onClick = rotateBtcUnit;
+  }
+
+  const enableClick = enableRotateUnit && (convertToFiat || isBitcoinCoin(amount.unit));
+  const stripTrailingZeros = removeTrailingZeros && isBitcoinCoinBased(amount.unit);
+
+  return (
+    <span className={`
+      ${style.rates || ''}
+      ${style.availableFiatAmount || ''}
+      ${wrap ? style.wrap || '' : ''}
+      ${!displayedAmount && style.notAvailable || ''}
+      ${amountClassName || ''}
+    `.trim()}>
+      {!!displayedAmount ? sign : ''}
+      {!!displayedAmount ? (
+        <Amount
+          alwaysShowAmounts={alwaysShowAmounts}
+          amount={displayedAmount}
+          unit={displayedUnit}
+          onMobileClick={enableClick ? onClick : undefined}
+          maxDecimals={maxDecimals}
+          removeTrailingZeros={stripTrailingZeros}
+          wrap={wrap}
+        />
+      ) : '---'}
+      {' '}
+      <AmountUnit
+        unit={displayedUnit}
+        rotateUnit={enableClick ? onClick : undefined}
+        className={unitClassName}/>
+    </span>
+  );
+};
+
+type TAmountUnitProps = {
+  rotateUnit?: () => Promise<void>;
+  unit: ConversionUnit | CoinUnit;
+  className?: string;
+};
+
+export const AmountUnit = ({ rotateUnit, unit, className = '' }: TAmountUnitProps) => {
+  const classRototable = rotateUnit ? (style.rotatable || '') : '';
+  const textStyle = `${style.unit || ''} ${classRototable} ${className}`;
+  return (
+    <span data-testid={`amount-unit-${unit}`} className={textStyle} onClick={rotateUnit}>
+      {unit}
+    </span>
+  );
+};

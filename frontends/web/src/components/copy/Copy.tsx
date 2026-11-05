@@ -1,121 +1,110 @@
-/**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import { translate, TranslateProps } from '../../decorators/translate';
-import { Check, Copy } from '../icon/icon';
-import * as style from './Copy.module.css';
+import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Check, Copy } from '@/components/icon/icon';
+import { triggerHapticFeedback } from '@/utils/transport-mobile';
+import style from './Copy.module.css';
 
-interface CopyableInputProps {
-    alignLeft?: boolean;
-    alignRight?: boolean;
-    borderLess?: boolean;
-    className?: string;
-    disabled?: boolean;
-    flexibleHeight?: boolean;
-    value: string;
-}
+type TProps = {
+  alignLeft?: boolean;
+  alignRight?: boolean;
+  borderLess?: boolean;
+  className?: string;
+  inputFieldClassName?: string;
+  buttonClassName?: string;
+  disabled?: boolean;
+  flexibleHeight?: boolean;
+  displayValue?: string;
+  value: string;
+  dataTestId?: string;
+};
 
-type Props = CopyableInputProps & TranslateProps;
+export const CopyableInput = ({
+  alignLeft,
+  alignRight,
+  borderLess,
+  value,
+  className,
+  inputFieldClassName,
+  buttonClassName,
+  disabled,
+  flexibleHeight,
+  displayValue,
+  dataTestId,
+}: TProps) => {
+  const [success, setSuccess] = useState(false);
+  const { t } = useTranslation();
 
-interface State {
-    success: boolean;
-}
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
-class CopyableInput extends Component<Props, State> {
-    public readonly state: State = {
-        success: false,
+  useEffect(() => {
+    setHeight();
+  }, [displayValue, value]);
+
+  useEffect(() => {
+    if (success) {
+      setTimeout(() => setSuccess(false), 1500);
     }
+  }, [success]);
 
-    private textArea!: HTMLTextAreaElement;
-
-    public componentDidMount() {
-        this.setHeight();
+  const setHeight = () => {
+    const textarea = textAreaRef.current;
+    if (!textarea) {
+      return;
     }
+    const fontSize = window.getComputedStyle(textarea, null).getPropertyValue('font-size');
+    const units = Number(fontSize.replace('px', '')) + 2;
+    textarea.setAttribute('rows', '1');
+    textarea.setAttribute('rows', String(Math.round((textarea.scrollHeight / units) - 2)));
+  };
 
-    public componentDidUpdate() {
-        this.setHeight();
+  const copy = () => {
+    if (textAreaRef.current) {
+      if (displayValue) {
+        navigator.clipboard.writeText(value);
+      } else {
+        navigator.clipboard.writeText(textAreaRef.current.value);
+      }
+      triggerHapticFeedback();
+      setSuccess(true);
     }
+  };
 
-    private setHeight() {
-        const textarea = this.textArea;
-        const fontSize = window.getComputedStyle(textarea, null).getPropertyValue('font-size');
-        const units = Number(fontSize.replace('px', '')) + 2;
-        textarea.setAttribute('rows', '1');
-        textarea.setAttribute('rows', String(Math.round((textarea.scrollHeight / units) - 2)));
-    }
 
-    private setRef = (textarea: HTMLTextAreaElement) => {
-        this.textArea = textarea;
-    }
-
-    private onFocus = (e: FocusEvent) => {
-        const textarea = e.target as HTMLTextAreaElement;
-        if (textarea) {
-            textarea.focus();
-        }
-    }
-
-    private copy = () => {
-        this.textArea.select();
-        if (document.execCommand('copy')) {
-            this.setState({ success: true }, () => {
-                setTimeout(() => this.setState({ success: false }), 1500);
-            });
-        }
-    }
-
-    public render(
-        { alignLeft, alignRight, borderLess, t, value, className, disabled, flexibleHeight }: RenderableProps<Props>,
-        { success }: State,
-    ) {
-        const copyButton = disabled ? null : (
-            <button
-                onClick={this.copy}
-                className={[style.button, success && style.success, 'ignore'].join(' ')}
-                title={t('button.copy')}>
-                {success ? <Check /> : <Copy />}
-            </button>
-        );
-        return (
-            <div class={[
-                'flex flex-row flex-start flex-items-start',
-                style.container,
-                className ? className : ''
-            ].join(' ')}>
-                <textarea
-                    disabled={disabled}
-                    readOnly
-                    onFocus={this.onFocus}
-                    value={value}
-                    ref={this.setRef}
-                    rows={1}
-                    className={[
-                        style.inputField,
-                        flexibleHeight && style.flexibleHeight,
-                        alignLeft && style.alignLeft,
-                        alignRight && style.alignRight,
-                        borderLess && style.borderLess,
-                    ].join(' ')} />
-                {copyButton}
-            </div>
-        );
-    }
-}
-
-const TranslatedCopyableInput = translate<CopyableInputProps>()(CopyableInput);
-export { TranslatedCopyableInput as CopyableInput };
+  return (
+    <div className={[
+      style.container,
+      className ? className : ''
+    ].join(' ')}>
+      <textarea
+        disabled={disabled}
+        readOnly
+        onMouseDown={event => event.preventDefault()}
+        tabIndex={-1}
+        value={displayValue ? displayValue : value}
+        ref={textAreaRef}
+        rows={1}
+        {...(dataTestId ? { 'data-testid': dataTestId } : {})}
+        className={`${style.inputField || ''}
+          ${flexibleHeight ? style.flexibleHeight || '' : ''}
+          ${alignLeft ? style.alignLeft || '' : ''}
+          ${alignRight ? style.alignRight || '' : ''}
+          ${borderLess ? style.borderLess || '' : ''}
+          ${inputFieldClassName ? inputFieldClassName : ''}
+        `} />
+      {disabled ? null : (
+        <button
+          onClick={copy}
+          className={`
+          ${style.button || ''}
+          ${success ? style.success || '' : ''}
+          ${buttonClassName ? buttonClassName : ''}
+           ignore`}
+          title={t('button.copy')}>
+          {success ? <Check /> : <Copy />}
+        </button>
+      )}
+    </div>
+  );
+};

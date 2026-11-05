@@ -1,25 +1,14 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package test
 
 import (
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil/hdkeychain"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/addresses"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/signing"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/logging"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/addresses"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/signing"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/logging"
+	"github.com/btcsuite/btcd/btcutil/v2/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg/v2"
 )
 
 const xpub = "tpubDCxoQyC5JaGydxN3yprM6sgqgu65LruN3JBm1fnSmGxXR3AcuNwr" +
@@ -31,7 +20,8 @@ var (
 )
 
 // NewAddressChain returns an AddressChain for convenience in testing.
-func NewAddressChain() (*signing.Configuration, *addresses.AddressChain) {
+func NewAddressChain(
+	isAddressUsed func(*addresses.AccountAddress) (bool, error)) (*signing.Configuration, *addresses.AddressChain) {
 	log := logging.Get().WithGroup("addresses_test")
 	xprv, err := hdkeychain.NewMaster(make([]byte, hdkeychain.RecommendedSeedLen), net)
 	if err != nil {
@@ -47,7 +37,7 @@ func NewAddressChain() (*signing.Configuration, *addresses.AddressChain) {
 	}
 	configuration := signing.NewBitcoinConfiguration(
 		signing.ScriptTypeP2PKH, []byte{1, 2, 3, 4}, derivationPath, xpub)
-	return configuration, addresses.NewAddressChain(configuration, net, 20, 0, log)
+	return configuration, addresses.NewAddressChain(configuration, net, 20, false, isAddressUsed, log)
 }
 
 // GetAddress returns a dummy address for a given address type.
@@ -60,7 +50,7 @@ func GetAddress(scriptType signing.ScriptType) *addresses.AccountAddress {
 		scriptType, []byte{1, 2, 3, 4}, absoluteKeypath, extendedPublicKey)
 	return addresses.NewAccountAddress(
 		configuration,
-		signing.NewEmptyRelativeKeypath(),
+		types.Derivation{Change: false, AddressIndex: 0},
 		net,
 		logging.Get().WithGroup("addresses_test"),
 	)

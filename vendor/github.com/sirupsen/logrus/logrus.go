@@ -6,32 +6,21 @@ import (
 	"strings"
 )
 
-// Fields type, used to pass to `WithFields`.
+// Fields type, used to pass to [WithFields].
 type Fields map[string]interface{}
 
 // Level type
+//
+//nolint:recvcheck // the methods of "Entry" use pointer receiver and non-pointer receiver.
 type Level uint32
 
-// Convert the Level to a string. E.g. PanicLevel becomes "panic".
+// Convert the Level to a string. E.g. [PanicLevel] becomes "panic".
 func (level Level) String() string {
-	switch level {
-	case TraceLevel:
-		return "trace"
-	case DebugLevel:
-		return "debug"
-	case InfoLevel:
-		return "info"
-	case WarnLevel:
-		return "warning"
-	case ErrorLevel:
-		return "error"
-	case FatalLevel:
-		return "fatal"
-	case PanicLevel:
-		return "panic"
+	if b, err := level.MarshalText(); err == nil {
+		return string(b)
+	} else {
+		return "unknown"
 	}
-
-	return "unknown"
 }
 
 // ParseLevel takes a string level and returns the Logrus log level constant.
@@ -64,12 +53,33 @@ func (level *Level) UnmarshalText(text []byte) error {
 		return err
 	}
 
-	*level = Level(l)
+	*level = l
 
 	return nil
 }
 
-// A constant exposing all logging levels
+func (level Level) MarshalText() ([]byte, error) {
+	switch level {
+	case TraceLevel:
+		return []byte("trace"), nil
+	case DebugLevel:
+		return []byte("debug"), nil
+	case InfoLevel:
+		return []byte("info"), nil
+	case WarnLevel:
+		return []byte("warning"), nil
+	case ErrorLevel:
+		return []byte("error"), nil
+	case FatalLevel:
+		return []byte("fatal"), nil
+	case PanicLevel:
+		return []byte("panic"), nil
+	}
+
+	return nil, fmt.Errorf("not a valid logrus level %d", level)
+}
+
+// AllLevels exposing all logging levels.
 var AllLevels = []Level{
 	PanicLevel,
 	FatalLevel,
@@ -111,8 +121,8 @@ var (
 )
 
 // StdLogger is what your logrus-enabled library should take, that way
-// it'll accept a stdlib logger and a logrus logger. There's no standard
-// interface, this is the closest we get, unfortunately.
+// it'll accept a stdlib logger ([log.Logger]) and a logrus logger.
+// There's no standard interface, so this is the closest we get, unfortunately.
 type StdLogger interface {
 	Print(...interface{})
 	Printf(string, ...interface{})
@@ -127,7 +137,8 @@ type StdLogger interface {
 	Panicln(...interface{})
 }
 
-// The FieldLogger interface generalizes the Entry and Logger types
+// FieldLogger extends the [StdLogger] interface, generalizing
+// the [Entry] and [Logger] types.
 type FieldLogger interface {
 	WithField(key string, value interface{}) *Entry
 	WithFields(fields Fields) *Entry
@@ -168,8 +179,9 @@ type FieldLogger interface {
 	// IsPanicEnabled() bool
 }
 
-// Ext1FieldLogger (the first extension to FieldLogger) is superfluous, it is
-// here for consistancy. Do not use. Use Logger or Entry instead.
+// Ext1FieldLogger (the first extension to [FieldLogger]) is superfluous, it is
+// here for consistency. Do not use. Use [FieldLogger], [Logger] or [Entry]
+// instead.
 type Ext1FieldLogger interface {
 	FieldLogger
 	Tracef(format string, args ...interface{})

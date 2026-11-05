@@ -1,0 +1,41 @@
+.container {
+    display: flex;
+    flex-basis: 100%;
+    flex-grow: 0;
+    flex-shrink: 1;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
+
+.iframe {
+    display: block;
+    max-width: 100%;
+    position: relative;
+    z-index: 3000;
+}
+
+.hide {
+    opacity: 0;
+}
+
+.header {
+    position: relative;
+    z-index: 2200;
+}
+
+.blocking {
+    background-color: var(--bg-transparent-dark);
+    bottom: 0;
+    left: 0;
+    position: fixed;
+    right: 0;
+    top: calc(-1 * var(--header-height));
+    /* z-index: 1; would be enough to cover the bottom-menu on mobile */
+    z-index: 4003; /* header has z-index: 2200; and sidebar z-index: 4002; */
+}
+
+.blocking + .iframe {
+    z-index: 4004;
+}

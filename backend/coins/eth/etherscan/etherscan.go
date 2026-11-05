@@ -1,66 +1,160 @@
-// Copyright 2018 Shift Devices AG
-// Copyright 2020 Shift Crypto AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package etherscan
 
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
+	"io"
+	"maps"
 	"math/big"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/eth/erc20"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/eth/rpcclient"
-	ethtypes "github.com/digitalbitbox/bitbox-wallet-app/backend/coins/eth/types"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth/erc20"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth/rpcclient"
+	ethtypes "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/eth/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/time/rate"
 )
 
-// CallInterval is the duration between etherscan requests.
+// CallsPerSec is thenumber of etherscanr equests allowed
+// per second.
 // Etherscan rate limits to one request per 0.2 seconds.
-var CallInterval = 260 * time.Millisecond
+var CallsPerSec = 3.8
 
-const apiKey = "8GXVIES9ACAJIH7Q5PFXVHK8KH44HZRWBM"
+// Limit historical balance requests to two per second across clients using the
+// provider's API credentials.
+var historicalBalanceRateLimiter = rate.NewLimiter(2, 1)
+
+// Coordinate admission across the shared budgets without reserving one budget
+// while a request waits for the other.
+var requestRateLimitLock sync.Mutex
+
+const (
+	maxAddressesForBalances      = 20
+	maxGetRequestTargetLength    = 6000
+	maxTokenTransactionsPerQuery = 10000
+
+	// Etherscan indexes mainnet block zero at the Frontier launch on
+	// 2015-07-30 15:26:13 UTC. The genesis header itself has a zero timestamp.
+	mainnetLaunchTimestamp = 1438269973
+)
+
+// ERC20GasErr is the error message returned from etherscan when there is not enough ETH to pay the transaction fee.
+const ERC20GasErr = "insufficient funds for gas * price + value"
 
 // EtherScan is a rate-limited etherscan api client. See https://etherscan.io/apis.
 type EtherScan struct {
-	url        string
-	httpClient *http.Client
+	url                      string
+	httpClient               *http.Client
+	limiter                  *rate.Limiter
+	historicalBalanceLimiter *rate.Limiter
+	chainId                  string
 }
 
 // NewEtherScan creates a new instance of EtherScan.
-func NewEtherScan(url string, httpClient *http.Client) *EtherScan {
+func NewEtherScan(chainId string, httpClient *http.Client, limiter *rate.Limiter) *EtherScan {
 	return &EtherScan{
-		url:        url,
-		httpClient: httpClient,
+		url:                      "https://etherscan-api.shiftcrypto.io/v2/api",
+		httpClient:               httpClient,
+		limiter:                  limiter,
+		historicalBalanceLimiter: historicalBalanceRateLimiter,
+		chainId:                  chainId,
 	}
 }
 
-func (etherScan *EtherScan) call(params url.Values, result interface{}) error {
-	params.Set("apikey", apiKey)
-	response, err := etherScan.httpClient.Get(etherScan.url + "?" + params.Encode())
+func (etherScan *EtherScan) call(ctx context.Context, params url.Values, result interface{}) error {
+	return etherScan.callWithMethod(ctx, http.MethodGet, params, result)
+}
+
+func (etherScan *EtherScan) waitForRequestRateLimit(ctx context.Context, action string) error {
+	limiters := []*rate.Limiter{etherScan.limiter}
+	if action == "balancehistory" || action == "tokenbalancehistory" {
+		limiters = append(limiters, etherScan.historicalBalanceLimiter)
+	}
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		requestRateLimitLock.Lock()
+		now := time.Now()
+		reservations := make([]*rate.Reservation, 0, len(limiters))
+		var delay time.Duration
+		var reservationError error
+		for _, limiter := range limiters {
+			reservation := limiter.ReserveN(now, 1)
+			reservations = append(reservations, reservation)
+			if !reservation.OK() {
+				reservationError = errp.New("rate limiter cannot admit a request")
+				break
+			}
+			delay = max(delay, reservation.DelayFrom(now))
+		}
+		if reservationError == nil && delay == 0 {
+			requestRateLimitLock.Unlock()
+			return nil
+		}
+		for _, reservation := range reservations {
+			reservation.CancelAt(now)
+		}
+		requestRateLimitLock.Unlock()
+		if reservationError != nil {
+			return reservationError
+		}
+		if deadline, ok := ctx.Deadline(); ok && now.Add(delay).After(deadline) {
+			return errp.New("rate limit wait would exceed context deadline")
+		}
+		timer := time.NewTimer(time.Until(now.Add(delay)))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func (etherScan *EtherScan) callWithMethod(
+	ctx context.Context,
+	method string,
+	params url.Values,
+	result interface{},
+) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := etherScan.waitForRequestRateLimit(ctx, params.Get("action")); err != nil {
+		return errp.WithMessage(rpcclient.ErrRequestRejected, err.Error())
+	}
+	params.Set("chainId", etherScan.chainId)
+	encodedParams := params.Encode()
+	requestURL := etherScan.url
+	var requestBody io.Reader
+	if method == http.MethodGet {
+		requestURL += "?" + encodedParams
+	} else {
+		requestBody = strings.NewReader(encodedParams)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, requestURL, requestBody)
+	if err != nil {
+		return errp.WithMessage(rpcclient.ErrRequestRejected, err.Error())
+	}
+	if method == http.MethodPost {
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	response, err := etherScan.httpClient.Do(request)
 	if err != nil {
 		return errp.WithStack(err)
 	}
@@ -68,7 +162,7 @@ func (etherScan *EtherScan) call(params url.Values, result interface{}) error {
 	if response.StatusCode != http.StatusOK {
 		return errp.Newf("expected 200 OK, got %d", response.StatusCode)
 	}
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return errp.WithStack(err)
 	}
@@ -78,10 +172,19 @@ func (etherScan *EtherScan) call(params url.Values, result interface{}) error {
 	return nil
 }
 
+// shouldPostRPC returns true when the encoded request would exceed the GET
+// request target length the upstream proxy accepts; the caller falls back to
+// POST in that case.
+func (etherScan *EtherScan) shouldPostRPC(params url.Values) bool {
+	candidate := maps.Clone(params)
+	candidate.Set("chainId", etherScan.chainId)
+	return len(candidate.Encode()) > maxGetRequestTargetLength
+}
+
 type jsonBigInt big.Int
 
-func (jsBigInt jsonBigInt) BigInt() *big.Int {
-	bigInt := big.Int(jsBigInt)
+func (jsBigInt *jsonBigInt) BigInt() *big.Int {
+	bigInt := big.Int(*jsBigInt)
 	return &bigInt
 }
 
@@ -143,6 +246,10 @@ type Transaction struct {
 	blockTipHeight  *big.Int
 	// isInternal: true if tx was fetched via `txlistinternal`, false if via `txlist`.
 	isInternal bool
+	// internal transactions can send to the same receive address multiple times in the same
+	// transaction, and they should all show up as separate transactions. They all have the same
+	// transaction hash, so we track duplicate IDs via a counter so the internal ID stays unique.
+	idIndex int
 }
 
 // TransactionData returns the tx data to be shown to the user.
@@ -164,6 +271,7 @@ func (tx *Transaction) TransactionData(isERC20 bool) *accounts.TransactionData {
 		Addresses:                tx.addresses(),
 		Gas:                      tx.jsonTransaction.GasUsed.BigInt().Uint64(),
 		Nonce:                    &nonce,
+		IsErc20:                  isERC20,
 	}
 }
 
@@ -172,20 +280,21 @@ func (tx *Transaction) UnmarshalJSON(jsonBytes []byte) error {
 	if err := json.Unmarshal(jsonBytes, &tx.jsonTransaction); err != nil {
 		return errp.WithStack(err)
 	}
-	switch {
-	case tx.jsonTransaction.ToAsString != "":
+	if tx.jsonTransaction.ToAsString != "" {
 		if !common.IsHexAddress(tx.jsonTransaction.ToAsString) {
 			return errp.Newf("eth address expected, got %s", tx.jsonTransaction.ToAsString)
 		}
 		addr := common.HexToAddress(tx.jsonTransaction.ToAsString)
 		tx.jsonTransaction.to = &addr
-	case tx.jsonTransaction.ContractAddressAsString != "":
+	}
+	if tx.jsonTransaction.ContractAddressAsString != "" {
 		if !common.IsHexAddress(tx.jsonTransaction.ContractAddressAsString) {
 			return errp.Newf("eth address expected, got %s", tx.jsonTransaction.ContractAddressAsString)
 		}
 		addr := common.HexToAddress(tx.jsonTransaction.ContractAddressAsString)
 		tx.jsonTransaction.contractAddress = &addr
-	default:
+	}
+	if tx.jsonTransaction.to == nil && tx.jsonTransaction.contractAddress == nil {
 		return errp.New("Need one of: to, contractAddress")
 	}
 	return nil
@@ -209,7 +318,7 @@ func (tx *Transaction) TxID() string {
 func (tx *Transaction) internalID() string {
 	id := tx.TxID()
 	if tx.isInternal {
-		id += "-internal"
+		id += fmt.Sprintf("-internal-%d", tx.idIndex)
 	}
 	return id
 }
@@ -251,22 +360,19 @@ func (tx *Transaction) addresses() []accounts.AddressAndAmount {
 	}}
 }
 
-// prepareTransactions casts to []accounts.Transactions and removes duplicate entries. Duplicate
-// entries appear in the etherscan result if the recipient and sender are the same. It also sets the
-// transaction type (send, receive, send to self) based on the account address.
+// prepareTransactions casts to []accounts.Transactions and sets the transaction type (send,
+// receive, send to self) based on the account address.
 func prepareTransactions(
 	isERC20 bool,
 	blockTipHeight *big.Int,
 	isInternal bool,
 	transactions []*Transaction, address common.Address) ([]*accounts.TransactionData, error) {
-	seen := map[string]struct{}{}
+	seen := map[string]int{}
 	castTransactions := []*accounts.TransactionData{}
 	ours := address.Hex()
 	for _, transaction := range transactions {
-		if _, ok := seen[transaction.TxID()]; ok {
-			continue
-		}
-		seen[transaction.TxID()] = struct{}{}
+		seenIdx := seen[transaction.TxID()]
+		seen[transaction.TxID()] = seenIdx + 1
 
 		from := transaction.jsonTransaction.From.Hex()
 		var to string
@@ -291,6 +397,7 @@ func prepareTransactions(
 		}
 		transaction.blockTipHeight = blockTipHeight
 		transaction.isInternal = isInternal
+		transaction.idIndex = seenIdx
 		castTransactions = append(castTransactions, transaction.TransactionData(isERC20))
 	}
 	return castTransactions, nil
@@ -306,7 +413,7 @@ func (etherScan *EtherScan) Transactions(
 	params.Set("module", "account")
 	if erc20Token != nil {
 		params.Set("action", "tokentx")
-		params.Set("contractAddress", erc20Token.ContractAddress().Hex())
+		params.Set("contractaddress", erc20Token.ContractAddress().Hex())
 	} else {
 		params.Set("action", "txlist")
 	}
@@ -320,7 +427,7 @@ func (etherScan *EtherScan) Transactions(
 	result := struct {
 		Result []*Transaction
 	}{}
-	if err := etherScan.call(params, &result); err != nil {
+	if err := etherScan.call(context.TODO(), params, &result); err != nil {
 		return nil, err
 	}
 	isERC20 := erc20Token != nil
@@ -335,7 +442,7 @@ func (etherScan *EtherScan) Transactions(
 		resultInternal := struct {
 			Result []*Transaction
 		}{}
-		if err := etherScan.call(params, &resultInternal); err != nil {
+		if err := etherScan.call(context.TODO(), params, &resultInternal); err != nil {
 			return nil, err
 		}
 		var err error
@@ -348,45 +455,167 @@ func (etherScan *EtherScan) Transactions(
 	return append(transactionsNormal, transactionsInternal...), nil
 }
 
+func tokenTransactionDedupKey(tx *Transaction) string {
+	contractAddress := tx.jsonTransaction.ContractAddressAsString
+	if tx.jsonTransaction.contractAddress != nil {
+		contractAddress = tx.jsonTransaction.contractAddress.Hex()
+	}
+	blockNumber := tx.jsonTransaction.BlockNumber.BigInt()
+	gasUsed := tx.jsonTransaction.GasUsed.BigInt()
+	gasPrice := tx.jsonTransaction.GasPrice.BigInt()
+	nonce := tx.jsonTransaction.Nonce.BigInt()
+	value := tx.jsonTransaction.Value.BigInt()
+	timestamp := time.Time(tx.jsonTransaction.Timestamp).Unix()
+	to := ""
+	if tx.jsonTransaction.to != nil {
+		to = tx.jsonTransaction.to.Hex()
+	}
+	from := tx.jsonTransaction.From.Hex()
+	return fmt.Sprintf(
+		"%s-%s-%s-%s-%s-%s-%s-%s-%s-%d-%s",
+		tx.TxID(),
+		contractAddress,
+		from,
+		to,
+		blockNumber.Text(10),
+		nonce.Text(10),
+		gasUsed.Text(10),
+		gasPrice.Text(10),
+		value.Text(10),
+		timestamp,
+		tx.jsonTransaction.Failed,
+	)
+}
+
+// TokenTransactionsByContract queries EtherScan for all token transfers for the given account,
+// grouped by token contract address. It uses the tokentx endpoint without a contract address
+// filter. If the result size hits the 10k limit, it paginates by setting endBlock to the last
+// returned transaction's block number while de-duplicating overlapping results.
+func (etherScan *EtherScan) TokenTransactionsByContract(
+	blockTipHeight *big.Int,
+	address common.Address, endBlock *big.Int) (map[common.Address][]*accounts.TransactionData, error) {
+	params := url.Values{}
+	params.Set("module", "account")
+	params.Set("action", "tokentx")
+	params.Set("startblock", "0")
+	params.Set("tag", "latest")
+	params.Set("sort", "desc") // desc by block number
+	params.Set("address", address.Hex())
+
+	endBlockCursor := new(big.Int).Set(endBlock)
+	// Etherscan pagination can repeat items at page boundaries (same endblock, desc order).
+	// We dedup by counting occurrences of a stable key across pages and, on each new page,
+	// skipping only as many occurrences as we already emitted. This avoids collapsing
+	// multiple identical logs from the same transaction within a single page, which we
+	// cannot distinguish further because Etherscan does not return a logIndex.
+	seenCounts := map[string]int{}
+	grouped := map[common.Address][]*Transaction{}
+	for {
+		params.Set("endblock", endBlockCursor.Text(10))
+		result := struct {
+			Result []*Transaction
+		}{}
+		if err := etherScan.call(context.TODO(), params, &result); err != nil {
+			return nil, err
+		}
+		if len(result.Result) == 0 {
+			break
+		}
+
+		newCount := 0
+		consumed := map[string]int{}   // per page: how many previously-emitted occurrences we've skipped per key
+		pageCounts := map[string]int{} // per page: how many new occurrences we accepted per key
+		for _, transaction := range result.Result {
+			key := tokenTransactionDedupKey(transaction)
+			if seenCounts[key] > consumed[key] {
+				consumed[key]++
+				continue
+			}
+			pageCounts[key]++
+			newCount++
+			if transaction.jsonTransaction.contractAddress == nil {
+				return nil, errp.New("token tx missing contract address")
+			}
+			contractAddress := *transaction.jsonTransaction.contractAddress
+			grouped[contractAddress] = append(grouped[contractAddress], transaction)
+		}
+		for key, count := range pageCounts {
+			seenCounts[key] += count
+		}
+
+		if len(result.Result) < maxTokenTransactionsPerQuery {
+			break
+		}
+		if newCount == 0 {
+			// Avoid an infinite loop if we are not making progress.
+			break
+		}
+		lastTx := result.Result[len(result.Result)-1]
+		endBlockCursor = lastTx.jsonTransaction.BlockNumber.BigInt()
+	}
+
+	byContract := map[common.Address][]*accounts.TransactionData{}
+	for contractAddress, transactions := range grouped {
+		castTransactions, err := prepareTransactions(true, blockTipHeight, false, transactions, address)
+		if err != nil {
+			return nil, err
+		}
+		byContract[contractAddress] = castTransactions
+	}
+	return byContract, nil
+}
+
 // ----- RPC node proxy methods follow
 
-func (etherScan *EtherScan) rpcCall(params url.Values, result interface{}) error {
+func (etherScan *EtherScan) rpcCall(ctx context.Context, params url.Values, result interface{}) error {
 	params.Set("module", "proxy")
 
 	var wrapped struct {
-		JSONRPC string `json:"jsonrpc"`
-		ID      int    `json:"id"`
-		Error   *struct {
-			Message string `json:"message"`
-		} `json:"error"`
-		Result *json.RawMessage `json:"result"`
+		Status  string              `json:"status"`
+		JSONRPC string              `json:"jsonrpc"`
+		ID      int                 `json:"id"`
+		Error   *rpcclient.RPCError `json:"error"`
+		Result  json.RawMessage     `json:"result"`
 	}
-	if err := etherScan.call(params, &wrapped); err != nil {
+	method := http.MethodGet
+	// A broadcast must not be retried as an idempotent GET after an ambiguous transport failure.
+	if params.Get("action") == "eth_sendRawTransaction" || etherScan.shouldPostRPC(params) {
+		method = http.MethodPost
+	}
+	if err := etherScan.callWithMethod(ctx, method, params, &wrapped); err != nil {
 		return err
 	}
-	if wrapped.Error != nil {
-		return errp.New(wrapped.Error.Message)
+	if wrapped.Status == "0" {
+		var message string
+		if err := json.Unmarshal(wrapped.Result, &message); err != nil {
+			return errp.Newf("unexpected response from EtherScan: %s", string(wrapped.Result))
+		}
+		// Other status-0 errors include timeouts and do not prove rejection.
+		if strings.HasPrefix(message, "Max rate limit reached") || message == "Invalid API Key" {
+			return errp.WithMessage(rpcclient.ErrRequestRejected, message)
+		}
+		return errp.New(message)
 	}
-	if result == nil {
-		return nil
+	if wrapped.Error != nil {
+		return errp.WithStack(*wrapped.Error)
 	}
 	if wrapped.Result == nil {
 		return errp.New("expected result")
 	}
-	if err := json.Unmarshal(*wrapped.Result, result); err != nil {
-		return errp.WithStack(err)
+	if err := json.Unmarshal(wrapped.Result, result); err != nil {
+		return errp.Newf("unexpected response from EtherScan: %s", string(wrapped.Result))
 	}
 	return nil
 }
 
 // TransactionReceiptWithBlockNumber implements rpc.Interface.
 func (etherScan *EtherScan) TransactionReceiptWithBlockNumber(
-	ctx context.Context, hash common.Hash) (*rpcclient.RPCTransactionReceipt, error) {
+	ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	params := url.Values{}
 	params.Set("action", "eth_getTransactionReceipt")
 	params.Set("txhash", hash.Hex())
-	var result *rpcclient.RPCTransactionReceipt
-	if err := etherScan.rpcCall(params, &result); err != nil {
+	var result *types.Receipt
+	if err := etherScan.rpcCall(ctx, params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -398,32 +627,34 @@ func (etherScan *EtherScan) TransactionByHash(
 	params := url.Values{}
 	params.Set("action", "eth_getTransactionByHash")
 	params.Set("txhash", hash.Hex())
-	var result rpcclient.RPCTransaction
-	if err := etherScan.rpcCall(params, &result); err != nil {
+	var result *rpcclient.RPCTransaction
+	if err := etherScan.rpcCall(ctx, params, &result); err != nil {
 		return nil, false, err
+	}
+	if result == nil {
+		return nil, false, ethereum.NotFound
 	}
 	return &result.Transaction, result.BlockNumber == nil, nil
 }
 
-// HeaderByNumber implements rpc.Interface.
-func (etherScan *EtherScan) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
+// BlockNumber implements rpc.Interface.
+func (etherScan *EtherScan) BlockNumber(ctx context.Context) (*big.Int, error) {
 	params := url.Values{}
 	params.Set("action", "eth_getBlockByNumber")
-	if number == nil {
-		params.Set("tag", "latest")
-	} else {
-		panic("not implemented")
-	}
+	params.Set("tag", "latest")
 	params.Set("boolean", "false")
-	var result *types.Header
-	if err := etherScan.rpcCall(params, &result); err != nil {
+	var header *types.Header
+	if err := etherScan.rpcCall(ctx, params, &header); err != nil {
 		return nil, err
 	}
-	return result, nil
+	if header == nil || header.Number == nil {
+		return nil, errp.New("expected block header")
+	}
+	return header.Number, nil
 }
 
-// BalanceAt implements rpc.Interface.
-func (etherScan *EtherScan) BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
+// Balance implements rpc.Interface.
+func (etherScan *EtherScan) Balance(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
 	var result struct {
 		Status  string
 		Message string
@@ -434,12 +665,8 @@ func (etherScan *EtherScan) BalanceAt(ctx context.Context, account common.Addres
 	params.Set("module", "account")
 	params.Set("action", "balance")
 	params.Set("address", account.Hex())
-	if blockNumber == nil {
-		params.Set("tag", "latest")
-	} else {
-		panic("not implemented")
-	}
-	if err := etherScan.call(params, &result); err != nil {
+	params.Set("tag", hexutil.EncodeBig(blockNumber))
+	if err := etherScan.call(ctx, params, &result); err != nil {
 		return nil, err
 	}
 	if result.Status != "1" {
@@ -452,6 +679,134 @@ func (etherScan *EtherScan) BalanceAt(ctx context.Context, account common.Addres
 	return balance, nil
 }
 
+func (etherScan *EtherScan) callNonNegativeInt(
+	ctx context.Context, params url.Values, resultName string,
+) (*big.Int, error) {
+	var result struct {
+		Status string
+		Result string
+	}
+	if err := etherScan.call(ctx, params, &result); err != nil {
+		return nil, err
+	}
+	if result.Status != "1" {
+		return nil, errp.Newf("could not get %s: %s", resultName, result.Result)
+	}
+	value, ok := new(big.Int).SetString(result.Result, 10)
+	if !ok || value.Sign() < 0 {
+		return nil, errp.Newf("unexpected %s from EtherScan", resultName)
+	}
+	return value, nil
+}
+
+// HistoricalBalanceAt returns the native or ERC20 token balance for the latest
+// block whose timestamp does not exceed the requested time.
+// A nil erc20Token selects the native balance.
+func (etherScan *EtherScan) HistoricalBalanceAt(
+	ctx context.Context, account common.Address, at time.Time, erc20Token *erc20.Token,
+) (*big.Int, error) {
+	if etherScan.chainId == "1" && at.Unix() < mainnetLaunchTimestamp {
+		return big.NewInt(0), nil
+	}
+
+	params := url.Values{
+		"module":    {"block"},
+		"action":    {"getblocknobytime"},
+		"timestamp": {strconv.FormatInt(at.Unix(), 10)},
+		"closest":   {"before"},
+	}
+	blockNumber, err := etherScan.callNonNegativeInt(ctx, params, "snapshot block")
+	if err != nil {
+		return nil, err
+	}
+
+	params = url.Values{
+		"module":  {"account"},
+		"action":  {"balancehistory"},
+		"address": {account.Hex()},
+		"blockno": {blockNumber.String()},
+	}
+	if erc20Token != nil {
+		params.Set("action", "tokenbalancehistory")
+		params.Set("contractaddress", erc20Token.ContractAddress().Hex())
+	}
+	return etherScan.callNonNegativeInt(ctx, params, "snapshot balance")
+}
+
+// Balances returns balances at the specified block, or the latest if nil, for multiple addresses.
+func (etherScan *EtherScan) Balances(ctx context.Context, accounts []common.Address, blockNumber *big.Int) (map[common.Address]*big.Int, error) {
+	if len(accounts) == 0 {
+		return nil, nil
+	}
+
+	params := url.Values{}
+	params.Set("module", "account")
+	params.Set("action", "balancemulti")
+	if blockNumber == nil {
+		params.Set("tag", "latest")
+	} else {
+		params.Set("tag", hexutil.EncodeBig(blockNumber))
+	}
+
+	balances := make(map[common.Address]*big.Int)
+
+	type balancesResult struct {
+		Status  string
+		Message string
+		Result  []struct {
+			Account string     `json:"account"`
+			Balance jsonBigInt `json:"balance"`
+		} `json:"result"`
+	}
+
+	for addressesChunk := range slices.Chunk(accounts, maxAddressesForBalances) {
+
+		addresses := make([]string, len(addressesChunk))
+		for i, account := range addressesChunk {
+			addresses[i] = account.Hex()
+		}
+
+		params.Set("address", strings.Join(addresses, ","))
+
+		result := balancesResult{}
+		if err := etherScan.call(ctx, params, &result); err != nil {
+			return nil, err
+		}
+		if result.Status != "1" {
+			return nil, errp.New("unexpected response from EtherScan")
+		}
+
+		for _, item := range result.Result {
+			account := common.HexToAddress(item.Account)
+			balance := item.Balance.BigInt()
+			balances[account] = balance
+		}
+	}
+	return balances, nil
+}
+
+// ERC20Balance implements rpc.Interface.
+func (etherScan *EtherScan) ERC20Balance(account common.Address, erc20Token *erc20.Token, blockNumber *big.Int) (*big.Int, error) {
+	parsed, err := erc20.IERC20MetaData.GetAbi()
+	if err != nil {
+		return nil, err
+	}
+	data, err := parsed.Pack("balanceOf", account)
+	if err != nil {
+		return nil, err
+	}
+	contract := erc20Token.ContractAddress()
+	result, err := etherScan.CallContract(context.TODO(), ethereum.CallMsg{To: &contract, Data: data}, blockNumber)
+	if err != nil {
+		return nil, err
+	}
+	values, err := parsed.Unpack("balanceOf", result)
+	if err != nil {
+		return nil, err
+	}
+	return values[0].(*big.Int), nil
+}
+
 // CallContract implements rpc.Interface.
 func (etherScan *EtherScan) CallContract(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	params := url.Values{}
@@ -460,18 +815,13 @@ func (etherScan *EtherScan) CallContract(ctx context.Context, msg ethereum.CallM
 	if blockNumber == nil {
 		params.Set("tag", "latest")
 	} else {
-		panic("not implemented")
+		params.Set("tag", hexutil.EncodeBig(blockNumber))
 	}
 	var result hexutil.Bytes
-	if err := etherScan.rpcCall(params, &result); err != nil {
+	if err := etherScan.rpcCall(ctx, params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
-}
-
-// CodeAt implements rpc.Interface.
-func (etherScan *EtherScan) CodeAt(ctx context.Context, account common.Address, blockNumber *big.Int) ([]byte, error) {
-	panic("not implemented")
 }
 
 func callMsgParams(params *url.Values, msg ethereum.CallMsg) {
@@ -498,30 +848,29 @@ func (etherScan *EtherScan) EstimateGas(ctx context.Context, msg ethereum.CallMs
 	callMsgParams(&params, msg)
 
 	var result hexutil.Uint64
-	if err := etherScan.rpcCall(params, &result); err != nil {
+	if err := etherScan.rpcCall(ctx, params, &result); err != nil {
 		return 0, err
 	}
 	return uint64(result), nil
 }
 
-// FilterLogs implements rpc.Interface.
-func (etherScan *EtherScan) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
-	panic("not implemented")
-}
-
-// PendingCodeAt implements rpc.Interface.
-func (etherScan *EtherScan) PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error) {
-	panic("not implemented")
-}
-
 // PendingNonceAt implements rpc.Interface.
 func (etherScan *EtherScan) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
+	return etherScan.nonceAt(ctx, account, "pending")
+}
+
+// NonceAt returns the confirmed account nonce at the given block.
+func (etherScan *EtherScan) NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error) {
+	return etherScan.nonceAt(ctx, account, hexutil.EncodeBig(blockNumber))
+}
+
+func (etherScan *EtherScan) nonceAt(ctx context.Context, account common.Address, tag string) (uint64, error) {
 	params := url.Values{}
 	params.Set("action", "eth_getTransactionCount")
 	params.Set("address", account.Hex())
-	params.Set("tag", "pending")
+	params.Set("tag", tag)
 	var result hexutil.Uint64
-	if err := etherScan.rpcCall(params, &result); err != nil {
+	if err := etherScan.rpcCall(ctx, params, &result); err != nil {
 		return 0, err
 	}
 	return uint64(result), nil
@@ -529,7 +878,7 @@ func (etherScan *EtherScan) PendingNonceAt(ctx context.Context, account common.A
 
 // SendTransaction implements rpc.Interface.
 func (etherScan *EtherScan) SendTransaction(ctx context.Context, tx *types.Transaction) error {
-	encodedTx, err := rlp.EncodeToBytes(tx)
+	encodedTx, err := tx.MarshalBinary() // canonical RLP encoding, works for legacy and EIP-1559 txs
 	if err != nil {
 		return errp.WithStack(err)
 	}
@@ -537,12 +886,14 @@ func (etherScan *EtherScan) SendTransaction(ctx context.Context, tx *types.Trans
 	params := url.Values{}
 	params.Set("action", "eth_sendRawTransaction")
 	params.Set("hex", hexutil.Encode(encodedTx))
-	return etherScan.rpcCall(params, nil)
-}
-
-// SubscribeFilterLogs implements rpc.Interface.
-func (etherScan *EtherScan) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
-	panic("not implemented")
+	var hash common.Hash
+	if err := etherScan.rpcCall(ctx, params, &hash); err != nil {
+		return err
+	}
+	if hash != tx.Hash() {
+		return errp.New("unexpected transaction hash from EtherScan")
+	}
+	return nil
 }
 
 // SuggestGasPrice implements rpc.Interface.
@@ -550,8 +901,92 @@ func (etherScan *EtherScan) SuggestGasPrice(ctx context.Context) (*big.Int, erro
 	params := url.Values{}
 	params.Set("action", "eth_gasPrice")
 	var result hexutil.Big
-	if err := etherScan.rpcCall(params, &result); err != nil {
+	if err := etherScan.rpcCall(ctx, params, &result); err != nil {
 		return nil, err
 	}
 	return (*big.Int)(&result), nil
+}
+
+// SuggestGasTipCap implements rpc.Interface.
+func (etherScan *EtherScan) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
+	return nil, errp.New("not implemented")
+}
+
+// FeeTargets returns three priorities with fee targets estimated by Etherscan
+// https://docs.etherscan.io/api-reference/endpoint/gasoracle
+// FeeTargets implements rpc.Interface.
+// Note: This is not a true RPC but a custom Etherscan API call which implements their own fee estimation.
+func (etherScan *EtherScan) FeeTargets(ctx context.Context) ([]*ethtypes.FeeTarget, error) {
+	var result struct {
+		// Values are decimal Gwei.
+		Result struct {
+			High    string `json:"FastGasPrice"`
+			Normal  string `json:"ProposeGasPrice"`
+			Low     string `json:"SafeGasPrice"`
+			BaseFee string `json:"suggestBaseFee"`
+		} `json:"result"`
+	}
+	params := url.Values{}
+	params.Set("module", "gastracker")
+	params.Set("action", "gasoracle")
+	if err := etherScan.call(ctx, params, &result); err != nil {
+		return nil, err
+	}
+	parseGwei := func(value string) (*big.Int, error) {
+		amount, err := coin.NewAmountFromString(value, big.NewInt(1e9))
+		if err != nil {
+			return nil, err
+		}
+		wei := amount.BigInt()
+		if wei.Sign() < 0 {
+			return nil, errp.New("gas price must be non-negative")
+		}
+		return wei, nil
+	}
+	highFeeCap, err := parseGwei(result.Result.High)
+	if err != nil {
+		return nil, err
+	}
+
+	normalFeeCap, err := parseGwei(result.Result.Normal)
+	if err != nil {
+		return nil, err
+	}
+
+	lowFeeCap, err := parseGwei(result.Result.Low)
+	if err != nil {
+		return nil, err
+	}
+
+	baseFeeWei, err := parseGwei(result.Result.BaseFee)
+	if err != nil {
+		return nil, err
+	}
+	for _, feeCap := range []*big.Int{highFeeCap, normalFeeCap, lowFeeCap} {
+		if feeCap.Sign() == 0 || feeCap.Cmp(baseFeeWei) < 0 {
+			return nil, errp.New("gas fee cap must be positive and cover the base fee")
+		}
+		if feeCap.Cmp(baseFeeWei) == 0 {
+			// Keep a positive tip for account validation and nodes that reject zero-tip transactions.
+			feeCap.Add(feeCap, big.NewInt(1))
+		}
+	}
+
+	return []*ethtypes.FeeTarget{
+		{
+			TargetCode: accounts.FeeTargetCodeHigh,
+			GasFeeCap:  highFeeCap,
+			GasTipCap:  new(big.Int).Sub(highFeeCap, baseFeeWei),
+		},
+		{
+			TargetCode: accounts.FeeTargetCodeNormal,
+			GasFeeCap:  normalFeeCap,
+			GasTipCap:  new(big.Int).Sub(normalFeeCap, baseFeeWei),
+		},
+		{
+			TargetCode: accounts.FeeTargetCodeLow,
+			GasFeeCap:  lowFeeCap,
+			GasTipCap:  new(big.Int).Sub(lowFeeCap, baseFeeWei),
+		},
+	}, nil
 }

@@ -1,45 +1,64 @@
+// SPDX-License-Identifier: Apache-2.0
+
+import { ReactNode, SyntheticEvent } from 'react';
+import { useTranslation } from 'react-i18next';
+import { open } from '@/api/system';
+import { alertUser } from '@/components/alert/Alert';
+import { runningInIOS } from '@/utils/env';
+import style from './anchor.module.css';
+
+type TProps = {
+  children: ReactNode;
+  className?: string;
+  href: string;
+  icon?: ReactNode;
+  title?: string;
+};
+
 /**
- * Copyright 2018 Shift Devices AG
+ * Renders a link to an external URL or file, which will open in the native browser or application.
+ * Use Link or ButtonLink component for internal links.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * @typedef {Object} LinkProps
+ * @property {string} href - The link to the external URL or file path on the local file system.
+ * @property {string} [icon] - (Optional) An icon associated with the link.
+ * @property {string} [className] - (Optional) Additional CSS class names for styling the link.
+ * @property {string} [title] - (Optional) A title used as tooltip for the link.
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * @param {LinkProps} props - The props object containing properties for the Link component.
  */
+export const A = ({
+  href,
+  icon,
+  className,
+  children,
+  ...props
+}: TProps) => {
+  const { t } = useTranslation();
 
-import { h, JSX, RenderableProps } from 'preact';
-import { route } from 'preact-router';
-import { hide } from '../guide/guide';
-import { debug } from '../../utils/env';
-import { apiPost } from '../../utils/request';
-import * as style from './anchor.module.css';
-
-interface Props {
-    href: string;
-    [property: string]: any;
-}
-
-export default function A({ href, icon, children, ...props }: RenderableProps<Props>): JSX.Element {
-    return (
-        <span className={style.link} onClick={(e: Event) => {
-            e.preventDefault();
-            const { hostname, origin } = new URL(href, location.href);
-            if (origin === 'qrc:' || (debug && hostname === location.hostname)) {
-                hide();
-                route(href);
-            } else {
-                apiPost('open', href);
+  return (
+    <span
+      className={`
+        ${(runningInIOS() ? style.linkIos : style.link) || ''}
+        ${className || ''}
+      `}
+      title={props.title || href}
+      onClick={(e: SyntheticEvent) => {
+        e.preventDefault();
+        open(href)
+          .then(response => {
+            if (!response.success) {
+              alertUser(response.errorMessage
+                ? t('unknownError', { errorMessage: response.errorMessage })
+                : t('genericError'));
             }
-        }} title={props.title || href} {...props}>
-            {icon ? icon : null}
-            {children}
-        </span>
-    );
-}
+          })
+          .catch(console.error);
+      }}
+      tabIndex={0}
+      {...props}>
+      {icon ? icon : null}
+      {children}
+    </span>
+  );
+};

@@ -1,29 +1,35 @@
 .button {
     align-items: center;
-    border-width: 1px;
-    border-style: solid;
+    appearance: none;
     border-color: transparent;
-    border-radius: 2px;
+    border-radius: var(--radius-xl);
+    border-style: solid;
+    border-width: var(--border-width);
     cursor: default;
-    /* Otter doesn't like display: inline-flex; */
     display: inline-flex;
     flex-direction: row;
-    justify-content: center;
-    align-items: center;
     font-family: var(--font-family);
     font-size: var(--size-default);
+    font-variant-numeric: tabular-nums;
     font-weight: 400;
     justify-content: center;
-    min-width: 100px !important;
-    height: 50px;
+    min-height: var(--button-height);
+    min-width: 100px;
+    outline: none;
     padding: 0 var(--space-default);
     position: relative;
-    outline: none;
     text-align: center;
     text-decoration: none;
-    -webkit-appearance: none;
     transition: background-color .2s ease-out, color .2s ease-out;
     will-change: background-color, color;
+}
+
+.button:hover {
+    cursor: pointer;
+}
+
+.button:disabled {
+    cursor: not-allowed;
 }
 
 .button:focus {
@@ -33,7 +39,7 @@
 .primary {
     composes: button;
     background: var(--color-blue);
-    color: var(--color-white);
+    color: var(--color-alt);
 }
 
 .primary:not([disabled]):focus,
@@ -43,56 +49,60 @@
 
 .secondary {
     composes: button;
-    background-color: var(--color-white);
-    border-color: var(--color-gray-alt);
+    background-color: var(--background-secondary);
+    border-color: var(--background-tertiary);
     color: var(--color-default);
 }
 
 .secondary:not([disabled]):focus,
 .secondary:not([disabled]):hover {
-    color: var(--color-blue);
     border-color: var(--color-blue);
+    color: var(--color-blue);
 }
 
 .secondary[disabled] {
-    color: var(--color-gray-alt);
-    border-color: var(--color-mediumgray);
+    border-color: var(--background-quaternary);
+    color: var(--color-tertiary);
 }
 
 .danger {
     composes: button;
-    background-color: var(--color-softred);
-    border-color: var(--color-softred);
-    color: var(--color-white);
+    background-color: var(--color-error);
+    border-color: var(--color-error);
+    color: var(--color-alt);
 }
 
 .danger:not([disabled]):focus,
 .danger:not([disabled]):hover {
-    background-color: var(--color-lightred);
-    border-color: var(--color-lightred);
-}
-
-.danger:focus {
-    outline-color: var(--color-swissred);
+    background-color: var(--color-softred);
+    border-color: var(--color-softred);
 }
 
 .transparent {
     composes: button;
     background-color: transparent;
+    border-color: transparent;
     color: var(--color-blue);
-    border-color: var(--color-blue);
+    display: inline-block;
+    min-width: 0;
 }
 
 .transparent:not([disabled]):focus,
 .transparent:not([disabled]):hover {
     color: var(--color-lightblue);
-    border-color: var(--color-lightblue);
 }
 
 .primary[disabled],
 .danger[disabled],
 .transparent[disabled] {
     opacity: 0.4;
+}
+
+.button.inline {
+    height: auto;
+    min-height: auto;
+    padding: 0;
+    text-decoration: underline;
 }
 
 .button[hidden] {
@@ -102,5 +112,8 @@
 @media (max-width: 768px) {
     .button {
         min-width: 90px;
+    }
+    .button.inline {
+        min-width: auto;
     }
 }

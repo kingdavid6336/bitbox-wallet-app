@@ -1,30 +1,28 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package coin
 
 import (
 	"math/big"
 	"strings"
+	"time"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts/errors"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/errors"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/rates"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/btcsuite/btcd/btcutil/v2"
 )
 
 // Amount represents an amount in the smallest coin unit (e.g. satoshi).
 type Amount struct {
 	n *big.Int
+}
+
+// SumAmounts returns the sum of two amounts.
+func SumAmounts(amount1, amount2 Amount) Amount {
+	var z big.Int
+	z.Add(amount1.n, amount2.n)
+	return NewAmount(&z)
 }
 
 // NewAmount creates a new amount.
@@ -38,7 +36,7 @@ func NewAmountFromInt64(amount int64) Amount {
 }
 
 // NewAmountFromString parses a user given coin amount, converting it from the default coin unit to
-// the the smallest unit.
+// the smallest unit.
 func NewAmountFromString(s string, unit *big.Int) (Amount, error) {
 	// big.Rat parsing accepts rationals like "2/3". Exclude those, we only want decimals.
 	if strings.ContainsRune(s, '/') {
@@ -67,6 +65,65 @@ func (amount Amount) Int64() (int64, error) {
 // BigInt returns a copy of the underlying big integer.
 func (amount Amount) BigInt() *big.Int {
 	return new(big.Int).Set(amount.n)
+}
+
+// FormattedAmountWithConversions and json tags.
+type FormattedAmountWithConversions struct {
+	Amount                 string         `json:"amount"`
+	Unit                   string         `json:"unit"`
+	Conversions            ConversionsMap `json:"conversions"`
+	UnformattedConversions ConversionsMap `json:"unformattedConversions,omitempty"`
+	// Estimated flag is enabled if the Conversions map was expected to
+	// be calculated using historical rates, but latest rates have been used instead.
+	Estimated bool `json:"estimated"`
+}
+
+// FormatWithConversions formats the Amount and adds fiat conversions.
+func (amount Amount) FormatWithConversions(accountCoin Coin, isFee bool, rateUpdater *rates.RateUpdater) FormattedAmountWithConversions {
+	return FormattedAmountWithConversions{
+		Amount: accountCoin.FormatAmount(amount, isFee),
+		Unit:   accountCoin.GetFormatUnit(isFee),
+		Conversions: Conversions(
+			amount,
+			accountCoin,
+			isFee,
+			rateUpdater),
+	}
+}
+
+// FormatWithConversionsAtTime formats the Amount and adds fiat conversions at a given timestamp.
+func (amount Amount) FormatWithConversionsAtTime(accountCoin Coin, timeStamp *time.Time, rateUpdater *rates.RateUpdater) FormattedAmountWithConversions {
+	var conversions map[string]string
+	var estimated bool
+
+	if timeStamp == nil {
+		conversions = Conversions(
+			amount,
+			accountCoin,
+			false,
+			rateUpdater,
+		)
+		estimated = true
+	} else {
+		conversions, estimated = ConversionsAtTime(
+			amount,
+			accountCoin,
+			false,
+			rateUpdater,
+			timeStamp,
+		)
+	}
+	return FormattedAmountWithConversions{
+		Amount:      accountCoin.FormatAmount(amount, false),
+		Unit:        accountCoin.GetFormatUnit(false),
+		Conversions: conversions,
+		Estimated:   estimated,
+	}
+}
+
+// ConvertBTCAmount formats a btcUtil.Amount and its fiat conversions into a FiatConvertedAmount.
+func ConvertBTCAmount(accountCoin Coin, amount btcutil.Amount, isFee bool, rateUpdater *rates.RateUpdater) FormattedAmountWithConversions {
+	return NewAmountFromInt64(int64(amount)).FormatWithConversions(accountCoin, isFee, rateUpdater)
 }
 
 // SendAmount is either a concrete amount, or "all"/"max". The concrete amount is user input and is

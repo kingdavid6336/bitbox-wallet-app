@@ -1,0 +1,97 @@
+.container {
+    border-radius: var(--radius-xl);
+    min-height: var(--item-height-xlarge);
+    width: 100%;
+    min-width: 230px;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    text-decoration: none;
+    text-align:left;
+    border: none;
+    background-color: var(--background-secondary);
+    font-size: var(--size-small);
+    font-weight: 400;
+    padding: 16px 24px;
+    color: var(--color-dark);
+    margin-bottom: var(--space-half);
+}
+
+.content {
+    flex-shrink: 1;
+    max-width: 75%;
+}
+
+.primaryText {
+    color: var(--color-default);
+    font-size: var(--size-default);
+    margin: 0;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+
+.rightContentContainer {
+    align-items: center;
+    display: flex;
+    flex-grow: 1;
+    justify-content: flex-end;
+}
+
+.extraPadding {
+    padding-right: var(--space-quarter);
+}
+
+.displayedValue {
+    color: var(--color-secondary);
+    font-size: var(--size-small);
+    margin: 0;
+    overflow-wrap: anywhere;
+    padding-left: var(--space-half);
+    padding-right: 0;
+    user-select: none;
+    text-align: right;
+    word-break: normal;
+}
+
+button .displayedValue {
+    padding-right: var(--space-quarter);
+}
+
+.displayedValue.withMargin {
+    margin-right: var(--space-quarter);
+    padding-right: 0;
+}
+
+.secondaryText {
+    color: var(--color-secondary);
+    font-size: var(--size-small);
+    margin: 0;
+    margin-top: var(--space-quarter);
+}
+
+.nowrap {
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .container {
+        margin-bottom: 5px;
+        min-width: 100%;
+        padding-left: var(--space-half);
+        padding-right: var(--space-half);
+    }
+}
+
+@media (max-width: 560px) {
+
+    .hideDisplayedValueOnSmall {
+        display: none;
+    }
+
+    .extraComponentSmall {
+        display: block;
+    }
+
+}

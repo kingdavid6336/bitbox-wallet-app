@@ -1,70 +1,62 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package mocks
 
 import (
 	"errors"
 
-	chainhash "github.com/btcsuite/btcd/chaincfg/chainhash"
-	wire "github.com/btcsuite/btcd/wire"
-	btcutil "github.com/btcsuite/btcutil"
-	blockchain "github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/blockchain"
+	blockchain "github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/blockchain"
+	"github.com/BitBoxSwiss/block-client-go/electrum/types"
+	btcutil "github.com/btcsuite/btcd/btcutil/v2"
+	chainhash "github.com/btcsuite/btcd/chainhash/v2"
+	wire "github.com/btcsuite/btcd/wire/v2"
 )
 
 // BlockchainMock implements blockchain.Interface for use in tests.
 type BlockchainMock struct {
-	MockScriptHashGetHistory func(blockchain.ScriptHashHex, func(blockchain.TxHistory), func(error))
-	MockTransactionGet       func(chainhash.Hash, func(*wire.MsgTx), func(error))
-	MockScriptHashSubscribe  func(func() func(error), blockchain.ScriptHashHex, func(string))
-	MockHeadersSubscribe     func(func() func(error), func(*blockchain.Header))
+	MockScriptHashGetHistory func(blockchain.ScriptHashHex) (blockchain.TxHistory, error)
+	MockTransactionGet       func(chainhash.Hash) (*wire.MsgTx, error)
+	MockScriptHashSubscribe  func(func() func(), blockchain.ScriptHashHex, func(string))
+	MockHeadersSubscribe     func(func(*types.Header))
 	MockTransactionBroadcast func(*wire.MsgTx) error
-	MockRelayFee             func(func(btcutil.Amount), func(error))
-	MockEstimateFee          func(int, func(*btcutil.Amount), func(error))
-	MockHeaders              func(int, int, func([]*wire.BlockHeader, int))
-	MockGetMerkle            func(chainhash.Hash, int, func(merkle []blockchain.TXHash, pos int), func(error))
+	MockRelayFee             func() (btcutil.Amount, error)
+	MockEstimateFee          func(int) (btcutil.Amount, error)
+	MockHeaders              func(int, int) (*blockchain.HeadersResult, error)
+	MockGetMerkle            func(chainhash.Hash, int) (*blockchain.GetMerkleResult, error)
 	MockClose                func()
 	MockConnectionError      func() error
 
 	MockRegisterOnConnectionErrorChangedEvent func(func(error))
+	MockManualReconnect                       func()
 }
 
 // ScriptHashGetHistory implements Interface.
-func (b *BlockchainMock) ScriptHashGetHistory(s blockchain.ScriptHashHex, success func(blockchain.TxHistory), cleanup func(error)) {
+func (b *BlockchainMock) ScriptHashGetHistory(s blockchain.ScriptHashHex) (blockchain.TxHistory, error) {
 	if b.MockScriptHashGetHistory != nil {
-		b.MockScriptHashGetHistory(s, success, cleanup)
+		return b.MockScriptHashGetHistory(s)
 	}
+	panic("ScriptHashGetHistory not mocked")
 }
 
 // TransactionGet implements Interface.
-func (b *BlockchainMock) TransactionGet(h chainhash.Hash, success func(*wire.MsgTx), cleanup func(error)) {
+func (b *BlockchainMock) TransactionGet(h chainhash.Hash) (*wire.MsgTx, error) {
 	if b.MockTransactionGet != nil {
-		b.MockTransactionGet(h, success, cleanup)
+		return b.MockTransactionGet(h)
 	}
+	panic("TransactionGet not mocked")
 }
 
 // ScriptHashSubscribe implements Interface.
-func (b *BlockchainMock) ScriptHashSubscribe(setupAndTeardown func() func(error), s blockchain.ScriptHashHex, success func(string)) {
+func (b *BlockchainMock) ScriptHashSubscribe(setupAndTeardown func() func(), s blockchain.ScriptHashHex, success func(string)) {
 	if b.MockScriptHashSubscribe != nil {
 		b.MockScriptHashSubscribe(setupAndTeardown, s, success)
 	}
 }
 
 // HeadersSubscribe implements Interface.
-func (b *BlockchainMock) HeadersSubscribe(setupAndTeardown func() func(error), success func(*blockchain.Header)) {
+func (b *BlockchainMock) HeadersSubscribe(success func(*types.Header)) {
 	if b.MockHeadersSubscribe != nil {
-		b.MockHeadersSubscribe(setupAndTeardown, success)
+		b.MockHeadersSubscribe(success)
 	}
 }
 
@@ -77,33 +69,38 @@ func (b *BlockchainMock) TransactionBroadcast(msgTx *wire.MsgTx) error {
 }
 
 // RelayFee implements Interface.
-func (b *BlockchainMock) RelayFee(success func(btcutil.Amount), cleanup func(error)) {
+func (b *BlockchainMock) RelayFee() (btcutil.Amount, error) {
 	if b.MockRelayFee != nil {
-		b.MockRelayFee(success, cleanup)
+		return b.MockRelayFee()
 	}
+	panic("not implemented")
 }
 
 // EstimateFee implements Interface.
-func (b *BlockchainMock) EstimateFee(i int, success func(*btcutil.Amount), cleanup func(error)) {
+func (b *BlockchainMock) EstimateFee(i int) (btcutil.Amount, error) {
 	if b.MockEstimateFee != nil {
-		b.MockEstimateFee(i, success, cleanup)
+		return b.MockEstimateFee(i)
 	}
+	panic("not implemented")
 }
 
 // Headers implements Interface.
-func (b *BlockchainMock) Headers(i1 int, i2 int, success func([]*wire.BlockHeader, int)) {
+func (b *BlockchainMock) Headers(i1 int, i2 int) (*blockchain.HeadersResult, error) {
 	if b.MockHeaders != nil {
-		b.MockHeaders(i1, i2, success)
-	} else {
-		success([]*wire.BlockHeader{}, 1)
+		return b.MockHeaders(i1, i2)
 	}
+	return &blockchain.HeadersResult{
+		Headers: []*wire.BlockHeader{},
+		Max:     1,
+	}, nil
 }
 
 // GetMerkle implements Interface.
-func (b *BlockchainMock) GetMerkle(h chainhash.Hash, i int, success func(merkle []blockchain.TXHash, pos int), cleanup func(error)) {
+func (b *BlockchainMock) GetMerkle(h chainhash.Hash, i int) (*blockchain.GetMerkleResult, error) {
 	if b.MockGetMerkle != nil {
-		b.MockGetMerkle(h, i, success, cleanup)
+		return b.MockGetMerkle(h, i)
 	}
+	panic("not implemented")
 }
 
 // Close implements Interface.
@@ -123,5 +120,14 @@ func (b *BlockchainMock) ConnectionError() error {
 
 // RegisterOnConnectionErrorChangedEvent implements Interface.
 func (b *BlockchainMock) RegisterOnConnectionErrorChangedEvent(f func(error)) {
-	b.MockRegisterOnConnectionErrorChangedEvent(f)
+	if b.MockRegisterOnConnectionErrorChangedEvent != nil {
+		b.MockRegisterOnConnectionErrorChangedEvent(f)
+	}
+}
+
+// ManualReconnect implements Interface.
+func (b *BlockchainMock) ManualReconnect() {
+	if b.MockManualReconnect != nil {
+		b.MockManualReconnect()
+	}
 }

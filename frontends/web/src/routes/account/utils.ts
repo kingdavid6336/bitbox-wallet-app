@@ -1,81 +1,86 @@
-/**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { CoinCode, ScriptType } from '../../api/account';
+import type { AccountCode, CoinCode, ScriptType, TAccount, TAccountBase, TKeystore } from '@/api/account';
 
-export function isBitcoinOnly(coinCode: CoinCode): boolean {
-    switch (coinCode) {
-    case 'btc':
-    case 'tbtc':
-        return true;
-    default:
-        return false;
+export const findAccount = <T extends { code: AccountCode }>(
+  accounts: T[],
+  accountCode: AccountCode
+): T | undefined => {
+  return accounts.find(({ code }) => accountCode === code);
+};
+
+export const getDisplayAccountNumber = (accountNumber?: number | null): number | undefined => {
+  if (accountNumber === undefined || accountNumber === null) {
+    return undefined;
+  }
+  return accountNumber + 1;
+};
+
+export const getScriptName = (scriptType: ScriptType): string => {
+  switch (scriptType) {
+  case 'p2pkh':
+    return 'Legacy (P2PKH)';
+  case 'p2wpkh-p2sh':
+    return 'Wrapped Segwit (P2WPKH-P2SH)';
+  case 'p2wpkh':
+    return 'Native segwit (bech32, P2WPKH)';
+  case 'p2tr':
+    return 'Taproot (bech32m, P2TR)';
+  }
+};
+
+export type TAccountsByKeystore<T extends { keystore: TKeystore } = TAccount> = {
+  keystore: TKeystore;
+  accounts: T[];
+};
+
+// Returns the accounts grouped by the keystore fingerprint.
+export const getAccountsByKeystore = <T extends TAccountBase>(accounts: T[]): TAccountsByKeystore<T>[] => {
+  return Object.values(accounts.reduce((acc, account) => {
+    const key = account.keystore.rootFingerprint;
+    if (!acc[key]) {
+      acc[key] = {
+        keystore: account.keystore,
+        accounts: []
+      };
     }
-}
+    acc[key].accounts.push(account);
+    return acc;
+  }, {} as Record<string, TAccountsByKeystore<T>>));
+};
 
-export function isBitcoinBased(coinCode: CoinCode): boolean {
-    switch (coinCode) {
-    case 'btc':
-    case 'tbtc':
-    case 'ltc':
-    case 'tltc':
-        return true;
-    default:
-        return false;
-    }
-}
+type TKeystoreName = {
+  keystore: {
+    name: string;
+  };
+};
 
-export function isEthereumBased(coinCode: CoinCode): boolean {
-    return coinCode === 'eth' || coinCode === 'teth' || coinCode === 'reth' || coinCode.startsWith('eth-erc20-');
-}
+// Returns true if more than one keystore has the given name.
+export const isAmbiguousName = (
+  name: string,
+  keystoreNames: TKeystoreName[],
+): boolean => {
+  return keystoreNames.filter(keystore => keystore.keystore.name === name).length > 1;
+};
 
-export function getCoinCode(coinCode: CoinCode): CoinCode | undefined {
-    switch (coinCode) {
-        case 'btc':
-        case 'tbtc':
-            return 'btc';
-        case 'ltc':
-        case 'tltc':
-            return 'ltc';
-        case 'eth':
-        case 'teth':
-        case 'reth':
-            return 'eth';
-    }
-}
+/** Matches `/account/<code>/addresses/<addressID>/verify`. */
+const ADDRESS_VERIFY_ROUTE_RE = /^\/account\/[^/]+\/addresses\/[^/]+\/verify$/;
 
+export const isAddressVerifyRoute = (pathname: string): boolean =>
+  ADDRESS_VERIFY_ROUTE_RE.test(pathname);
 
-export function getScriptName(scriptType: ScriptType): string {
-    switch (scriptType) {
-        case 'p2pkh':
-            return 'Legacy';
-        case 'p2wpkh-p2sh':
-            return 'Segwit';
-        case 'p2wpkh':
-            return 'Native segwit (bech32)';
-    }
-}
+/** Query param used to skip device verification on the address verify route. */
+export const SKIP_DEVICE_VERIFICATION_PARAM = 'skipDeviceVerification';
 
-export function customFeeUnit(coinCode: CoinCode): string {
-    if (isBitcoinBased(coinCode)) {
-        return 'sat/vB';
-    }
-    if (isEthereumBased(coinCode)) {
-        return 'Gwei';
-    }
-    return '';
-}
+export type TAccountCoinMap = {
+  [code in CoinCode]?: TAccount[];
+};
+
+export const getAccountsPerCoin = (accounts: TAccount[]): TAccountCoinMap => {
+  return accounts.reduce<Partial<TAccountCoinMap>>((accountPerCoin, account) => {
+    accountPerCoin[account.coinCode]
+      ? accountPerCoin[account.coinCode]!.push(account)
+      : accountPerCoin[account.coinCode] = [account];
+    return accountPerCoin;
+  }, {});
+};

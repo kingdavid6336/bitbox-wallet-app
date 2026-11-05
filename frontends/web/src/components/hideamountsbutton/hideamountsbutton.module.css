@@ -1,0 +1,22 @@
+.button {
+    border-width: 0;
+    display: flex;
+    padding: 0;
+    text-align: left;
+}
+
+.button img {
+    max-height: var(--size-default);
+    width: var(--size-default);
+}
+
+.buttonText {
+    margin-left: var(--space-eight);
+}
+
+@media (max-width: 768px) {
+    .button {
+        min-width: auto;
+        padding: 0 var(--space-quarter);
+    }
+}

@@ -1,0 +1,10 @@
+.settingNameContainer {
+    align-items: center;
+    display: flex;
+}
+
+.settingName {
+    color: var(--color-swissred);
+    margin: 0;
+    margin-left: var(--space-quarter);
+}

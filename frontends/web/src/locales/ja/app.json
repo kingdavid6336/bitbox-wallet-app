@@ -1,60 +1,99 @@
 {
   "account": {
+    "account": "アカウント",
+    "accounts": "アカウント",
+    "backupReminder": "あなたのウォレット<strong>{{name}}</strong>が {{fiat}} {{threshold}} を超えました。\n\n追加の保護のために、ペーパー・バックアップの作成をおすすめします。手順は簡単で、すぐに行えます。",
+    "backupReminderLink": "紙にバックアップを作成",
     "disconnect": "接続が切れました。再試行中です…",
-    "export": "エクスポート",
-    "exportTransactions": "取引一覧をCSV形式でダウンロードフォルダにエクスポート",
+    "exportTransactions": "取引一覧をCSV形式でダウンロードフォルダにエクスポートする\n",
     "fatalError": "予期せぬエラーが起こりました。",
     "incoming": "受信中",
-    "info": {
-      "btc-p2pkh": "こちらはBitcoinのLegacyアカウントになります。より低いネットワーク手数料で取引を行うためにも、SegwitのBitcoinアカウントを使用することを推奨します。",
-      "btc-p2wpkh": "こちらはさらに低いネットワーク手数料で使用できるNative SegwitのBitcoinアカウントになります。まだ幅広くサポートされていないBech32のアドレス形式を使用しています。最先端の技術を試したい場合のみご使用ください。",
-      "btc-p2wpkh-p2sh": "こちらはSegwitのBitcoinアカウントで、低いネットワーク手数料での取引のため推奨されています。以前のアプリからアップグレードを行なった場合、あなたの資金はLegacyのBitcoinアカウントにあり、これは「設定」から有効にすることができます。最先端の技術を試してより低いネットワーク手数料を試したい場合は、「設定」からBech32のアドレス形式を使用するNative SegwitのBitcoinアカウントを有効にしてください。",
-      "tbtc-p2pkh": "$t(account.info.btc-p2pkh)",
-      "tbtc-p2wpkh": "$t(account.info.btc-p2wpkh)",
-      "tbtc-p2wpkh-p2sh": "$t(account.info.btc-p2wpkh-p2sh)"
-    },
     "initializing": "ブロックチェーンから情報を取得中…",
-    "openFile": "ファイルを開く",
-    "reconnecting": "接続が切れました。再試行中…"
+    "insuranceExpired": "<strong>アカウントに保険が適用されなくなりました</strong>\n\nこのアカウントの保険プランが変更されました。\n詳細については、保険ページをご確認ください。",
+    "insured": "保険付き口座",
+    "maybeProxyError": "Torプロキシが有効化されています。Torプロキシが正しく動作していることを確認するか、プロキシ設定を無効にしてください。",
+    "reconnecting": "接続が切れました。再試行中…",
+    "syncedAddressesCount": "{{count}}個のアドレスをスキャンしました",
+    "uncoveredFunds": "あなたの<strong>{{name}}</strong>アカウントには、以下の未対応のアドレスタイプにコインが存在します：{{uncovered}}。\nアカウントは保険でカバーされていますが、<strong>Native Segwit</strong>アドレスタイプを通じて受け取ったコインのみが対象です。同じアカウント上でも異なるアドレスタイプにあるコインは保険対象外となります。\nこのアカウントのすべてのコインが保険でカバーされるように、未対応のアドレスタイプから<strong>Native Segwit</strong>アドレスタイプにすべてのコインを移動してください。",
+    "uncoveredFundsLink": "コインの移動方法については、こちらのガイドに従ってください。",
+    "warning": "警告"
   },
   "accountInfo": {
     "address": "アドレス",
-    "extendedPublicKey": "拡張パブリックキー",
+    "buyCTA": {
+      "information": {
+        "looksEmpty": "このウォレットは空のようです",
+        "start": "ウォレットにコインを入金するか、BitBoxAppで直接購入して始めましょう。\n\n"
+      }
+    },
+    "extendedPublicKey": "拡張公開鍵",
     "label": "アカウント情報",
+    "scriptType": "スクリプトタイプ",
     "title": "アカウント情報",
-    "verify": "デバイスで確認"
+    "verify": "デバイスで確認",
+    "xpubTypeChangeBtn": {
+      "p2pkh": " legacy P2PKH 拡張公開鍵を表示\n",
+      "p2tr": "Taprootを表示",
+      "p2wpkh": "ネイティブSegwitを表示"
+    },
+    "xpubTypeInfo": "現在、{{scriptType}}拡張公開鍵（{{numberOfXPubs}}中の{{current}}）を表示しています"
   },
   "accountSummary": {
     "availableBalance": "利用可能な残高",
     "balance": "残高",
-    "exportSummary": "ダウンロードフォルダにアカウント概要をCSV形式でエクスポート",
-    "fiatBalance": "不換通過残高",
     "name": "アカウント名",
     "noAccount": "表示できるアカウントがありません。",
-    "title": "アカウント概要",
+    "portfolio": "ポートフォリオ",
+    "title": "ポートフォリオ",
     "total": "合計",
     "transactionHistory": "取引履歴"
   },
   "addAccount": {
-    "accountName": "アカウント名",
-    "address": "アドレス",
-    "coin": "コイン",
-    "error": {
-      "alreadyExists": "アカウントは既に存在します。",
-      "invalidAddress": "有効なアドレスを入力してください",
-      "xprivEntered": "警告：あなたは拡張プライベートキーを入力しました。拡張パブリックキーを入力し、プライベートキーは安全に保管してください。",
-      "xpubInvalid": "拡張パブリックキーの形式が正しくありません。"
+    "chooseName": {
+      "nextButton": "アカウントを追加",
+      "step": "アカウント名をつける",
+      "title": "あなたのアカウントに名前を付けてください"
     },
-    "extendedPublicKey": "拡張パブリックキー",
-    "scriptType": "スクリプトタイプ",
-    "submit": "アカウントを追加",
-    "title": "アカウントを追加",
-    "warning": {
-      "xpubWrongNet": "注意：拡張公開鍵の形式が選択されたアカウントに対して有効でない可能性を示しています。目的の取引が表示されない場合、別のアカウント形式から拡張公開鍵のインポートを試みてください。"
-    }
+    "selectCoin": {
+      "nextButton": "次",
+      "step": "コインを選択",
+      "title": "仮想通貨を選択"
+    },
+    "success": {
+      "addAnotherAccount": "別のアカウントを追加",
+      "message": "<strong>{{accountName}}</strong>があなたのアカウントに追加されました",
+      "nextButton": "完了",
+      "step": "終了",
+      "title": "アカウント追加済み"
+    },
+    "title": "アカウント追加"
+  },
+  "aopp": {
+    "addressRequest": "{{host}}は受け取りアドレスを要求しています",
+    "addressRequestWithLogo": "受け取りアドレスを要求しています",
+    "addressRequestWithLogoAndXPub": "受信アドレスと公開鍵（xpub）を要求しています。",
+    "addressRequestWithXPub": "{{host}} が受信アドレスと公開鍵（xpub）を要求しています。",
+    "banner": "アドレスの要求が進行中です。続行するためにデバイスを接続してください。",
+    "errorTitle": "アドレスのリクエスト中にエラーが起きました",
+    "labelAddress": "アドレス",
+    "labelMessage": "メッセージ",
+    "reverifyInfoText": "アドレスの確認",
+    "signing": "次に進むには、BitBox でメッセージを署名してください",
+    "success": {
+      "message": "{{host}}で進めてください",
+      "title": "アドレスの送信に成功"
+    },
+    "title": "アドレスリクエスト",
+    "xpubRequested": "xpub を共有すると、外部サービスがあなたのアカウントのアドレスを確認できるようになります。ただし、コインは安全であり、引き続きあなたの管理下にあります。"
   },
   "app": {
     "upgrade": "アプリの新しいバージョンが利用可能です！{{current}}から{{version}}にアップグレードしてください。"
+  },
+  "auth": {
+    "authButton": "認証",
+    "dismissButton": "キャンセル",
+    "missing": "お使いの端末のシステム設定から、画面ロックを設定してください。",
+    "title": "続行するには認証してください"
   },
   "backup": {
     "check": {
@@ -88,6 +127,7 @@
     "description": "<strong>ウォレットのバックアップファイル</strong>を選択してください",
     "insert": "バックアップを管理するにはSDカードを挿入してください。",
     "insertButton": "SDカードを挿入しました",
+    "link": "バックアップの管理画面へ",
     "list": "microSDカード上のバックアップ",
     "noBackups": "このmicroSDカードにはバックアップが存在しません。",
     "restore": {
@@ -103,298 +143,637 @@
         "showLabel": "リカバリーパスワード"
       },
       "restoring": "バックアップから復元中…",
+      "selectedBackup": "<strong>{{backupName}}</strong>は、{{createdDateTime}}に作成され、復元されます。",
+      "subtitle": "続行するにはバックアップを選択してください",
       "title": "復元",
       "understand": "間違ったリカバリーパスワードは別のウォレットを作成することを理解しました"
     },
     "showMnemonic": {
-      "description": "これからあなたのウォレットを構成する単語が24個表示されます。紙に書き写してください。\n\n<strong>デジタルな形や写真を撮るなどの保存はしないでください。</strong>\n\n<strong>単語を声に出さないでください。</strong>\n\n<strong>このバックアップはパスワードによって保護されていません。\n</strong>\n\n後ほど各単語を確認していただくことになります。",
-      "title": "ニーモニック・シードを表示"
+      "title": "リカバリーワードを表示する",
+      "warning": "<strong>リカバリーフレーズは決して誰にも教えないでください。</strong>リカバリーフレーズを使えば、ウォレットへの完全なアクセスが可能になります。もし誰かがリカバリーフレーズを求めてきたら、それは詐欺師です。絶対に共有しないでください！"
     },
     "title": "バックアップの管理"
   },
   "bb02Bootloader": {
     "abort": "アップグレードしない – 前の画面に戻る",
+    "abort_noUpgrade": "前の画面に戻る",
+    "additionalUpgradeFollows1": "このアップグレードの直後に、追加のアップグレードが行われます。",
+    "additionalUpgradeFollows2": "BitBox はアップグレードが終わるまで接続したままにしてください",
     "advanced": {
-      "label": "アドバンスト設定",
-      "toggleShowFirmwareHash": "スタートアップ時に毎回ファームウェアのハッシュを表示"
+      "label": "詳細設定",
+      "toggleShowFirmwareHash": "起動時に毎回ファームウェアのハッシュを表示"
     },
     "flipscreen": "画面を反転",
-    "orientation": "デバイスの向きは合っていますか？",
-    "success": "アップグレードに成功しました！{{rebootSeconds}}秒後に次に進みます。"
+    "orientation": "デバイスの向きは合っていますか？　",
+    "success": "アップグレードに成功しました！",
+    "success_install": "インストールが成功しました！",
+    "upgradeTitle": "BitBox のファームウェアをアップグレード中",
+    "upgradeTitle_install": "BitBox のファームウェアをインストール中"
   },
   "bitbox": {
     "error": {
       "e10000": "現在のデバイスのパスワードが間違っています。",
-      "e10001": "デバイスパスワードの入れ替えに失敗。",
-      "e102": "パスワードは4文字以上（半角）必要です。",
-      "e112": "秘密デバイスのパスワードとメインデバイスのパスワードは同じであってはいけません。"
+      "e10001": "デバイスのパスワードの変更に失敗しました。",
+      "e102": "パスワードは4文字以上（半角）必要です。"
     }
   },
   "bitbox02Interact": {
-    "confirmDate": "本日の日付をBitBox02で確認してください",
+    "confirmDate": "BitBox 上で本日の日付を確認してください",
     "confirmDateText": "この日付はバックアップ作成に使用されます。",
-    "confirmName": "名前をBitBox02で確認してください",
-    "followInstructions": "BitBox02の手順に従ってください。",
-    "followInstructionsMnemonic": "ニーモニック・シードから復元するにはBitBox02の手順に従ってください。"
+    "confirmName": "BitBox 上で名前を確認してください",
+    "confirmWords": "BitBox に表示される {{amount}} 個のリカバリーワードを書き留めてください。",
+    "confirmWordsText": "その後、バックアップが正しいことを確認するために、BitBox が各単語の確認を求めてきます。",
+    "followInstructions": "BitBox の画面の指示に従って操作してください。",
+    "followInstructionsMnemonic": "バックアップからリカバリーワードを入力してウォレットを復元するために、BitBox の画面の指示に従って操作してください。",
+    "followInstructionsMnemonicTitle": "リカバリーワードから復元する"
   },
   "bitbox02Settings": {
+    "bluetoothToggleEnabled": {
+      "alertDisabled": "BitBoxのBluetoothは現在オフになっています。今後iPhoneと接続する場合は、Bluetoothを再度有効にしてください",
+      "alertEnabled": "Bluetoothがオンになりました。",
+      "description": "iPhoneと接続する際にBluetoothを使用します。",
+      "titleDisabled": "Bluetoothをオンにする",
+      "titleEnabled": "Bluetoothをオフにする"
+    },
     "deviceName": {
       "current": "現在のデバイス名",
-      "input": "BitBox02の名前",
+      "error": "デバイス名を設定できませんでした。",
+      "error_104": "デバイス上でデバイス名の確認が中止されました。",
+      "input": "BitBoxの名前",
       "placeholder": "新しいデバイス名",
-      "title": "BitBox02の名前を設定"
+      "title": "BitBox のデバイス名を設定"
     },
-    "mnemonicPassphrase": {
-      "description": "任意でBItBox02のアンロック後にパスフレーズを入力することができます。\n\n<strong>注意：</strong>パスフレーズの内容毎に新しいウォレットが派生します。ご自身で決めたパスフレーズは<strong>大切に保管してください</strong>。\n<strong>パスフレーズを紛失した場合、ウォレットは復元できません。</strong>",
-      "disable": "ニーモニックパスフレーズを無効化",
-      "enable": "ニーモニックパスフレーズを有効化",
-      "successDisable": "ニーモニックパスフレーズの無効化に成功しました",
-      "successEnable": "ニーモニックパスフレーズの有効化に成功しました。\n\nこれからはBitBox02のアンロック後にパスフレースを入力することができます。\n\nパスフレーズが何か分からない場合はこのオプションを無効化してください、上級ユーザ向けのオプションとなります。\n\n<strong>注意：</strong>どのパスフレーズも有効なウォレットを生成します。パスフレーズが<strong>安全で失くさないよう気をつけてください。</strong>\n\n<strong>パスフレーズを失くした場合は、あなたのコインへアクセスできなくなり、紛失したことになります。</strong"
+    "gotoStartupSettings": {
+      "description": "これにより BitBox が再起動し、起動設定に入ります。",
+      "title": "起動設定に移動"
     }
   },
   "bitbox02Wizard": {
-    "attestationFailed": "デバイス認証に失敗しました。あなたのBitBox02は偽造されたもの、もしくは悪性のものに感染している恐れがあります。BitBox02上のコインは紛失するリスクがあるため、すぐに support@shiftcrypto.ch へご連絡ください。",
+    "advanced": {
+      "button": "詳細オプション",
+      "outOfDate": "ファームウェアの更新が必要です",
+      "seed12WordInfo": "ウォレットを作成した後で単語の数を変更することはできないことに注意してください。",
+      "seed12WordLabel": "24語のシードの代わりに12語のシードを作成します。",
+      "seed12WordText": "BitBox はデフォルトで 24 語のシードを使用します。どちらのシード長も、実際には総当たり攻撃に対して十分な安全性があります。ただし、利便性を重視して 12 語のシードを選ぶユーザーもいます。",
+      "skipSDCardLabel": "マイクロSDカードのバックアップをスキップして、代わりにリカバリーワードを書き留めてください",
+      "skipSDCardText": "セットアップ後にmicroSDカードのバックアップを作成したり、リカバリーワードを書き込んだりするオプションは常に用意されています。これは、設定から行うことができます。",
+      "title": "高度なバックアップオプション"
+    },
+    "attestationFailed": "正規性チェックに失敗しました。これは、デバイスがユーザー入力を待っている間にアプリを再起動したためである可能性があります。再接続して再試行してください。この問題が続く場合は、support@bitbox.swissにお問合せください。",
     "backup": {
       "point1": "microSDカードのバックアップを選択してください",
       "point2": "デバイスのパスワードを設定",
       "restoreText": "さあ、バックアップを復元しましょう！",
-      "text1": "これでBitBox02のパスワードは設定され、ウォレットも作成されました。次はバックアップを作成しましょう、microSDカードがデバイスに挿入されていることを確認してから次に進んでください。",
-      "text2": "バックアップを作るにはデバイスの画面上の手順に従って下さい。",
-      "text3": "バックアップ作成後にデバイスからmicroSDカードを取り外し、<strong>安全な場所</strong>に保管してください。microSDカードの内容はパスワード保護されていません。BitBox02以外のデバイスに挿入しないよう気をつけてください。",
+      "text1": "BitBox のパスワードが設定され、ウォレットが作成されました。続いて、最初のバックアップを作成します。BitBox に microSD カードが挿入されていることを確認し、続行してください。",
+      "text2": "デバイス上の画面の指示に従って、バックアップを作成してください。",
+      "text3": "バックアップの作成が完了したら、microSD カードを取り出し、<strong>安全な場所</strong>に保管してください。microSD カードの内容はパスワードで保護されていません。BitBox以外のデバイスには絶対に挿入しないでください。\n",
       "userConfirmation1": "バックアップは安全な場所に保管するべきです。",
-      "userConfirmation2": "バックアップはパスワードによって保護されていません。バックアップにアクセスのある人はあなたのウォレットにもアクセスがあります。",
-      "userConfirmation3": "BitBox02が損傷または紛失した際には、バックアップからしか私の資金を復元できません。",
-      "userConfirmation4": "BitBox02ならびにバックアップ両方の損傷・紛失の場合、私の資金は失くなります。"
+      "userConfirmation2": "バックアップはパスワードによって保護されていません。バックアップにアクセスできる人はあなたのウォレットにもアクセスできます。",
+      "userConfirmation3": "BitBox を紛失したり故障した場合、資金を復元する唯一の方法は、バックアップからの復元です。",
+      "userConfirmation4": "バックアップと BitBox の両方を紛失または故障させた場合、資金は失われます。",
+      "userConfirmation5": "microSD カードのバックアップは、BitBox 以外のコンピューター、スマートフォン、プリンター、その他の機器に挿入してはいけません。",
+      "userConfirmation5mnemonic": "リカバリーワードをBitBox以外のコンピュータ、スマートフォン、プリンタ、またはその他の機器に保存してはいけません。"
     },
     "create": {
-      "button": "デバイス名を設定して次へ進む",
+      "button": "デバイス名を設定して続行",
       "info": "BitBoxの初期設定には下記のステップを行います：",
-      "inputTitle": "ウォレット名",
+      "inputTitle": "ウォレット名前",
       "point1": "デバイス名の設定",
       "point2": "デバイスのパスワードを設定",
       "point3": "バックアップ作成",
       "text": "さあ、新しいウォレットを作りましょう！"
     },
+    "createBackupAborted": "バックアップの作成が中断されました。",
     "createBackupFailed": "バックアップの作成に失敗しました、再度試してください。",
     "initialize": {
-      "passwordText": "次にデバイスのパスワードを設定しましょう。BitBoxを操作してパスワードの入力を行ってください。",
-      "passwordTitle": "BitBoxのパスワードを設定",
-      "text": "BitBox02のペアリングに成功しました！次にデバイスの初期化を行いましょう。まず最初に新しくウォレットを作成するか、既存のバックアップを復元するかを選んでください。<strong>次のステップに進む前に、デバイスにmicroSDカードが挿入されていることを確認してください。</strong>",
-      "tip": "安全な環境を確保した上で次のステップに進んでください。",
-      "title": "BitBoxの初期化"
+      "tip": "安全な場所で進めることをお勧めします。"
     },
-    "insertSDCard": "<strong>BitBox02にmicroSDカードが挿入されていることを確認してください。</strong?",
     "noPasswordMatch": "パスワードが一致しませんでした、再度試してください。",
     "pairing": {
-      "confirmButton": "確認して次へ進む",
-      "failed": "ペアリングが確認できません。BitBox02を挿し直してください。",
-      "paired": "あなたはコードが一致することをデバイス上で確認しました。間違いがない場合、下のボタンをクリックして次へ進んでください。",
-      "title": "ペアリングコードの確認",
-      "unpaired": "新しいBitBox02が認識されました。下記コードがデバイス上で表示されているものと一致することを確認してください。コードが一致する場合はデバイス画面のチェックマーク下部をタッチし、それから下記ボタンをクリックして次へ進んでください。"
+      "failed": "ペアリングが確認できませんでした。BitBox を再接続してください。",
+      "paired": "あなたのデバイスで以下のコードを確認しました。続行してください。",
+      "title": "ペアリングコードを確認する",
+      "unpaired": "未ペアリングの BitBox が検出されました。BitBox に表示されているペアリングコードと一致していることを確認してください。"
     },
     "restoreFromMnemonic": {
-      "failed": "ニーモニック・シードからの復元に失敗しました、再度試してください。"
+      "e104": "カバリーワードからの復元がキャンセルされました。",
+      "failed": "リカバリーワードからの復元に失敗しました、もう一度試してください。"
     },
     "stepBackup": {
       "beforeProceed": "次へ進む前に、重要なセキュリティ事項を読んでください。",
-      "createBackup": "これからmicroSDカード上にバックアップを作成します。"
+      "createBackup": "これからmicroSDカード上にバックアップを作成します。",
+      "createBackupMnemonic": "あなたは今、リカバリーワードを書き留めることになります。"
     },
     "stepBackupSuccess": {
       "fundsSafe": "資金の安全を保つため、次のことを覚えていてください：",
       "title": "バックアップを復元しました！"
     },
     "stepConnected": {
-      "unlock": "BitBox02のパスワードを入力してアンロックしてください。"
+      "unlock": "BitBoxのパスワードを入力してロックを解除してください"
     },
     "stepCreate": {
-      "buttonBack": "戻る",
-      "buttonContinue": "次へ進む",
-      "nameLabel": "BitBox02の名前",
-      "namePlaceholder": "私のBitBox02",
-      "title": "BitBox02の名前を決めてください",
-      "toastMicroSD": "BitBox02にmicroSDカードが挿入されていることを確認してください。"
+      "description": "この名前は、デバイス名およびバックアップ名として使用されます。",
+      "error": {
+        "genericMessage": "文字、数字、基本的な記号、スペースを使用してください。最大30文字までです。",
+        "invalidChars": "名前に無効な文字が含まれています: {{invalidChars}}.",
+        "tooLong": "名前が長すぎます。"
+      },
+      "nameLabel": "BitBoxの名前",
+      "namePlaceholder": "私のBitBox",
+      "title": "BitBoxの名前を決めてください",
+      "toastMicroSD": "ウォレットのバックアップを保存するために、BitBoxにmicroSDカードを挿入してください。"
     },
     "stepCreateSuccess": {
-      "removeMicroSD": "BitBox02からmicroSDカードを抜いて安全が場所にしまってください。",
+      "removeMicroSD": "BitBoxからmicroSDカードを取り外し、安全な場所に保管してください。",
+      "storeMnemonic": "リカバリーワードを安全な場所に保管してください",
       "success": "バックアップの作成に成功しました。"
     },
     "stepInsertSD": {
-      "insertSDCard": "次へ進むにはBitBox02にmicroSDカードを挿入してください。",
+      "insertSDCard": "次へ進むにはBitBoxにmicroSDカードを挿入してください。",
+      "insertSDCardToSeeBackups": "バックアップを確認するには、microSDカードをBitBoxに挿入してください。",
       "insertSDcardTitle": "microSDカードを挿入してください。"
     },
     "stepPassword": {
-      "title": "BitBox02のパスワードを設定する",
-      "useControls": "BitBox02を操作してパスワードを設定してください。"
+      "e104": "パスワードの設定がキャンセルされました。",
+      "title": "BitBoxのパスワードを設定する",
+      "useControls": "BitBoxを操作してパスワードを設定してください。"
     },
     "stepUninitialized": {
-      "create": "新しいBitBox02をセットアップする。",
+      "create": "BitBoxで新しいウォレットを作成したいです。",
       "restore": "バックアップからウォレットを復元する。",
       "restoreMicroSD": "microSDカードから復元する",
-      "restoreMnemonic": "ニーモニックから復元する",
-      "title": "BitBox02をセットアップする"
-    },
-    "stepUnpaired": {
-      "verify": "ペアリングコードがBitBox02に表示されているものと一致することを確かめてください。"
+      "restoreMnemonic": "リカバリーワードから復元",
+      "title": "ウォレットをセットアップしてください。"
     },
     "success": {
-      "text": "おめでとうございます！BitBox02を使い始める準備が整いました。\n\nBitBox Appの使い方を確認するには、画面右上のアイコンからアプリ内のガイドを参照してください。",
-      "title": "準備が整いました！"
+      "title": "準備が整いました"
     }
   },
-  "bitboxBase": {
-    "connect": "Baseに接続",
-    "connectedBases": "接続されたデバイス",
-    "detectedBases": "ネットワーク上に次のデバイスが認識されました：",
-    "detectedBasesEmpty": "デバイスがありません",
-    "manage": "管理",
-    "manualInput": "BitBox Baseが表示されませんか？下記から手動で接続することができます：",
-    "manualInputInvalid": "IPアドレスが無効です。",
-    "manualInputLabel": "IPアドレス:ポート",
-    "new": "新しいBitBoxBase",
-    "settings": {
-      "advanced": {
-        "blocks": "ブロック数",
-        "confirmSystemPassword": "<strong>SSH認証とsudoアクセス</strong>のためBitBoxBaseのシステムパスワードを設定する。\n$t(generic.confirmToContinue)",
-        "connectElectrum": "Electrumに接続",
-        "headers": "ヘッダー",
-        "ipAddress": "IPアドレス",
-        "manual": "手動で更新",
-        "port": "ポート",
-        "reset": "初期設定にリセット",
-        "sshAccess": {
-          "button": "SSHパスワードでログイン",
-          "confirm": "この設定はパスワードを決めることでBitBoxBaseに<strong>SSHとsudoアクセス</strong>の権限を与えます。\n内容を理解している場合のみ次へお進みください。",
-          "inProgress": "SSHパスワード認証の切り替え",
-          "success": "SSHパスワード認証とsudoアクセス：{{enabled}}",
-          "title": "SSHアクセス"
-        },
-        "status": "ステータス",
-        "subheaders": {
-          "bitcoin": "Bitcoin Core",
-          "electrs": "Electrs",
-          "lightning": "ライトニング",
-          "networking": "ネットワーキング"
-        },
-        "syncOptions": "同期オプション",
-        "systemPassword": "システムパスワードの設定",
-        "systemPasswordSuccess": "BitBoxBaseのシステムパスワードの設定に成功しました。",
-        "title": "アドバンスト設定",
-        "torAddress": "Tor onionアドレス",
-        "version": "バージョン"
-      },
-      "backups": {
-        "confirmBackup": "BitBoxBaseの設定事項のバックアップを外部フラッシュドライブに新規作成します。\n\nBitBoxBaseに<strong>フラッシュドライブが接続されている</strong>ことを確認してください。",
-        "create": "バックアップの作成",
-        "created": "バックアップの作成に成功しました。",
-        "creating": "バックアップの作成中…",
-        "manage": "バックアップの管理",
-        "restore": "バックアップの復元",
-        "title": "バックアップ"
-      },
-      "dashboard": {
-        "lightningChannels": "ライトニング・チャンネルの有効化",
-        "notAvailable": "利用不可",
-        "peers": "Bitcoinピア数",
-        "syncStatus": "Bitcoin同期状況"
-      },
-      "node": {
-        "bitcoinRestarting": "Baseサービスの再起動中…",
-        "changeName": "名前の変更",
-        "changeNameTitle": "BitBoxBaseのホスト名を変更",
-        "confirmDisconnect": "アプリからBitBoxBaseを取り除きます、使用するには再度繋げ直す必要なあります。\n$t(generic.confirmToContinue)"
-      }
+  "bitsurance": {
+    "dashboard": {
+      "active": "有効な保険契約",
+      "button": "新しいアカウントに保険をかける",
+      "canceled": "キャンセル",
+      "coverage": "最大適用範囲",
+      "inactive": "非アクティブ",
+      "processing": "処理",
+      "refused": "拒否",
+      "supportLink": "契約の管理",
+      "title": "保険付き口座\n",
+      "waitpayment": "支払いを待っています"
     },
-    "title": "BitBox Base"
+    "detect": {
+      "button": "既存の保険を確認してください。",
+      "insured": "保険がかけられたアカウントが検出されました：",
+      "notInsured": "保険付き口座が検出されませんでした。保険付き口座をお持ちの場合は、正しいウォレットが接続されていることをご確認ください。",
+      "text": "Bitsuranceに既に登録済みの場合、BitBoxAppは自動的に既存の保険内容を同期することができます。",
+      "title": "すでに保険に加入されていますか？"
+    },
+    "insure": {
+      "button": "可用性と価格を確認してください",
+      "faq": "BitsuranceのFAQをもっと読む",
+      "listItem1": "盗難",
+      "listItem2": "恐喝（例：5ドルの鉄パイプ攻撃など）",
+      "listItem3": "火災、水害、自然災害による損害",
+      "month": "月",
+      "text": "BitBox と最大 €100,000 相当のビットコインを対象に保険をかけましょう",
+      "text2": "保険プランは年間30ユーロ（月額2.50ユーロ）から。Bitsuranceの詳細と正確な保険内容については、以下をご覧ください。",
+      "text3": "現在ドイツで入手可能で、今後さらに多くの地域で入手可能になる予定。",
+      "title": "始める"
+    },
+    "intro": {
+      "link": "Bitsurance のウェブサイト",
+      "text1": "BitBox は Bitsurance と連携し、ビットコインに対する保護をさらに強化します。BitBox が資金のセキュリティを担保する一方で、Bitsurance は技術だけでは防ぎきれない自宅でのリスクたとえば、空き巣や脅迫、ハードウェアウォレット自体の破損などに備えた補償を提供します。"
+    },
+    "terms": {
+      "link": "Bitsuranceプライバシーポリシー",
+      "text1": "Bitsuranceは独立した第三者サービスです。サービス内容や保険請求に関するご質問は、Bitsuranceに直接お問い合わせください。",
+      "text2": "保険は現在ドイツで利用可能で、今後さらに多くの地域で利用できるようになる。",
+      "text3": "現在利用可能なビットコインの最高補償額は1人当たり10万ユーロです。将来的にはもっと高額になる予定です。",
+      "text4": "個人情報と保険契約の拡張公開鍵は、保険契約と関連する情報としてBitsuranceと保険プロバイダーと共有されます。",
+      "text5": "プライバシーに関する詳細は"
+    },
+    "title": "保険"
+  },
+  "bitsuranceAccount": {
+    "errorNoXpub": "エラー： アカウントからxpubを取得できませんでした。",
+    "noAccount": "保険に加入できるアカウントはない。　\n",
+    "select": "アカウント選択"
   },
   "blink": {
     "button": "点滅"
   },
+  "bluetooth": {
+    "connected": "接続済み",
+    "connectionFailed": "接続に失敗しました",
+    "connectionIssues": "接続に問題がありますか？",
+    "enable": "Bluetoothをオンにしてください",
+    "select": "BitBoxを選択してください"
+  },
   "bootloader": {
-    "button": "ファームウェアをアップグレード",
-    "progress": "アップグレード中：{{progress}}\r%",
+    "button": "ファームウェアをアップグレードする",
+    "button_install": "ファームウェアをインストールする",
+    "progress": "アップグレード中",
+    "progress_install": "インストール中",
     "success": "アップグレートが完了しました。今回は、ボタンを触らずにデバイスを挿入し直してください。"
   },
   "button": {
-    "abort": "取消し",
+    "abort": "中止",
     "back": "戻る",
-    "changepin": "デバイスパスワードの変更",
+    "changepin": "デバイスのパスワード変更",
     "check": "バックアップの確認",
-    "copy": "コピーする",
+    "continue": "続行",
+    "copy": "コピー",
     "create": "作成",
+    "dismiss": "閉じる",
+    "done": "完了",
     "download": "ダウンロード",
-    "hiddenwallet": "秘密ウォレットの作成",
     "next": "次へ",
     "ok": "OK",
     "previous": "前へ",
-    "receive": "受信",
     "restore": "復元",
-    "send": "送信",
+    "select": "選択",
     "unlock": "アンロック",
+    "update": "アップデート",
     "upgrade": "アップグレード"
+  },
+  "buy": {
+    "bitrefill": {
+      "error": {
+        "insufficientFunds": "ギフトカードを購入するための残高が足りません。"
+      },
+      "transactionNote": "Bitrefill に送金済み"
+    },
+    "exchange": {
+      "bankTransfer": "銀行振込",
+      "bestDeal": "最良の取引",
+      "buy": "購入",
+      "creditCard": "クレジットカード",
+      "description_bitrefill": "ギフトカード、通話リチャージなどを購入",
+      "fast": "高速",
+      "fee": "手数料",
+      "infoContent": {
+        "bitrefill": {
+          "disclaimer": {
+            "account": {
+              "link": "Bitrefillの購入上限",
+              "text": "アカウントを作成しなくても、一定の範囲でBitrefillをご利用いただけます。上限を引き上げるには、基本アカウントの作成または本人確認が必要です。詳しくは、Bitrefillの購入上限をご覧ください。",
+              "title": "アカウント情報と利用上限"
+            },
+            "claims": {
+              "link": "BitrBitrefillのサポート",
+              "text": "ご購入に関して問題が発生した場合は、ご注文から30日以内に直接Bitrefillへお問い合わせください。",
+              "title": "申し立てについて"
+            },
+            "dataProtection": {
+              "link": "Bitrefillのプライバシーポリシー",
+              "text": "BitBoxAppは個人情報を収集しません。Bitrefillは、そのプライバシーポリシーに基づいて情報を収集します。",
+              "title": "個人データの保護"
+            },
+            "fees": {
+              "text": "Bitrefillでは手数料は明記されていませんが、商品価格に上乗せが含まれている場合があります。上乗せの割合は、販売元・地域・為替レートによって異なります。",
+              "title": "手数料"
+            },
+            "intro": {
+              "text": "Bitrefillは、ビットコインなどの暗号資産でギフトカードを購入したり、携帯電話をチャージしたり、請求書の支払いができるオンラインプラットフォームです。暗号資産を法定通貨に換えることなく、日常の買い物やサービスに使える手軽な方法として利用されています。Bitrefillは、世界中の有名ブランドの商品を幅広く取り扱っており、暗号資産だけで生活したい人や買い物をしたい人に人気があります。",
+              "title_bitcoin": "Bitrefillでビットコインを使う",
+              "title_crypto": "Bitrefillで暗号資産を使う"
+            },
+            "security": {
+              "link": "BitBox security tBitBox security threat modelhreat model",
+              "text": "BitrefillはBitBoxとは別の外部サービスであり、BitBoxのセキュリティ設計には含まれていません。購入時に送金される宛先アドレスはBitrefillが指定するもので、BitBoxがその正当性を確認することはできません。",
+              "title": "セキュリティに関するお知らせ"
+            }
+          },
+          "infobox": {
+            "intro": "Bitrefillは、ビットコインなどの暗号資産でギフトカードや携帯電話のチャージ、各種サービスを購入できるオンラインサービスです。BitBoxAppと連携することで、取引所や他のウォレットに資産を移動することなく、BitBoxから直接支払いが可能になります。"
+          }
+        },
+        "btcdirect": {
+          "disclaimer": {
+            "dataProtection": {
+              "link": "BTC Direct プライバシーポリシー",
+              "text": "BitBoxAppは個人データを収集しません。一方で、BTC Directは規制基準を満たすために必要な情報を、プライバシーポリシーに基づいて収集しています。",
+              "title": "データ保護"
+            },
+            "kyc": {
+              "text": "すべての取引において、顧客の本人確認が必要です。アカウントマネージャーが、手続きの各ステップを案内し、疑問点について丁寧に回答いたします。",
+              "title": "本人確認"
+            },
+            "partnership": {
+              "text": "BitBoxは、信頼できる欧州のブローカーであるBTC Directと提携し、Bitcoin、Ethereum、ステーブルコインなどの大口場外取引（OTC取引）を提供しています。このサービスは、BitBoxApp内でエキスパートによるサポートを受けながら利用することができます。",
+              "title": "BTC Directのプライベートトレーディングデスクを利用して、売買を行いましょう。"
+            },
+            "paymentMethods": {
+              "buy": "ビットコインの購入:",
+              "buy2": "アカウントマネージャーを通じて大口の買注文を行い、固定価格を確定した上で銀行振込で支払いを完了してください。支払いが確認され次第、購入した仮想通貨が直接BitBoxに送付されます。",
+              "fee": "最低取引額は50,000ユーロで、手数料は0.5%から1%の範囲で明確に設定されています。",
+              "sell": "ビットコインの売却:",
+              "sell2": "売却注文を出す際に、OTC（店頭取引）の固定価格を確定することができます。仮想通貨をBTC Directに送付すると、ユーロでの支払いが行われます。必要に応じて、パーソナルサポートもご利用いただけます。",
+              "title": "お支払い方法と手数料"
+            },
+            "personal": {
+              "text": "プライベートトレーディングの各クライアントには、専任のアカウントマネージャーが割り当てられ、電話、ビデオ通話、メール、またはチャットを通じて個別サポートを提供します。注文が確定した時点で、売買価格は即座に固定され、決済が後日行われる場合でも変更されません。注文はBTC DirectのOTCデスクを通じて実行されるため、スリッページが最小限に抑えられます。",
+              "title": "固定価格でのパーソナルサービス"
+            },
+            "security": {
+              "link": "BitBoxのセキュリティ脅威モデル",
+              "text": "BTC Direct のプライベートトレーディングデスクは、BitBox のセキュリティ脅威モデルの対象外となる外部サービスです。ただし、BTC Direct は BitBox 製品に精通しており、安全かつ専門的なガイダンスを提供しています。BitBox 製品は、取引時に暗号資産アドレスを検証することで、安全な送金を確保します。",
+              "title": "セキュリティ"
+            },
+            "title": "免責事項"
+          },
+          "infobox": {
+            "intro_btconly": "高額な店頭取引（OTC）のビットコイン取引に関して、個別サポートを受けることができます。",
+            "intro_multi": "ビットコイン、イーサリアム、ステーブルコインなどの高額な店頭取引（OTC取引）に関して、個別サポートを受けることができます。",
+            "kyc": "BTC Directでは、すべての取引において本人確認が必要です。アカウントマネージャーが各ステップを丁寧にサポートします。",
+            "learnmore": "BTC Directのプライベートトレーディングデスクについて詳しく知る。\n\n",
+            "listItem1": "電話、メール、ビデオ通話、またはチャットでアカウントマネージャーに連絡することで、いつでも売買を行うことができます。",
+            "listItem2": "注文完了後、支払いは銀行振込で行われます。",
+            "listItem3": "最低注文金額：50,000ユーロ",
+            "listItem4": "手数料は0.5%～1%で固定されており、個別サポートも含まれています。\n",
+            "manager": "専任のアカウントマネージャーが各ステップでサポートし、固定レートと最小限のスリッページで安全かつスムーズな取引体験を提供します。"
+          }
+        },
+        "btcdirectWidget": {
+          "disclaimer": {
+            "description": "BitBoxApp では、信頼できるヨーロッパのブローカーである BTC Direct と提携し、暗号資産の売買を簡単に行えるようにしています。このサービスは、銀行振込、クレジットカード、その他多くの現地決済手段に対応しており、ヨーロッパ全域で利用可能です。",
+            "kyc": {
+              "description": "すべての取引には顧客の本人確認が必要です。セルフィー（自撮り）と、公的な書類の写真を撮影して提出してください。",
+              "title": "本人確認"
+            },
+            "paymentMethods": {
+              "buy": "購入：EURで支払いを行うと、コインが直接BitBoxに送られます。一回限りの購入と定期購入のどちらかを選択できます。銀行振込の場合、BTC Directが資金を受け取った時点で為替レートが固定されます。即時決済方法では、一定時間固定された換算レートが適用されます。",
+              "note": "注意：BTC Directの為替レートは、BitBoxAppのレートと若干異なる場合があります。",
+              "sell": "売却：BTC Direct に暗号資産を送金すると、ユーロがあなたの銀行口座に振り込まれます。BTC Direct がコインを受け取った時点で、為替レートが確定します。",
+              "title": "お支払い方法と手数料"
+            },
+            "security": {
+              "description": "BTC Direct は、BitBox のセキュリティ脅威モデルの対象外となる外部サービスです。ただし、私たちは BTC Direct と緊密に連携し、全体的なセキュリティの強化に取り組んでいます。",
+              "link": "BitBoxのセキュリティ脅威モデル",
+              "title": "セキュリティ"
+            },
+            "title_bitcoin": "BTC Directでビットコインを売買する",
+            "title_crypto": "BTC Direct で暗号資産を売買する"
+          },
+          "infobox": {
+            "feesBuying": {
+              "bancontact": "Bancontact：{{fee}}%",
+              "bankTransfer": "銀行振込、SEPA、iDEAL：{{fee}}%",
+              "creditDebitCard": "クレジットカード、Cartes Bancaires：{{fee}}%",
+              "sofort": "Sofort：{{fee}}%",
+              "title": "購入時の手数料"
+            },
+            "feesSelling": {
+              "bankTransfer": "銀行振込手数料：{{fee}}%",
+              "title": "売却手数料"
+            },
+            "intro": "ヨーロッパでのユーロ建て暗号資産の売買",
+            "payment": {
+              "bancontact": "Bancontact",
+              "bankTransfer": "銀行振込、SEPA Instant、iDEAL",
+              "creditDebitCard": "クレジットカード（Mastercard、Visa）、Cartes Bancaires",
+              "sofort": "Sofort",
+              "title": "支払い方法"
+            }
+          },
+          "learnmore": "BTC Directについて詳しく見る"
+        },
+        "moonpay": {
+          "fees": {
+            "bankTransfer": "銀行振込: {{fee}}%",
+            "creditDebitCard": "クレジット/デビットカード: {{fee}}%",
+            "learnMore": "Moonpayについて詳しく知る",
+            "title": "手数料"
+          },
+          "fullCurrenciesList": "ここで全ての通貨のリストを見る",
+          "payment": {
+            "asteriskText": "米国在住の方はご利用いただけません。",
+            "bankTransfer": "銀行振込",
+            "bankTransferDetails": {
+              "pix": "PIX（ブラジル内の取引のみ）",
+              "sepa": "SEPAおよびSEPAインスタント（SEPA加盟国内のユーロ取引のみ）",
+              "uk": "UKファスターペイメント（イギリス内のGBP取引のみ）"
+            },
+            "creditDebitCard": "クレジット/デビットカード",
+            "creditDebitCardDetails": {
+              "cards": "Amex, Mastercard, Visa and Maestro"
+            },
+            "learnMore": "お支払い方法について詳しく見る",
+            "title": "お支払い方法"
+          },
+          "supportedCurrencies": "すべての主要なフィアット通貨をサポート：USD、EUR、CHFなど。"
+        },
+        "pocket": {
+          "fees": {
+            "info": "銀行振込: {{fee}}%",
+            "title": "手数料"
+          },
+          "learnMore": "Pocketについて詳しく知る",
+          "payment": {
+            "bankTransfer": "銀行振込",
+            "bankTransferDetails": {
+              "sepa": "「SEPAおよびSEPAインスタント（SEPA国のユーロ取引のみ）」",
+              "sic": "スイス・インターバンク・クリアリング（CH/LI内のCHF取引のみ）",
+              "uk": "UKファスターペイメント（イギリス内のGBP取引のみ）"
+            },
+            "bankTransferReccuring": "スタンディングオーダーでの定期購入をどのように設定しますか？",
+            "title": "お支払い方法"
+          },
+          "sell": {
+            "title": "ビットコインを売る"
+          },
+          "supportedCurrencies": "欧州通貨に対応：EUR, GBP, and CHF.",
+          "verification": {
+            "info": "日次と年次のしきい値を超える場合にのみ、身元確認が必要です。",
+            "link": "現在のしきい値はこちら",
+            "title": "本人確認"
+          }
+        },
+        "region": {
+          "title": "お客様の銀行口座が登録されている地域を選択すると、どのようなオプションが利用できるかを確認することができます。"
+        }
+      },
+      "noExchanges": "申し訳ございませんが、この地域では利用可能な取引所はございません。",
+      "region": "地域",
+      "selectRegion": "指定なし",
+      "sell": "売却",
+      "spend": "支払う"
+    },
+    "info": {
+      "continue": "同意して続ける",
+      "crypto": "仮想通貨",
+      "disclaimer": {
+        "intro": [
+          "私たちはMoonPayと提携し、BitBoxApp内で直接{{coinCode}}を購入するためのシームレスな方法を提供しています。数回クリックするだけです。",
+          "MoonPayは、160以上の国で{{coinCode}}を簡単かつ迅速に購入することができるプラットフォームです。"
+        ],
+        "payment": {
+          "details": "MoonPay経由で、以下の支払い方法で{{coinCode}}を即座に購入することができます。クレジットカードまたはデビットカードの注文は即座にできて便利ですが、チャージバックのリスクが高まるため、割高になります。大量の購入には銀行振込のご利用をお勧めします。最低手数料は4 USD/EURまたはそれに相当する金額です。",
+          "footnote": "MoonPayの為替レートはBitBoxAppで使用されているものと異なる場合があり、その結果、金額が若干異なることをご了承ください。",
+          "table": {
+            "1_description": "最安値の料金で、最大3営業日かかります。",
+            "1_method": "銀行振込(SEPA)",
+            "2_description": "手数料は高いが、迅速な対応で即座に",
+            "2_method": "クレジットとデビットカード",
+            "description": "概要",
+            "fee": "手数料",
+            "method": "方法"
+          },
+          "title": "支払い方法と手数料"
+        },
+        "privacyPolicy": "MoonPayのプライバシーポリシー",
+        "protection": {
+          "descriptionGeneric_bitcoin": "BitBoxAppはBitcoinを購入する際には一切のデータを収集しません。入金される資金は通常の取引として取り扱われます。しかし、パートナーの取引所は運営のためにいくつかの情報を収集する必要があります。データがどのように取り扱われるのか、詳細は各々のプライバシーポリシーをご覧ください。",
+          "descriptionGeneric_crypto": "BitBoxAppは仮想通貨を購入する際には一切のデータを収集しません。入金される資金は通常の取引として取り扱われます。しかし、パートナーの取引所は運営のためにいくつかの情報を収集する必要があります。データがどのように取り扱われるのか、詳細は各々のプライバシーポリシーをご覧ください。",
+          "title": "データ保護"
+        },
+        "security": {
+          "descriptionGeneric_bitcoin": "パートナー取引所を通じてビットコインを購入する場合、外部サービスを利用することになります。このサービスは BitBox のセキュリティ脅威モデルの対象外であり、BitBoxApp ソフトウェアが実行されている環境の安全性とセキュリティに依存します。",
+          "descriptionGeneric_crypto": "パートナー取引所を通じて暗号資産を購入する場合、外部サービスを利用することになります。このサービスは BitBox のセキュリティ脅威モデルの対象外であり、BitBoxApp ソフトウェアが実行されている環境の安全性とセキュリティに依存しています。",
+          "link": "キュリティ脅威モデル",
+          "title": "セキュリティモデル"
+        },
+        "title_bitcoin": "ビットコイン購入のためのワンストップショップへようこそ",
+        "title_crypto": "仮想通貨購入のためのワンストップショップへようこそ"
+      },
+      "next": "次へ",
+      "selectLabel": "アカウントを選択する",
+      "selectPlaceholder": "コインを選択する",
+      "skip": "再表示しない"
+    },
+    "pocket": {
+      "error": {
+        "insufficientFunds": "選択されたアカウントの残高が不足しています"
+      },
+      "paymentRequestNote": "からの支払いリクエスト",
+      "previousTransactions": "このアカウントの取引履歴は空ではありません。このアカウントを共有すると、過去及び未来の全ての取引がPocketに表示されます。それでも進みますか？",
+      "usedAddress": "アドレス{{address}}はすでに使用されているため、新しいアドレスでやり直してください。",
+      "verifyBitBox02": "あなたがメールで受け取ったアドレスがBitboxに表示されているアドレスと一致することを確認してください。可能であれば、より高いセキュリティを確保するために、別のデバイスでメールを開くべきです。"
+    }
   },
   "changePin": {
     "newTitle": "新しいデバイスパスワード",
     "oldLabel": "現在のデバイスパスワード"
   },
-  "checkSDcard": "microSDカードの確認中",
+  "chart": {
+    "dataMissing": "過去のデータを収集中です...お待ちください",
+    "dataOldTimestamp": "過去の為替レートが更新されています。{{time}}以降のデータがチャートに表示されません。",
+    "dataUpdating": "データを更新中です...",
+    "filter": {
+      "all": "全て",
+      "month": "月",
+      "week": "週",
+      "year": "年"
+    }
+  },
+  "checkSDcard": "microSDカードを確認しています",
+  "clickHere": "こちらをクリック",
   "confirm": {
-    "abortInfo": "タップで",
-    "abortInfoRedText": "中止する",
-    "approveInfo": "4秒以上の長押しで",
-    "approveInfoGreenText": "確認",
-    "info": "BitBox上で",
-    "infoWhenPaired": "まずペアリングされたモバイルアプリで、次にBitBox上で"
+    "info": "BitBoxで続けてください"
   },
   "confirmOnDevice": "デバイス上で確認してください。",
-  "device": {
-    "appUpradeRequired": "あなたのBitBoxはこのソフトウェアとの互換性がありません。最新のバージョンをダウンロードしてからインストールしてください。"
+  "connectKeystore": {
+    "promptNoName": "続行するには、BitBoxを接続してください",
+    "promptWithName": "\"{{name}}\" という名前のBitBoxを接続してください"
   },
-  "deviceLock": {
-    "button": "2段階認証(2FA)を有効にする",
-    "condition1": "バックアップはありますか？",
-    "condition2": "モバイルアプリでの検証はできていますか？",
-    "condition3": "2段階認証(2FA)はバックアップ及びモバイルアプリのペアリングを無効にします。2段階認証を終了するにはデバイスのリセットが必要です。",
-    "confirm": "2段階認証(2FA)を有効にする",
-    "title": "2段階認証(2FA)を有効にする"
+  "darkmode": {
+    "toggle": "ダークモード"
+  },
+  "device": {
+    "appUpradeRequired": "あなたのBitBoxはこのソフトウェアとの互換性がありません。最新のバージョンをダウンロードしてからインストールしてください。",
+    "firmwareUpgradeRequired": "この機能を使用するには、ファームウェアの更新が必要です。",
+    "keystoreConnected": "接続されたウォレット",
+    "unsupportedFeature": "この機能はこのデバイスでは利用できません。"
   },
   "deviceSettings": {
+    "backups": {
+      "manageBackups": {
+        "description": "マイクロSDカードのバックアップを作成するか確認してください。"
+      },
+      "showRecoveryWords": {
+        "description": "BitBoxの画面にリカバリーワードを表示し、確認します。"
+      },
+      "title": "バックアップ"
+    },
+    "deviceInformation": {
+      "attestation": {
+        "description": "BitBoxAppはあなたのデバイスが本物であるかどうかを確認します"
+      },
+      "deviceName": {
+        "description": "あなたのデバイスの名前を変更してください。"
+      },
+      "rootFingerprint": {
+        "description": "ルートフィンガープリントは、現在使用中のウォレットに対して固有の識別子です。パスフレーズを使用する場合、異なるウォレットを区別するのに役立ちます。"
+      },
+      "securechip": {
+        "description": "セキュアチップのモデルです。"
+      },
+      "title": "デバイス情報"
+    },
+    "expert": {
+      "bip85": {
+        "description": "BitBoxウォレットからチャイルドキーを生成してください。",
+        "disclaimer": "チャイルドキーの仕組みとセキュリティ上の考慮事項を理解しています",
+        "how": {
+          "description": "チャイルドキーは、BitBox上でニーモニックとして表示されます。必要な数だけチャイルドキーを作成することができます。チャイルドキーを表示するためには、チャイルド番号（例：1番目、2番目、3番目など）と希望のニーモニックの長さ（12、18、または24のリカバリーワード）を指定する必要があります。同じニーモニックを後で表示するには、<strong>チャイルド番号とワード数</strong>を必ず記録しておいてください。",
+          "title": "どのような仕組みなのですか？"
+        },
+        "recover": {
+          "description": "チャイルドキーのニーモニックはいつでも再表示することができます。前述の通り、同じニーモニックを表示するためには<strong>チャイルド番号とワード数</strong>を覚えておく必要があります。メインのBitBoxリカバリーワードを他のウォレットにインポートしないでください。他のウォレットにインポートする場合は、チャイルドキーのみを使用してください。",
+          "title": "BitBoxのチャイルドキーを使用してウォレットを復元する方法は？"
+        },
+        "security": {
+          "description": "チャイルドキーを再利用しないでください。たとえば、ホットウォレット用にチャイルドキーを使用した後で、同じキーをハードウェアウォレットに使用しないでください。ホットウォレットに使用されたキーは安全とはみなされません。",
+          "title": "セキュリティに関する考慮事項"
+        },
+        "title": "BIP-85のチャイルドキーを表示",
+        "what": {
+          "description": "チャイルドキーは、メインシードから派生され、新しいウォレットを作成する際に追加のシードをバックアップする必要がない方法です。例えば、ホットウォレットが全く新しいシードを作成する代わりに、チャイルドキーを作成してホットウォレットにインポートすることができます。",
+          "link": "BIP-85についてもっと読む",
+          "title": "チャイルドキーとは何ですか？"
+        }
+      },
+      "factoryReset": {
+        "description": "デバイスを初期化します。これにより、BitBoxからウォレットが削除されます！",
+        "title": "工場出荷時の設定にリセットします。"
+      },
+      "goToStartupSettings": {
+        "description": "BitBox のブートローダーを起動します。ここからファームウェアハッシュを有効にできます。"
+      },
+      "passphrase": {
+        "description": "パスフレーズ機能を有効または無効にします。",
+        "title": "パスフレーズ"
+      }
+    },
     "firmware": {
+      "firmwareVersion": "ファームウェアのバージョン",
       "newVersion": {
-        "label": "利用可能なバージョン"
+        "label": "使用可能なバージョン"
       },
       "title": "ファームウェア",
       "upToDate": "デバイスは最新の状態です",
+      "upgradeAvailable": "新しいアップグレードが可能です",
       "version": {
         "label": "バージョン"
       }
     },
     "hardware": {
+      "attestation": {
+        "false": "認証チェックに失敗しました",
+        "label": "真贋チェック",
+        "true": "あなたのBitBoxは本物です"
+      },
       "sdcard": {
         "false": "挿入されていません",
         "label": "microSDカード",
         "true": "挿入されています"
       },
+      "securechip": "セキュアチップ",
       "title": "ハードウェア"
     },
     "loading": "デバイス情報を読込中…",
-    "pairing": {
-      "lock": {
-        "false": "無効",
-        "label": "2段階認証(2FA)",
-        "true": "有効"
-      },
-      "mobile": {
-        "false": "停止中",
-        "label": "モバイルアプリ",
-        "true": "起動中"
-      },
-      "status": {
-        "false": "ペアされていません",
-        "label": "ステータス",
-        "true": "ペアされています"
-      },
-      "title": "ペアリング"
-    },
+    "noDevice": "デバイスが接続されていません",
     "secrets": {
       "manageBackups": "バックアップを管理",
       "title": "秘密"
@@ -402,8 +781,67 @@
   },
   "deviceTampered": "あたなのBitBoxにリカバリーパスワードが同梱されていた場合、直ちにセットアップをやめてサポートに連絡をしてください。Shiftは設定済みのウォレットの販売及びパスワードの推奨を行うことはありません。",
   "dialog": {
-    "cancel": "取消し",
-    "confirm": "確認"
+    "cancel": "キャンセル",
+    "confirm": "確認",
+    "confirmTitle": "確認"
+  },
+  "error": {
+    "accountAlreadyExists": "アカウントはすでに存在しています。",
+    "accountLimitReached": "アカウントを追加できません。このコインのアカウント最大数に達しました。",
+    "aoppCallback": "アドレスを{{host}}に配信する際にエラーが発生しました。",
+    "aoppInvalidRequest": "無効なリクエストです",
+    "aoppNoAccounts": "利用可能なアカウントはありません。",
+    "aoppSigningAborted": "アドレス所有権の要求がキャンセルされました。",
+    "aoppUnknown": "不明なエラーが発生しました",
+    "aoppUnsupportedAsset": "アセットがサポートされていません。",
+    "aoppUnsupportedFormat": "要求されたアドレス形式をサポートする利用可能なアカウントはありません。",
+    "aoppUnsupportedKeystore": "接続されたデバイスは、このアセットのメッセージに署名できません",
+    "aoppVersion": "不明なバージョンです。",
+    "keystoreTimeout": "ウォレットリクエストの有効期限が切れました。もう一度お試しください",
+    "wrongKeystore": "接続されたウォレットが間違っています。このアカウントに合致する正しいデバイスを挿入しているかを確認してください。",
+    "wrongKeystore2": "オプションのパスフレーズを使用している場合、アカウントの正しいパスフレーズを入力していることを確認してください。"
+  },
+  "exchange": {
+    "btcdirect": {
+      "currencyMismatch": "支払いリクエストに想定外の通貨が含まれています",
+      "insufficientFunds": "選択されたアカウントの残高が不足しています。"
+    },
+    "buySell": {
+      "coinNotSupported": "このコインタイプにはオプションが利用できません。",
+      "regionNotSupported": "この地域ではオプションが利用できません。"
+    },
+    "pocket": {
+      "terms": {
+        "dataprotection": {
+          "link": "Pocketの個人情報保護方針",
+          "p1": "BitBoxAppは個人データを学習したり収集したりしません。Pocketは、プライバシーポリシーに記載されているように、いくつかの個人データを収集します。",
+          "title": "データ保護"
+        },
+        "fees": {
+          "extraNote": "Pocketでビットコインを購入してからでないと売却できませんのでご注意ください。",
+          "note": "注：Pocketの為替レートはBitBoxAppのレートと異なる場合があります。",
+          "p1": "<strong>ビットコインの購入:</strong> SEPA銀行振込を使用してEURまたはCHFを送金すると、Pocketが振込を受け取った後、通常同日中にビットコインが直接BitBoxに送付されます。\n",
+          "p2": "<strong>ビットコインの売却:</strong> ビットコインをPocketに送金し、登録済みの銀行口座でEURまたはCHFを受け取ります。為替レートは、Pocketがビットコインを受け取った時点で固定されます。",
+          "title": "お支払い方法と手数料"
+        },
+        "kyc": {
+          "info": "Pocket では、本人確認書類の提出が求められる場合があります。詳細は、Pocket のよくある質問（FAQ）をご参照ください。",
+          "link": "PocketのFAQを読む",
+          "title": "KYC/AML（顧客確認 / マネーロンダリング防止）"
+        },
+        "security": {
+          "link": "BitBoxのセキュリティ脅威モデル",
+          "p1": "Pocket の利用は外部サービスに該当し、BitBoxのセキュリティ脅威モデルの対象外です。ただし、私たちは Pocket と緊密に連携し、全体的なセキュリティの向上に取り組んでいます。",
+          "p2": "<strong>ビットコインの購入:</strong> ビットコイン受取用アドレスを確認するためのメールが、別の通信手段で送信されます。",
+          "p3": "<strong>ビットコインの売却時：</strong> BitBox はビットコインの入金アドレスを暗号的に検証し、ハードウェアウォレット上に「Pocket」と表示します。",
+          "title": "セキュリティ"
+        },
+        "welcome": {
+          "p1": "私たちは、スイスのブローカーであるPocketと提携し、BitBoxApp内でビットコインの売買を簡単に行えるようにしています。このサービスは、SEPA銀行送金が対応しているヨーロッパ全域で利用可能です。",
+          "title": "Pocketでビットコインを売買する"
+        }
+      }
+    }
   },
   "fiat": {
     "default": "デフォルト",
@@ -411,7 +849,38 @@
     "title": "通貨"
   },
   "footer": {
-    "appVersion": "ソフトウェアバージョン："
+    "appVersion": "アプリのバージョン："
+  },
+  "gapLimit": {
+    "change": "おつりアドレスのギャップ制限",
+    "description": "ビットコインの受取アドレスとおつりアドレスのギャップ制限をカスタマイズできます",
+    "maxValue": "ギャップ制限は最大 {{max}} までです。",
+    "minValue": "ギャップ制限は {{min}} 未満には設定できません。",
+    "receive": "受取用アドレスに適用されるギャップ制限",
+    "title": "カスタムギャップ制限の設定"
+  },
+  "generic": {
+    "buy": "{{coinCode}}を購入」",
+    "buySell": "マーケットプレイス（売買サービス）",
+    "buy_bitcoin": "ビットコインを購入",
+    "buy_crypto": "仮想通貨を購入",
+    "close": "閉じる",
+    "enabled_false": "無効化",
+    "enabled_true": "有効化",
+    "noOptionOnIos": "iOSでは利用できません",
+    "noOptions": "該当する選択肢が見つかりません",
+    "paymentRequestNote": "{{name}} の支払い（注文番号：{{orderId}}）",
+    "receive": "{{coinCode}}を受け取る",
+    "receive_bitcoin": "ビットコインを受け取る",
+    "receive_crypto": "仮想通貨を受け取る",
+    "resetToDefault": "初期設定に戻す",
+    "search": "検索…",
+    "searchButton": "検索する",
+    "sell": "{{coinCode}} を売却",
+    "sell_bitcoin": "Bitcoin を売却",
+    "sell_crypto": "暗号資産を売却",
+    "spend_bitcoin": "Bitcoin を使う",
+    "spend_crypto": "暗号資産を使う"
   },
   "genericError": "エラーが発生しました。問題が起きた場合はソフトウェアを再起動してください。",
   "goal": {
@@ -422,7 +891,7 @@
     "paragraph": "次の中から一つ選択してください",
     "step": {
       "1": {
-        "title": "セキュリティー情報"
+        "title": "セキュリティ情報"
       },
       "2": {
         "description": "デバイスパスワード",
@@ -446,156 +915,276 @@
   },
   "guide": {
     "accountDescription": {
-      "text": "こちらはあなたの取引の送受信状況が確認できるアカウント概観となります。残高は各アカウント毎に分けて表示されます。アカウントの種類については、設定画面のガイドをご参照ください。",
-      "title": "ここには何が表示されますか？"
+      "text": "あなたのアカウント概要は、利用可能な残高と受け取りおよび送り出しのトランザクションを表示します。「設定」のガイドには、各アカウントタイプに関する詳しい情報があります。",
+      "title": "ここには何を示していますか？"
     },
     "accountFiat": {
-      "text": "はい、表示通貨を切り替えるには、表示されている通貨部分をクリックすることで有効になっている通貨を順に切り替えることができます。また、設定画面から有効な通貨を変更することができます。",
+      "text": "はい。どのティッカーでもクリックするとフィアット通貨が順に切り替わります。設定で通貨のリストを変更することができます。",
       "title": "他の換算レートも表示できますか？"
     },
     "accountIncomingBalance": {
-      "text": "受信中とは、ネットワークにまだ承認されていない、受け取る予定の取引の合計額を示します。",
+      "text": "受信中は、あなたに送金されたがまだネットワークによって確認されていない金額を合計します。",
       "title": "受信中とはどういう意味ですか？"
     },
     "accountInfo": {
+      "multipleXPubs": {
+        "text": "それぞれのxpubは、表示された\"Type\"（タイプ）に結びついています：\"Native Segwit (bech32)\"、\"Wrapped Segwit\"または“Taproot”（ビットコインのみ）。これらは{{coinName}}で使用されるスクリプトタイプです。BitBoxAppはこれらを組み合わせ、同じアカウントで複数のスクリプトタイプをサポートします。各スクリプトタイプは異なるxpubを提供するため、アカウントごとに複数のxpubが存在します。\n\nデフォルトのアドレス（Native Segwit）に一貫して受け取る場合、\"bech32\" xpubだけが必要です。しかし、\"Wrapped Segwit\"または“Taproot”にも資金を受け取る場合は、それぞれ\"Wrapped Segwit\"と“Taproot”の拡張公開鍵も使用する必要があります。",
+        "title": "なぜ複数のxpubが存在するのですか？"
+      },
+      "privacy": {
+        "text": "この特定のアカウントでは、拡張公開キー（xpub）が全ての金融履歴、アカウントの残高、そして全ての将来の取引を明らかにします。しかし、xpubでは誰もあなたのコインを使うことはできません。\n\nもしxpubを誰かに渡す場合、その人や会社が同一のアカウントの他の全ての取引を見ることができることを理解しておくべきです。それゆえ、その目的のためだけにそのアカウントを使用し、他の資金は別のアカウントに保管するのが良い考えです。",
+        "title": "私のxpub（拡張公開キー）を秘密に保つ必要がありますか？"
+      },
+      "verify": {
+        "text": "はい、xpubを再確認することは常に良い考えです。もし他の人があなたにお金を送るためにこのxpubから受け取りアドレスを生成する場合、これは特に重要です。このxpubがあなたのものであることを確認するために、デバイス上で確認する必要があります。そうしないと、全ての資金が誤ったアドレスに送られる可能性があります。",
+        "title": "デバイス上でxpub（拡張公開キー）を確認する必要がありますか？"
+      },
       "xpub": {
-        "text": "拡張公開鍵とは、全ての取引アドレスの元となる鍵(暗号)です。ElectrumやSentinelなどのウォッチオンリーウォレットとの相互運用などの高度な使用目的のためここに表示されています。",
+        "text": "拡張公開キー（xpub）は、アカウントの全ての受け取りアドレスが派生するルートキーです。\n\nこれは、ElectrumやSentinelなどのウォッチオンリー（閲覧専用）ウォレットとの高度な使用と相互運用性のために提供されています。異なるアドレスタイプに対して資金を受け取った場合は、全てのコインを確認するために、異なるxpubフォーマット全てをウォッチオンリーウォレットにインポートしてください。\n\nただし、第三者のウォレットはまだTaproot xpubをサポートしていないかもしれませんので、ご注意ください。",
         "title": "拡張公開鍵とはなんですか？"
       }
     },
-    "accountLegacyConvert": {
-      "text": "まずは移す先となるBitcoinアカウントの概観画面で「受信」をクリックし、表示されている受信用アドレスをコピーしてください。Legacyアカウントに戻って「送信」をクリックし、「全て送る」のチェックボックスをクリックしてください。この取引を署名して送信すれば、単一の取引で全てのコインを移し出せます。",
-      "title": "Legacyアカウントからどのようにコインを移し出せますか？"
-    },
     "accountRates": {
-      "link": {
-        "text": "www.coingecko.com",
-        "url": "https://www.coingecko.com/"
-      },
       "text": "換算レートは毎分CoinGeckoの情報を取得して更新されます。",
-      "title": "どのレートが使用されていますか？"
+      "title": "どの為替レートが適用されますか？"
     },
     "accountReload": {
-      "text": "全ての取引情報は自動的に更新されます。",
-      "title": "どのように取引履歴を更新できますか？"
+      "text": "それは必要ありません。あなたの取引情報は自動的に更新されます。",
+      "title": "取引履歴を再読み込みすることは可能ですか？"
     },
     "accountSendDisabled": {
       "text": "「送信」ボタンは残高が0以上の時に有効になります。",
       "title": "{{unit}}を送ることが出来ないのですが？"
     },
+    "accountSummaryAmount": {
+      "text": "合計金額は、すべての仮想通貨アカウントの合計です。為替レートはcoingecko.comから取得されます。\n\n注意: BitBoxAppでサポートされていないトークンをMyEtherWalletで使用している場合、表示される金額には含まれません。\n\n\n\n",
+      "title": "総額はどのように算出されるのですか？"
+    },
+    "accountSummaryDescription": {
+      "text": "ここでは、ポートフォリオの時間経過に伴うパフォーマンスを確認できます。チャートの下には、個々の仮想通貨アカウントのサマリーが表示されます。",
+      "title": "このページは何を示しているのでしょうか？"
+    },
     "accountTransactionAttributesBTC": {
-      "text": "バーチャルサイズ：ネットワーク手数料を算出するために使用されます。取引のサイズよりも小さい場合は節約に成功したことになります。\nサイズ：基本となるブロックチェーンから、byte単位で表示されるシリアル化された取引の実サイズです。\n重量：取引とブロックサイズを判断するために、Segwitから採用された新しい単位です。証明書の分離されたbyteは1、それ以外は4の重量単位となります。ブロックサイズの上限は実サイズ1メガバイトに代わり、重量単位400万となります。",
-      "title": "ビットコイン関連の取引詳細"
+      "text": "バーチャルサイズ（Virtual size）：ネットワーク手数料を決定する要素です。もしトランザクションサイズよりも小さい場合、手数料を節約できています。\nサイズ（Size）：ブロックチェーンに基づいてシリアライズされた場合の実際のトランザクションサイズ（バイト単位）です。\nウェイト（Weight）：Segwitで導入された新しい指標で、トランザクションやブロックのサイズを評価するために使用されます。Segregated Witnessのバイトは1として数えられ、それ以外は4のウェイト単位として数えられます。従来の1メガバイトのサイズではなく、ブロックサイズの制限は現在400万のウェイト単位となります。",
+      "title": "ビットコイン特有の取引内容についてはどうでしょうか。　"
     },
     "accountTransactionAttributesGeneric": {
-      "text": "承認数：取引が最初に発信された時は未承認状態となります。採掘者によってブロックに追加されるまで待つ必要があり、ブロックに追加された状態で承認数が1となります。ネットワークに発信される各ブロックは取引に承認数を1つ増やす形となります。基本的に商店などでは承認数が3-6の間でなければ成立した取引とみなしません。\n取引ID：ブロックエキスプローラで取引を参照するために使用できる取引のユニークな識別番号です。\n手数料：採掘者にはそれぞれ採掘するブロックに対して取引手数料という報酬が支払われます。より詳しく知るためには「送信」ボタンをクリックしてください。",
-      "title": "取引詳細では何の情報が表示されていますか？"
+      "text": "\n承認数：最初のトランザクションのブロードキャストは、マイナーがそれをブロックに含めるまで承認されていません。ブロードキャストされた各ブロックは、取引に別の承認を追加します。一般的に、商人や他のネットワーク参加者は、取引が3〜6回の承認を受けた後にのみ決済を行います。\nトランザクションID：block explorerでトランザクションを検索するための一意の識別番号です。\n手数料：マイナーはトランザクションをブロックに含めるためのインセンティブとして手数料を受け取ります。詳細については、送信ボタンをクリックしてください。",
+      "title": "取引明細に記載されている情報は何ですか？"
     },
     "accountTransactionConfirmation": {
-      "text": "ペンディング状態の取引はネットワークに向けて発信され、承認を待っているものとなります。",
-      "title": "ペンディングの取引とは何ですか？"
+      "text": "ネットワークにブロードキャストされたが、まだ承認されていないトランザクションです。",
+      "title": "ペンディングトランザクションとは何ですか？"
     },
     "accountTransactionLabel": {
-      "text": "あなたがコインを受信した、もしくは送信した先のアドレスが表示されています。アドレスは、コインがどのように(従って誰により)消費されるかを暗号化しています。",
-      "title": "各取引では何のアドレスが表示されているのですか？"
+      "text": "それは、コインを受け取ったアドレスまたはコインを送ったアドレスです。\n",
+      "title": "各トランザクションには、どのアドレスが表示されますか？"
     },
     "accountTransactionTime": {
-      "text": "ブロックチェーン上で取引が認証された時間が表示されます。",
-      "title": "何の時間が表示されているのですか？"
+      "text": "ブロックチェーントランザクションの確認時間です。\n",
+      "title": "表示される時間は何時ですか？"
+    },
+    "accounts": {
+      "howManyAccounts": {
+        "text": "Bitcoinと Litecoinは任意の数のアカウントを持つことができます。6つのアカウントがある場合、前のアカウントが使用された場合のみ別のアカウントを追加できます。\n他のコインは最大で5つのアカウントを持つことができます。",
+        "title": "何個のアカウントを作成することができますか？"
+      },
+      "howtoAddTokens": {
+        "text": "ERC20標準を使用するトークンは特定のイーサリアムアカウントに関連付けられています。特定のトークンを有効にしたり無効にしたりするには、「アカウントの管理」画面を開き、あなたのイーサリアムアカウントを展開し、目的のトークンをオンまたはオフに切り替えます。",
+        "title": "トークンを追加したいのですが、どうすればよいですか？"
+      },
+      "moveFunds": {
+        "text": "はい。しかし、アカウントが独立しているため、通常の取引を使用して資金を送金する必要があります。",
+        "title": "アカウント間で資金を移動することは可能ですか？"
+      },
+      "recoverAccounts": {
+        "text": "はい。BitBoxAppは、他のほとんどの暗号ウォレットと互換性のある、確立された標準を使用してアカウントを作成します。",
+        "title": "他のウォレットのアカウントを復元することはできますか？"
+      },
+      "supportedCoins": {
+        "link": {
+          "text": "サポートされているコインを表示する"
+        },
+        "text": "BitBoxApp は、Bitcoin、Litecoin、Ethereum、および一部の ERC20 トークンに対応しています。Cardano やその他のトークンを利用する場合は、AdaLite や Rabby などの代替ソフトウェアと組み合わせて BitBox をご利用ください。対応しているすべてのコインの一覧は、当社のウェブサイトでご確認いただけます：",
+        "title": "どのコインに対応していますか？"
+      },
+      "whatAreAccounts": {
+        "text": "ウォレットは、同じコインの複数のアカウントを管理することができます。資金を別々に管理したいときに便利です。",
+        "title": "アカウントとは何ですか？"
+      },
+      "whatIsRememberWallet": {
+        "text": "「ウォレットを記憶する」を有効にすると、BitBox を接続していない状態でも BitBoxApp 上でそのウォレットのアカウントを表示できます。これにより、いつでも残高やポートフォリオを確認できます。ただし、コインの送受信には BitBox を接続し、ロック解除する必要があります。\n\n「ウォレットを記憶する」を無効にしている場合は、BitBox（またはパスフレーズウォレット）を接続しないと、該当するアカウントを BitBoxApp 上で表示できません。\n",
+        "title": "「ウォレットを記憶する」を有効／無効にするとどうなりますか？"
+      },
+      "whyIsThisUseful": {
+        "text": "アカウントは分離されているため、異なる人や目的のための資金を管理するのに適しています。また、アカウントの「拡張公開鍵」を共有することで、他のアカウントについて何も明かすことなく利用することができます。これにより、給料の受け取りや暗号の定期購入など、アドレスを再利用することなく繰り返し資金を受け取ることができます。",
+        "title": "なぜこれが便利なのでしょうか？"
+      }
     },
     "appendix": {
-      "href": "https://shiftcrypto.ch/contact",
       "link": "ご連絡ください！",
-      "text": "他にも質問がありますか？"
+      "questionService": "{{serviceName}} に関してお困りですか？",
+      "text": "他にも質問がありますか？",
+      "textService": "{{serviceName}} に関する問題は、直接お問い合わせください："
     },
     "backups": {
       "check": {
-        "text": "「バックアップの確認」ではあなたのバックアップが正常な状態にあり、現在のウォレットと紐づいていることを検証します。また、あなたのリカバリーパスワードが間違っていないことを確認するためにも使用していただけます。",
-        "title": "「バックアップの確認」とは何ですか？"
+        "text": "「バックアップのチェック」機能により、現在のウォレットに対応する動作するバックアップを確認することができます。また、正しいリカバリーパスワードを持っているかどうかを確認するためにも使用することができます。メインのリカバリーパスワードまたは隠しリカバリーパスワードのどちらかをチェックすることができます。",
+        "title": "「バックアップのチェック」とは何ですか？"
       },
       "encrypt": {
         "text": "できませんが、保管されたシードから正しいウォレットを復元するには関連付けたリカバリーパスワードが必要です。",
         "title": "バックアップを暗号化することはできますか？"
       },
       "howOften": {
-        "text": "新しいウォレットが作成された際にバックアップは自動的に生成されます。microSDカードを損傷・紛失した場合、または複数のmicroSDカードでバックアップを管理したい場合は作成する必要があります。\n毎回取引を行った後にバックアップを作成する必要はありません。全ての取引データは自動的に生成されたバックアップで復元することができます。",
+        "text": "新しいウォレットが作成されると、バックアップは自動的に生成されます。microSDカードが紛失または破損した場合、または複数のmicroSDカードをバックアップとして使用したい場合を除き、新しいバックアップを作成する必要はありません。\n取引後に新しいバックアップを作成する必要はありません。すべての取引データは、自動的に生成された単一のバックアップによって再作成できます。",
         "title": "どれだけ頻繁にバックアップを作成するべきですか？"
       },
       "whatIsABackup": {
-        "text": "バックアップとはmicroSDカードにコピーされたシードのことを示します。シードとリカバリーパスワードの両方が揃ってはじめてあなたのウォレットを生成することができます。",
+        "text": "microSDカードにシードをコピーしたものです。シードとリカバリーパスワードを合わせてウォレットを生成します。",
         "title": "バックアップとは？"
       }
     },
     "backupsBB02": {
       "check": {
-        "text": "「バックアップの確認」では現在のウォレットに紐付いた有効なバックアップが存在するか検証することができます。",
+        "text": "「バックアップの確認」では現在のウォレットに対応するバックアップが動作しているかどうかを確認することができます。",
         "title": "「バックアップの確認」とは？"
       },
       "encrypt": {
-        "text": "いいえ。microSDカードにはウォレット復元のために必要な暗号化されていないシード情報を含んでいるため、安全な場所に保管してください。",
+        "text": "いいえ。microSDカードにはウォレット復元のために必要な暗号化されていないシード情報を含んでいるため、安全な場所に保管してください。シードをパスワードで保護したい場合は、エキスパート設定の「デバイスの管理」でオプションのパスフレーズを有効にすることができます。",
         "title": "バックアップを暗号化することはできますか？"
       },
       "whatIsABackup": {
-        "text": "microSDカード上にあるシードのコピーです。",
+        "text": "microSDカードにシードをコピーしたものです。",
         "title": "バックアップとは？"
       }
     },
     "bitbox": {
-      "2FA": {
-        "text": "2段階認証(2FA)が有効な場合、コインを消費するには全ての取引をペアされた携帯電話で承認する必要があります。裏側では暗号化された一回限り使用可能な番号をモバイルアプリに送信し、承認ボタンが押されたタイミングで解読された番号をBitBoxに送り返します。この送受信は、最初にモバイルアプリとのペアリングを行った際に開設されたチャンネルを使用します。\n2段階認証(2FA)を有効にする前に、必ずウォレットのバックアップを作成し、モバイルアプリとのペアリングを行ってください。2段階認証(2FA)が有効になると、バックアップ時に使用されるmicroSDカードスロットとモバイルアプリのペアリングは無効となります。これらを再度使用したい場合は再設定、つまりはBitBoxをリセットしなければなりません。",
-        "title": "2段階認証(2FA)はどのように機能するのですか？"
-      },
-      "disable2FA": {
-        "text": "2段階認証(2FA)を無効にするには、BitBoxをリセットした後、バックアップからウォレットの復元をする必要があります。バックアップの入ったmicroSDカードが手元にあることと、リカバリーパスワードを覚えていることを確認してから「デバイスのリセット」を選択してください。新しいデバイスパスワードを設定してから「もしくはバックアップから復元」を選びます。作成したバックアップを選択してから「復元」をクリックし、ウォレット作成時に使ったリカバリーパスワードを入力してください。",
-        "title": "どのように2段階認証(2FA)を無効にできますか？"
-      },
       "ejectBitbox": {
         "text": "BitBoxはいつでも取り外すことができます。",
         "title": "どのようにBitBoxを取り出すのですか？"
       },
       "ejectSD": {
-        "text": "バックアップの作成や復元といった処理を行っている最中ではない限り、いつでも取り外すことができます。",
-        "title": "どのようにmicroSDカードを取り外せますか？"
-      },
-      "hiddenWallet": {
-        "text": "隠しウォレットとは同じデバイス上にあり、別のパスワード・リカバリーパスワードで守られた２つ目のウォレットであり、妥当な否認権(plausible deniability)として使用できます。普通のウォレットと隠しウォレット両方で一つのバックアップを使用するので、新しくバックアップを作成する必要はありません。",
-        "title": "隠しウォレットとは何ですか？"
-      },
-      "legacyHiddenWallet": {
-        "text": "最初に下のボタンをクリックし（BitBoxがメインデバイスパスワードによりアンロックされていて、2段階認証が無効な場合押すことができます）、BitBoxを挿し直してから秘密デバイスパスワードでアンロックしてください。",
-        "title": "どのようにレガシー秘密ウォレットにアクセスできますか？"
-      },
-      "pairing": {
-        "text": "iOSもしくはAndroid用のモバイルアプリのダウンロード後、表示されているQRコードをスキャンすることでこのソフトウェアとモバイルアプリの間に安全なチャンネルが開設されます。スキャン後はモバイルアプリに表示される手順に従ってペアリングを行なってください。",
-        "title": "安全に携帯電話とペアリングを行うには"
+        "text": "バックアップの作成・復元作業中でなければ、いつでもmicroSDカードをBitBoxから取り外すことができます。",
+        "title": "microSDカードを取り出すにはどうしたらよいですか？"
       }
+    },
+    "bitsurance": {
+      "faq": {
+        "link": {
+          "text": "www.bitsurance.eu"
+        },
+        "text": "詳しくはBitsuranceのウェブサイトとFAQをご覧ください。",
+        "title": "他に質問はありますか？"
+      },
+      "privacy": {
+        "link": {
+          "text": "Bitsuranceプライバシーポリシー"
+        },
+        "text": "通常の保険契約と同様に、この契約にはあなたのフルネームと住所が含まれ、保険対象物（保険されたビットコインアカウントの拡張公開鍵によって定義されます）が明示されています。このデータはBitsuranceに直接提出され、Shift Cryptoとは共有されません。詳細についてはBitsuranceのプライバシーポリシーをご参照ください。\n\n\n\n\n\n",
+        "title": "保険にはどのような個人情報が必要ですか？"
+      },
+      "renew": {
+        "text": "保険は次年度に自動更新されます。BitBoxAppの「契約管理」をクリックし、Bitsuranceカスタマーポータルに移動すると、いつでも更新をキャンセルできます。",
+        "title": "保険の更新や解約はどうすればよいですか？"
+      },
+      "status": {
+        "text": "保険が適用されたアカウントは、各Bitcoinアカウントページの左上に緑色の「保険適用済み」バッジが表示されます。「保険」セクションでは、すべての保険適用済みBitcoinアカウントとその現在の保険ステータスの概要を確認できます。保険ステータスの更新には最大で48時間かかることがあります。",
+        "title": "保険付き口座の状況を確認できますか？"
+      },
+      "what": {
+        "text": "各ビットコイン保険契約は特定のウォレットアカウントをカバーします。複数のアカウントを保険できるように、複数の保険ポリシーを取り扱うことができます。保険の対象となるアカウントは、「Native Segwit」ビットコインアドレスの使用に制限されています。",
+        "title": "BitBoxウォレット全体に保険はかけられてますか？"
+      },
+      "who": {
+        "text": "保険はビットコイン関係者によって設立された保険ブローカーであるBitsuranceによって提供されています。彼らはELEMENT Insuranceと提携してビットコイン保険を提供しています。両社はドイツに拠点を置いています。\n",
+        "title": "私のビットコインに保険をかけるのは誰ですか？"
+      },
+      "why": {
+        "text": "Bitsuranceは、最も安全なウォレットにも含まれない、自己保管のいくつかのリスクをカバーしています。たとえば、強盗、恐喝、またはウォレットの破壊などです。これらのリスクに対する保険が必要かどうかは、あなた個人の判断によります。",
+        "title": "ビットコインの保険は必要ですか？"
+      }
+    },
+    "device": {
+      "attestation": {
+        "link": {
+          "text": "真贋チェックの詳細はこちら"
+        },
+        "text": "BitBoxApp は BitBox に対して証明チェック（アテステーション）を行い、デバイスが正規品であるかを検証します。このチェックはローカルで実行され、外部サーバーへの接続は行われません。",
+        "title": "真贋チェックはどのように行われるのですか？"
+      },
+      "name": {
+        "text": "これはあなたのウォレットとバックアップの名前です。この名前は将来のバックアップに使われ、異なるウォレットを区別するのに役立つことがあります。いつでも変更することができますが、変更前に作成したバックアップは以前の名前を使用し続けることに注意してください。",
+        "title": "BitBoxの名前は何に使われているのですか？"
+      },
+      "secure-chip": {
+        "link": {
+          "text": "セキュアチップについて詳しく見る"
+        },
+        "text": "この情報はセキュアチップのモデル番号を表示しています。最新のチップはATECC608Bで、旧モデルに比べてセキュリティ機能が向上しています。",
+        "title": "セキュアチップモデルを見せる理由は？"
+      }
+    },
+    "guideTitle": {
+      "account": "アカウントガイド",
+      "accountInformation": "アカウント情報ガイド",
+      "accountSummary": "アカウント概要ガイド",
+      "advancedSettings": "詳細設定ガイド",
+      "appearance": "アピアランスガイド",
+      "buySell": "マーケットプレイスガイド",
+      "insurance": "インシュアランスガイド",
+      "manageAccount": "アカウント管理ガイド",
+      "manageDevice": "デバイス管理ガイド",
+      "receive": "受信ガイド",
+      "send": "送信ガイド",
+      "walletConnect": "WalletConnectガイド"
     },
     "receive": {
       "address": {
-        "text": "コインを送ってもらうために他の人に渡してください。(間違いを避けるため、電話などでアドレスの確認を行うことをお勧めします。)",
+        "text": "あなたは他の人にこのアドレスを教えて、コインを送ってもらうことができます。ただし、正しいアドレスに送金していることを確認してください。",
         "title": "アドレスは何に使用することができますか？"
       },
       "addressChange": {
-        "text": "取引でアドレスが使用された際、新しいアドレスが代わりに追加されます。常に20個の利用可能なアドレスが用意されます。",
+        "text": "取引を行うとすぐに、新しいアドレスが自動的にリストに追加され、常に受け取り履歴のないアドレスが20個利用可能となります。",
         "title": "アドレスが変わるのはいつですか？"
       },
+      "addressFormats": {
+        "text": "デフォルトでは、アドレスタイプはNative Segwitです。このアドレスタイプは他のウォレット/取引所に広く採用されており、日常のトランザクションに最適な手数料率を提供します。しかし、Taproot（ビットコインのみ）に送ることも選択できます。これは最新のアドレスタイプですが、まだ広くサポートされていないかもしれません。また、Native Segwit（デフォルトタイプ）への送金に問題がある場合は、より多くのウォレット/取引所と互換性がある可能性のある古いWrapped Segwitアドレスタイプに切り替えることを試みることができます。",
+        "title": "\"アドレスタイプを変更\"はいつ使用しますか？」という質問に対する回答は次のとおりです："
+      },
       "howVerify": {
-        "text": "サイドバーからBitBoxのアイコンのある項目を選択し、ペアリングの部分を見てください。そこからガイドの説明に従い検証へと進んでください。",
+        "text": "送金や受取の際に、BitBox 上でアドレスを直接確認できます。",
         "title": "安全にアドレスを検証するにはどうすればいいですか？"
       },
+      "plugout": {
+        "text": "BitBoxのアドレスにコインを送った後は、BitBoxを接続したままにしておく必要はありません。BitBoxの接続を解除することは自由です。",
+        "title": "受信中、BitBoxを接続したままにしておく必要はありますか？"
+      },
+      "why20": {
+        "text": "スタートアップ時に、アプリはあなたのシードから派生したアドレスを生成し、彼らが資金を受け取ったかどうかを確認します。アプリはほぼ無限にアドレスを生成できるため、残高の確認に何年も費やす可能性があります。この検索を制限するために、資金を受け取ったことがないアドレスを20個見つけたら停止するようにしています。これが「ギャップリミット」で、20個がデファクトスタンダードになっていますが、その数は任意です。これが、あなたが選ぶことのできる20のアドレスです。",
+        "title": "なぜ20個のアドレスだけなのですか？"
+      },
       "whyMany": {
-        "text": "プライバシーとセキュリティー目的のため、同じアドレスは二度しないことをお勧めします。違った目的のためには「次へ」をクリックして新しいアドレスを取得できます。一度に用意されるアドレスの数は20個です。全てのアドレスはあなたの単一バックアップのシードから派生しています。(アドレスは請求書番号のようなものと考えられます。)",
-        "title": "なぜ複数のアドレスが存在するのですか？"
+        "text": "プライバシーとセキュリティを保つため、同じアドレスを2度渡さないようにしてください。アドレスを使用してしまった場合は、右矢印をクリックして新しいアドレスを作成してください。一度に最大20個のアドレスを生成することができます。住所は、請求書番号のようなものだと考えてください。すべてのアドレスは、あなたの1つのバックアップシードから派生します。",
+        "title": "なぜこんなにたくさんのアドレスが存在するのですか？"
       },
       "whyVerify": {
-        "text": "BitBoxのようなハードウェアウォレットを購入する理由の一つは、パソコンのような攻撃できる面積の大きいプラットフォームは信頼しないほうがいいからです。それ故に、真正なアドレスの生成・表示することに対してもパソコンを信頼しないほうがいいでしょう。アドレスを安全に検証するボタンは、BitBoxからペアリングされた携帯電話にアドレスを送信し、そこからQRコードをスキャンして検証できます。",
+        "text": "正当なアドレスの生成や表示をパソコンに任せるべきではありません。パソコンは攻撃対象領域（アタックサーフェス）が広いため、ハードウェアウォレットと比べてはるかに脆弱です。アドレスは BitBoxの画面で直接確認できます。",
         "title": "なぜ安全にアドレスを検証したほうがいいのですか？"
       }
     },
     "send": {
+      "change": {
+        "text": "Taproot UTXOが1つ以上あれば、お釣りはTaprootアドレスに返却されます。コインコントロールを使用する場合、選択したUTXOの中に少なくとも1つのTaproot UTXOがある場合、釣りはTaprootアドレスに返されます。それ以外の場合は、Native Segwitアドレスにお釣りが返されます。",
+        "title": "変化出力はどのように決定されるのですか？"
+      },
       "fee": {
         "text": "手数料は取引の総額ではなくデータサイズによって決まります。手数料は選択したネットワーク優先度毎にBitcoin Coreの手数料見積もりアルゴリズムを使用して算出されます。結果が下記情報と違った場合に表示されます。\nエコノミー：24ブロック(Bitcoinで約4時間、Litecoinで約1時間)\n低：12ブロック(Bitcoinで約2時間、Litecoinで約30分)\n普通：6ブロック(Bitcoinで約1時間、Litecoinで約15分)\n高：2ブロック(Bitcoinで約20分、Litecoinで約5分)\n(1つのブロックを採掘するのにBitcoinで約10分、Litecoinで約2.5分かかり、上記時間内にネットーワーク負荷が変化する可能性もあります。)",
         "title": "手数料はどのように計算されているのですか？"
+      },
+      "plugout": {
+        "text": "いいえ、一度取引した後は、BitBoxを接続したままにしておく必要はありません。BitBoxの接続を解除することは自由です。",
+        "title": "送信中にBitBoxを接続したままにしておく必要はありますか？"
       },
       "priority": {
         "text": "高い手数料を払うほど、より早くあなたの取引がネットワークに認証されます。",
@@ -610,43 +1199,54 @@
         "title": "なぜネットワーク手数料は存在するのですか？"
       }
     },
+    "settings": {
+      "sats": {
+        "text": "Satoshi（略して「sat」）とは、ビットコインの最小単位である。1 Satoshiはbitcoinの1億分の1（0.00000001BTC）です。bitcoinの生みの親であるサトシ・ナカモトにちなんで名づけられました。",
+        "title": "Satoshiとはなんですか？"
+      },
+      "servers": {
+        "text": "このアプリは情報更新、取引履歴の読み込み、ペアされたモバイルアプリへの情報送信のためShift Cryptoのサーバーと繋がっています。また、CoinGeckoより最新の換算レートを取得しています(換算はローカル環境で行われます、あなたの金額等の情報は一切発信されません)。",
+        "title": "このアプリはどのサーバーと接続していますか？"
+      }
+    },
     "settings-electrum": {
+      "connection": {
+        "text": "同じネットワーク（例：自宅のwifi）にいるときだけノードに接続するつもりであれば、通常のネットワーク通信を使用すれば十分です。\nこの場合、Electrumサーバーは、通信を暗号化するためにTLS証明書を提供することをお勧めします。\nもし、どこからでもノードに接続するつもりであれば、Torを使うのがよいでしょう。この場合、TLS証明書は必要ありません。",
+        "title": "clearnet TCP、TLS、Torのどれを使うべきですか？"
+      },
+      "instructions": {
+        "link": {
+          "text": "ノード接続の手引き"
+        },
+        "text": "詳しいチュートリアルは、こちらのガイドをご覧ください：",
+        "title": "BitBoxAppを自分のフルノードに接続するにはどうすればよいですか？"
+      },
+      "options": {
+        "text": "自分のノードを動かすには、完成品を買う、自作する、Bitcoin Coreを動かすなど、複数の選択肢があります。\nBitBoxAppをノードに接続したい場合は、Electrumサーバーが動作していることを確認します。これは、ウォレットアプリがあなたのフルノードと通信するための専用プログラムです。\nサポートされているオプションには、Electrs、Electrum Personal Server (EPS)、Bitcoin Wallet Tracker (BTW)があります。",
+        "title": "ノードを動かすには、どのようなオプションがあるのでしょうか？"
+      },
+      "tor": {
+        "text": "Torは「The Onion Router」の略で、フリーでオープンソースのソフトウェアで、多くのプライバシー上の利点を提供し、特にビットコインを使用する際に便利です。\nTor経由でノードに接続する場合は、Torがコンピュータにインストールされていることを確認し、BitBoxAppの設定でTor Proxyを有効にします。\nほとんどのOSで、Torを実行する方法は2つあります：\n1. Tor Browser: Tor Browser をダウンロードし、開いてください。これにより、Torプロキシ設定でポート9150を設定することで、BitBoxAppがTorネットワークに接続することができます。\n2. Tor background service：Torデーモンをインストールし、常にバックグラウンドで実行します。これにより、BitBoxAppはTorプロキシ設定にポート9050を設定することで接続できるようになります。",
+        "title": "Tor、Torプロキシとはどのようなもので、どのポートを使用すればいいのでしょうか？\n"
+      },
       "what": {
         "text": "Shiftのサーバーを使う代わりに、自分のノードを使用してウォレットを運用することができます。",
         "title": "ここで何ができますか？"
-      }
-    },
-    "settings": {
-      "btc-p2pkh": {
-        "text": "こちらは古い取引形式をとっていて、Segwitのアドレスと取引形式に取って代わられました。BitBoxを古いバージョンのデスクトップアプリでご使用になっていた場合、こちらのアカウントにあなたのコインがあります。手数料の節約のためにも、BitcoinもしくはBitcoin bech32のアカウントのアドレスにコインを送信してください。",
-        "title": "Bitcoin Legacyとはなんですか？"
       },
-      "btc-p2sh": {
-        "link": {
-          "text": "証明書の分離(Segregated Witness, Segwit)の有益性",
-          "url": "https://bitcoincore.org/en/2016/01/26/segwit-benefits/"
-        },
-        "text": "こちらは後方互換性のあるSegwitアカウント(p2sh-p2wpkh)です。新しい取引形式を使用していて、以前より低い手数料で取引を行うことができます。アドレスの形式はLegacyと似ていて、それ自体は現存する全てのBitcoinウォレット、交換所、サービスで使用することができます。",
-        "title": "Bitcoin accountとはなんですか？"
-      },
-      "btc-p2wpkh": {
-        "link": {
-          "text": "Bech32の採用",
-          "url": "https://en.bitcoin.it/wiki/Bech32_adoption"
-        },
-        "text": "Segwitのより安いネットワーク手数料の有益性をフル活用するためにはBitcoin beck32を使うことをお勧めします。bech32という新しいアドレス形式を採用していますが、この形式はまだ限られたところでしか受け入れられていません。",
-        "title": "Bitcoin bech32とはなんですか？"
-      },
-      "servers": {
-        "text": "このアプリは情報更新、取引履歴の読み込み、ペアされたモバイルアプリへの情報送信のためShift Cryptoのサーバーと繋がっています。また、CryptoCompareより最新の換算レートを取得しています(換算はローカル環境で行われます、あなたの金額等の情報は一切発信されません)。",
-        "title": "このアプリはどのサーバーと接続していますか？"
-      },
-      "whyMultipleAccounts": {
-        "text": "いくつかの仮想通貨は複数のアドレス形式と取引形式をとっていて、これらのアドレスは別のアカウントへと分けられます。",
-        "title": "$t(settings.expert.splitAccounts)"
+      "why": {
+        "text": "自分のノードを実行することは必須ではありませんが、プライバシーを向上させ、他人を信頼する必要性を減らすことができます。\nまず、BitBoxAppが私たちのサーバーに接続して取引履歴を取得するのではなく、自分のノードから情報を取得するため、より個人的にビットコインを使用することを意味します。\n第二に、自分のノードを動かすということは、自分のノードがすべてのトランザクションを自分で検証し、コンセンサスルールが実施されていることを確認することを意味します。",
+        "title": "なぜ自分でノードを動かす必要があるのか？"
       }
     },
     "title": "ガイド",
+    "toggle": {
+      "close": "ガイドを終了します",
+      "open": "ガイド"
+    },
+    "trackingModePortfolioChart": {
+      "text": "デスクトップでは、カーソルをチャート上に重ねてください。モバイルでは、指をチャート上に長押しし、横方向にドラッグしてください。",
+      "title": "チャートで過去の値を見るには？"
+    },
     "unlock": {
       "forgotDevicePassword": {
         "text": "デバイスのリセットを行い、リカバリーパスワードを使用してバックアップからウォレットを復元する必要があります。",
@@ -658,14 +1258,9 @@
       }
     },
     "waiting": {
-      "deviceNotRecognized": {
-        "text": "デバイスを挿入した際に一度点滅するはずです。挿入する方向に気をつけて挿入してください。引き続き認識されない場合は下記リンクよりご連絡ください。",
-        "title": "デバイスが認識されないのですが？"
-      },
       "getDevice": {
         "link": {
-          "text": "BitBoxを注文",
-          "url": "https://shiftcrypto.shop/"
+          "text": "BitBoxを注文"
         },
         "text": "BitBoxは弊社オンラインショップよりご購入いただけます：",
         "title": "どのようにデバイスを入手できますか？"
@@ -676,34 +1271,44 @@
       },
       "lostDevice": {
         "link": {
-          "text": "バックアップセンター",
-          "url": "https://shiftcrypto.ch/backup"
+          "text": "バックアップセンター"
         },
         "text": "バックアップセンターを使用することで、新しいBitBoxにあなたのアカウントを復元することができます。",
         "title": "デバイスを紛失してしまったのですが？"
       },
       "useWithoutDevice": {
-        "text": "残念ながら現段階では使用できません。",
+        "text": "はい、アカウント管理設定でウォレットを記憶させることができます。これにより、BitBox を接続せずにポートフォリオを確認できます。",
         "title": "アプリをデバイスなしでも使用することができますか？"
       },
       "welcome": {
         "text": "スイスのShift Cryptoにより開発されたこのアプリをご使用いただきありがとうございます。現在はまだベータ版となっているため、使い勝手においての不明点・お気付きの点などのご連絡をいただけると幸いです。",
-        "title": "BitBoxアプリへようこそ！"
+        "title": "BitBoxAppにようこそ！"
+      },
+      "worksWithIos": {
+        "link": {
+          "text": "BitBox02 Nova を注文する"
+        },
+        "text": "iOS に対応しているのは BitBox02 Nova のみです。通常版の BitBox02 は、それ以外のすべてのプラットフォームで使用できます。BitBox02 Nova の購入をご希望の方は、当社オンラインショップをご覧ください。",
+        "title": "iOS で使える BitBox はどれですか？"
+      }
+    },
+    "walletConnect": {
+      "noPreviousConnections": {
+        "text": "BitBoxAppを新しい電話/コンピューターで使用している場合、DAppsに再接続する必要があります。その後、通常通りにDApp上でコインが表示されるでしょう。",
+        "title": "以前の接続が見えません。"
+      },
+      "supportedNetworks": {
+        "text": "現在、BitBoxAppでWalletConnectを使用してサポートされているのはEthereumメインネットのみです。他のEVM互換チェーンを使用するには、Rabbyブラウザ拡張ウォレットをご利用ください。",
+        "title": "どのネットワークがサポートされていますか？"
+      },
+      "whatIsWalletConnect": {
+        "text": "WalletConnectは、web3アプリケーションのための通信プロトコルです。これにより、第三者のアプリを使用せずに、EthereumベースのDAppsやウェブウォレットに便利に接続することができます。これは、BitBoxAppのAndroidユーザーに特に便利です。",
+        "title": "WalletConnectとは何ですか？"
       }
     }
   },
   "headerssync": {
     "blocksSynced": "{{blocks}}のブロックを同期済み"
-  },
-  "hiddenWallet": {
-    "info1HTML": "妥当性のある否認権(plausible deniability)目的のため、普段お使いのウォレットとは<strong>違った</strong>デバイスパスワード・リカバリーパスワードで隠しウォレットを作ることができます。",
-    "info2HTML": "隠しウォレットに紐づけるデバイスパスワードとリカバリーパスワードを決めてください。これら2つのパスワードは、通常のウォレットとは<strong>違う</strong>パスワードでなければいけません。",
-    "passwordLabel": "隠しリカバリーパスワード",
-    "passwordPlaceholder": "隠しリカバリーパスワードの確認",
-    "pinLabel": "隠しデバイスパスワード",
-    "pinRepeatLabel": "隠しデバイスパスワードの確認",
-    "pinRepeatPlaceholder": "隠しデバイスパスワードの確認",
-    "success": "隠しウォレットの作成に成功しました。アンロックするにはデバイスを一度抜いて、再度挿入してください。"
   },
   "initialize": {
     "create": "デバイスパスワードを設定",
@@ -712,7 +1317,6 @@
       "e102": "デバイスパスワードは4文字以上(半角)でなければいけません。"
     },
     "info": {
-      "button": "次へ",
       "description1": "デバイスパスワードを決めてください。これはあなたのBitBoxのアンロックに使用されます。",
       "description2": "半角の数字、文字、及び記号を使用できます。",
       "description3": "デバイスパスワードを紛失した場合は、デバイスをリセットしてからウォレットをバックアップから復元する必要があります。",
@@ -729,53 +1333,180 @@
   "language": {
     "title": "言語を選択してください"
   },
-  "legacyhiddenwallet": {
-    "disable": "レガシー秘密ウォレットの無効化",
-    "enable": "レガシー秘密ウォレットの有効化",
-    "successDisable": "レガシー秘密ウォレットの無効化に成功しました。",
-    "successEnable": "レガシー秘密ウォレットの有効化に成功しました。BitBoxを挿し直し、秘密デバイスパスワードを入力してレガシー秘密ウォレットにアクセスしてください。"
-  },
   "loading": "ロード中…",
-  "notification": {
-    "newTxs_0": "{{accountName}}にて{{count}}個の新しいトランザクション"
+  "manageAccounts": {
+    "accountHidden": "このアカウントは、ウォッチ専用アカウントから非表示になっています。再び表示するには、BitBoxを接続してください。",
+    "editAccount": "編集",
+    "editAccountNameTitle": "アカウント名を編集する",
+    "noAccounts": "アカウントが見つかりません",
+    "settings": {
+      "hideTokens": "トークンを隠す",
+      "showTokens": "トークンを表示する ({{activeTokenCount}})"
+    },
+    "settingsButtonDescription": "アカウントの追加と表示/非表示",
+    "title": "アカウント管理",
+    "watchAccount": "閲覧アカウント",
+    "watchAccountDescription": "このアカウントは閲覧専用アカウントの一部です。トグルを使用して、閲覧専用から非表示にすることができます。"
   },
-  "pairing": {
-    "aborted": {
-      "text": "ペアリングはモバイルアプリから取り消されました。",
-      "title": "中止しました"
+  "mobile": {
+    "usingMobileDataWarning": "モバイルデータ使用：このアプリは、アカウントロック解除後に最大数百メガバイトのブロックチェーンヘッダーデータをダウンロードする場合があります。モバイルデータの使用を避けるため、Wi-Fiに接続してください。このメッセージは、一度閉じると再び表示されません。"
+  },
+  "newSettings": {
+    "about": {
+      "appVersion": {
+        "title": "アプリバージョン"
+      }
     },
-    "button": "モバイルアプリとのペアリング",
-    "confirm": "本当にBitBoxのペアリングを行いますか？この場合、トランザクションを行うには携帯電話が必要になります。",
-    "connectOnly": {
-      "button": "モバイルアプリに接続",
-      "title": "モバイルアプリから「Connect to new desktop app」を選択してスキャンを行なってください。"
+    "advancedSettings": {
+      "authentication": {
+        "description": "アプリへのアクセスを画面ロックや指紋認証でロックします。",
+        "title": "スクリーンロック"
+      },
+      "coinControl": {
+        "description": "プライバシーを向上させるために、トランザクションに含まれるUTXO（未使用取引出力）を選択してください。"
+      },
+      "customFees": {
+        "description": "送信時に独自の手数料を入力することができます。"
+      },
+      "restartInTestnet": {
+        "description": "テストネットを使用して機能を試し、探索しましょう。"
+      },
+      "torProxy": {
+        "description": "プライバシーを向上させるために、Tor経由で接続してください。"
+      }
     },
+    "appearance": {
+      "activeCurrencies": {
+        "description": "これらの追加通貨は、アカウントページで切り替えることができます。",
+        "title": "活発な通貨"
+      },
+      "darkmode": {
+        "description": "ダークモードでのBitBoxAppをご覧ください。"
+      },
+      "defaultCurrency": {
+        "description": "デフォルトの通貨を選択してください。",
+        "title": "デフォルトの通貨"
+      },
+      "enableAccount": {
+        "description": "アカウントを無効にすると、サイドバーやポートフォリオに表示されなくなります。ここからいつでも有効に戻すことができます。このアカウントのコインは影響を受けず、安全なままです。",
+        "title": "アカウントの有効化/無効化"
+      },
+      "hideAmounts": {
+        "description": "公共の場でアプリを使用する際にプライバシーを向上させるために、残高や金額を非表示にするトグルを表示します。",
+        "hideAmounts": "金額を隠す",
+        "showAmounts": "金額を表示する",
+        "title": "金額の非表示を許可する"
+      },
+      "language": {
+        "description": "BitBoxAppで使用する言語を選択してください。",
+        "title": "言語"
+      },
+      "remebmerWallet": {
+        "enable": {
+          "description": "BitBoxデバイスを挿入せずに、このウォレットに関連付けられたアカウントを閲覧できるようになりました。ただし、取引の実行や受取用アドレスの表示には、BitBoxが引き続き必要です。",
+          "title": "ウォレットが保存されました"
+        },
+        "name": "ウォレットを記憶する",
+        "warning": "この操作により、記憶されたウォレットが削除されます。再び表示するには、このウォレットに対応する BitBoxを接続する必要があります。ウォレット内のコインには影響しません。続行しますか？\n",
+        "warningTitle": "ウォレットを記憶しない"
+      },
+      "toggleSats": {
+        "description": " Satoshi単位を有効または無効にします。"
+      }
+    }
+  },
+  "note": {
+    "input": {
+      "description": "(任意)",
+      "placeholder": "メモを追加する..."
+    },
+    "title": "メモ"
+  },
+  "notification": {
+    "newTxs_other": "{{accountName}}に{{count}}件の新しい取引があります"
+  },
+  "novaConnectionIssues": {
+    "connectionIssueTips": "接続トラブル対処のヒント",
+    "description1": "iOS に対応しているのは BitBox02 Nova のみです。通常の BitBox02 は、Windows、macOS、Android、または Linux でご利用ください。BitBox02 Nova のご購入は、当社オンラインショップから可能です：",
+    "description2": "画面が点灯しない場合は、デバイスに電源が入っていない可能性があります。",
+    "description3": "BitBox02 Nova は iPhone または iPad の近くに置いてください。できるだけ直接デバイスに接続することをおすすめします。",
+    "description4": "BitBox02 Nova は iOS と Bluetooth で接続します。他のプラットフォームでは、BitBoxApp の設定から Bluetooth をオン／オフにできます。",
+    "link1": "BitBox02 Nova を注文する",
+    "link2": "サポートへお問い合わせ",
+    "stillHavingIssues": "まだ問題は解決していませんか？",
+    "title1": "iOS では BitBox02 Nova のみをご使用ください",
+    "title2": "BitBox02 Nova の電源が入っていることを確認してください",
+    "title3": "BitBox02 Nova をデバイスの近くに置いてください",
+    "title4": "BitBox02 Nova の Bluetooth がオフになっていないか確認してください"
+  },
+  "passphrase": {
+    "considerations": {
+      "button": "バックアップについて",
+      "message": "パスフレーズは、ウォレットのバックアップ（microSD カードまたはリカバリーフレーズ）に対する追加の保護層として機能します。\n誰かがあなたのバックアップにアクセスした場合でも、ウォレットにアクセスするにはパスフレーズも必要になります。\n\nただしこれは、BitBox を紛失したり故障したりした場合に、<strong>パスフレーズとウォレットのバックアップ<strong>の両方がなければ、パスフレーズ対応のウォレットを復元できないことも意味します。パスフレーズを忘れたり失ったりすると、そのウォレットに保管されているすべてのコインにアクセスできなくなります。\n\nパスフレーズを保管する際は、バックアップとは別の場所に保存することを検討してください。そうすることで、誰かがバックアップを見つけてもパスフレーズまでは見つけられないようにできます。",
+      "title": "バックアップについて"
+    },
+    "disable": "パスフレーズを無効にする",
+    "disableInfo": {
+      "button": "無効にする",
+      "message": "パスフレーズを無効にすると、BitBox のロック解除後にパスフレーズの入力は求められなくなります。そのため、デフォルトのウォレットに入ることになります。\n\nパスフレーズ付きウォレットのコインは引き続きそのウォレットに存在しますが、BitBox を解除したあとはデフォルトウォレットが開かれるため、アクセスできなくなります。\n\n再びパスフレーズ付きウォレットにアクセスするには、パスフレーズ機能を再度有効にし、BitBox のロック解除後に該当のパスフレーズを入力してください。\n\n<strong>Tip:</strong> パスフレーズを空欄のままにすることで、元のデフォルトウォレットにアクセスできます。"
+    },
+    "enable": "パスフレーズを有効にする",
     "error": {
-      "text": "問題が起きました。もう一度やり直してください。",
-      "title": "エラー"
+      "e104": "パスフレーズ設定の変更が中止された。"
     },
-    "reconnectOnly": {
-      "button": "モバイルアプリに再接続"
+    "how": {
+      "button": "どのようなものか",
+      "message": "パスフレーズは、一般的なパスワードのようには機能しません。入力ミスをしても通知はされません。これは、<strong>すべてのパスフレーズが、それぞれ異なる正当なウォレットを生成するため</strong>です。\nつまり、複数のパスフレーズを使って、いくつでもウォレットを作成できます。ただし、それぞれのウォレットには、対応するパスフレーズを正しく入力しないとアクセスできません。\n\nBitBoxを接続すると、まず通常どおりデバイスパスワードの入力が求められます。その後、パスフレーズの入力が求められます。\n\nパスフレーズを入力すると、その内容が画面に表示されます。これは、入力した内容に誤りがないか確認できるようにするためです。",
+      "title": "どのような仕組みになっているのか"
     },
-    "start": {
-      "hideAppQRCode": "QRコードを隠す",
-      "revealAppQRCode": "QRコードを表示",
-      "step1": "モバイルアプリを持っていない場合は\biOS・Android用アプリへのQRコードをスキャンしてください。",
-      "step2": "モバイルアプリ（「Digital Bitbox 2FA」の名前でiOS・Android用アプリを検索できます）からQRコードをスキャンしてください。"
+    "intro": {
+      "message": "パスフレーズは、ウォレットのセキュリティを一層強化するためのものです。\nそれがどのように機能するかを学んでみましょう。\n\n",
+      "title": "パスフレーズの設定"
     },
-    "started": {
-      "text": "モバイルアプリに表示されている手順に従ってください。",
-      "title": "いい調子です"
+    "progressDisable": {
+      "message": "オプションのパスフレーズを<strong>disable</strong>にすることをBitBoxで確認します。",
+      "title": "デバイスで確認する"
     },
-    "success": {
-      "text": "おめでとうございます、あなたのBitBoxは問題なくモバイルアプリとペアリングされました。",
-      "title": "成功"
+    "progressEnable": {
+      "message": "オプションのパスフレーズを<strong>enable</strong>にすることをBitBoxで確認します。",
+      "title": "デバイスで確認する"
     },
-    "timeout": {
-      "text": "ペアリング作業は2分経過した時点でタイムアウトしました。ペアリングを行いたい場合はもう一度最初からやり直してください。",
-      "title": "タイムアウト"
+    "successDisabled": {
+      "message": "オプションのパスフレーズ <strong>successfully enabled</strong>！\n今後、パスフレーズの入力が求められます。",
+      "messageEnd": "BitBoxを再接続してください。",
+      "title": "パスフレーズを有効にする"
     },
-    "title": "モバイルペアリング"
+    "successEnabled": {
+      "message": "オプションのパスフレーズは<strong>正常に無効化されました</strong>！\n\nパスフレーズの入力を求められることはなくなりました。",
+      "messageEnd": "BitBoxを再接続してください。",
+      "tips": "ヒント",
+      "tipsList": [
+        "まず、パスフレーズ付きウォレットに少額を送金することをおすすめします。その後、BitBoxをいったん取り外してから再接続し、パスワードとパスフレーズを入力してください。\nパスフレーズが正しく入力されていれば、ウォレット内にコインが表示されるはずです。",
+        "パスフレーズなしで元のウォレットに入りたい場合、パスフレーズの入力を求められたときに何も入力しないことでパスフレーズを入力することができます。また、パスフレーズ機能を無効にすることもできます。"
+      ],
+      "title": "パスフレーズ無効"
+    },
+    "summary": {
+      "button": "パスフレーズ有効",
+      "title": "要約",
+      "understand": "パスフレーズの仕組みやリスクについて理解している。",
+      "understandList": [
+        "パスフレーズは、バックアップの上に追加されるセキュリティの層です。",
+        "異なるパスフレーズを入力すると、必ず異なるウォレットが生成されます。",
+        "ウォレットを復元するには、<strong>パスフレーズとバックアップの両方が必要です</strong>。",
+        "パスフレーズを忘れた場合、<strong>コインにアクセスできなくなります</strong>。"
+      ]
+    },
+    "what": {
+      "button": "この仕組みについてはこちら",
+      "message": "ウォレットは、非常に大きなランダムな数（シード）から作成（導出）されます。\nこのシードは、BitBox を初期設定する際に生成され、microSD カードまたはリカバリーフレーズによってバックアップされます。\nシードにアクセスできる人は、そのウォレットの資金を完全に管理することができます。\n\nパスフレーズは、シードに追加される<strong>任意の秘密情報</strong>です。パスフレーズを使用する場合、シード + パスフレーズ（任意の秘密）の組み合わせに基づいて、新しいウォレットが生成されます。\nパスフレーズには、文字、単語、記号など何を使ってもよく、空欄でも構いません。デフォルトのウォレットは、実際には「シード + 空のパスフレーズ」から導出されています。\n\nパスフレーズは BIP39 規格の一部であり、この仕様に対応したすべてのウォレットと互換性があります。",
+      "title": "パスフレーズとは何ですか？"
+    },
+    "why": {
+      "button": "パスフレーズを使用する理由",
+      "message": "BitBox は、シードがデバイス本体から抽出されるのを防ぎますが、バックアップ（microSD カードまたはリカバリーフレーズ）にはウォレットへの完全なアクセス権があります。\nそのため、バックアップは安全な場所に保管する必要があります。\n\nパスフレーズは既存のシードを使って新しいウォレットを生成するため、パスフレーズ対応ウォレットを復元するには、<strong>バックアップとパスフレーズの両方が必要</strong>です。この仕組みにより、誰かがバックアップを見つけたとしても、パスフレーズがなければそのウォレットにアクセスすることはできません。\n\nさらに、パスフレーズ機能を使えば、同じデバイス上に複数のウォレット、あるいはデフォルトウォレットに加えて「隠しウォレット」を作成することも可能です。",
+      "title": "なぜパスフレーズを使うのですか？"
+    }
   },
   "password": {
     "show": "{{label}}を表示",
@@ -784,42 +1515,47 @@
       "paste": "貼り付けを行うには「{{label}}を表示」を有効にしてください"
     }
   },
-  "random": {
-    "button": "乱数を生成",
-    "description": "あなたのBitBoxは次の{{bits}}bit乱数を生成しました："
-  },
   "receive": {
+    "bitsuranceWarning": "これは保険のかかったアカウントであり、Native Segwitへの入金のみが許可されています。これはWrapped SegwitやTaprootへ誤って入金しないようにするための措置です。これらは保険の対象外です。",
+    "changeScriptType": "アドレスの種類を変更する",
     "label": "あなたのアドレス",
-    "showFull": "フルアドレスをデバイス上で表示・確認",
-    "title": "コインの受け取り",
-    "verify": "安全にアドレスを検証",
-    "verifyInstruction": "下記アドレスがデバイス画面に表示されているものと一致することを確認してください。",
-    "warning": {
-      "secureOutput": "アドレスを安全に検証するには、BitBoxをモバイルアプリとペアリングしてください。サイドバーの「デバイス設定」からできます。"
-    }
+    "onlyThisCoin": {
+      "description": "他のトークンを受け取るには、設定で有効にしてください。他のトークンを預けると、アクセスできなくなる場合があります。",
+      "warning": "このアドレスで{{coinName}}だけを受信するようにしてください。"
+    },
+    "qrCodeCopiedMessage": "コピーしました！",
+    "scriptType": {
+      "p2tr": "Taproot (最新版)",
+      "p2wpkh": "Native Segwit (デフォルト)"
+    },
+    "selectAccount": "アカウント選択",
+    "taprootWarning": "注意：Taprootは新しいビットコインの機能であり、まだ広く採用されていません。Taprootアドレスで受け取った資金は、サードパーティのwatch-only ウォレットでは表示されない場合があります。多くのウォレットと取引所はまだTaprootアドレスに送金することができません。",
+    "title": "受け取る{{accountName}}",
+    "verify": "安全にアドレスを検証する",
+    "verifyBitBox02": "BitBoxでアドレスを確認",
+    "verifyInstruction": "下記アドレスがデバイス画面に表示されているものと一致することを確認してください。"
   },
   "reset": {
-    "description": "デバイス上の全データが消去されます。これはあなたのプライベートキーも含みます！",
+    "description": "このデバイスからすべてのデータが削除されます。それには、あなたのプライベートキーも含まれます！",
     "notReset": "デバイスはリセットされませんでした。",
-    "title": "デバイスのリセット",
-    "understand": "私はバックアップがあり、リカバリーパスワードも覚えています"
+    "title": "デバイスを工場出荷状態にリセット",
+    "understand": "私はバックアップがあり、リカバリーパスワードも覚えています",
+    "understandBB02": "有効なバックアップがあります"
   },
   "securityInformation": {
     "create": {
-      "button": "続ける",
-      "description1": "デバイスの設定を行う前に、安全な環境で行うことをお勧めします。",
+      "description1": "私たちは、他の人があなたが選んだパスワードを見ることができる環境から離れた、安全な環境でデバイスを設定することをお勧めします。",
       "description2": "これから2つのパスワードを設定します。",
       "description3": "1つ目は<strong>デバイスパスワード</strong>です。あなたのBitBoxをアンロックをするのに必要で、後から変更することができます。",
       "description4": "2つ目は<strong>リカバリーパスワード</strong>です。これはウォレットのアンロックに使用され、後から変更できません。",
-      "description5": "作成されたウォレットは挿入したmicroSDカードにバックアップされます。これは<strong>リカバリーパスワード</strong>を使用して緊急時に資金を復元することができます。",
-      "title": "セキュリティー情報"
+      "description5": "作成したウォレットは、提供されたマイクロSDカード上のファイルにバックアップされます。これは緊急時にあなたの<strong>リカバリーパスワード</strong>を使用して資金を回復するために使用することができます。",
+      "title": "セキュリティ情報"
     },
     "restore": {
-      "button": "続ける",
-      "description1": "バックアップが保存されたmicroSDカードを挿入するよう求められます。",
+      "description1": "バックアップを保存するために使用したmicroSDカードを挿入するよう求められます。",
       "description2": "復元を行うにはリカバリーパスワードが必要です。",
       "description3": "リカバリーパスワードを入力する際はご注意ください。間違ったパスワードを入力した場合でも妥当なウォレットは作成されます。パスワードが間違っていた場合は予期せぬウォレット残高が表示される場合があります。",
-      "title": "セキュリティー情報"
+      "title": "セキュリティ情報"
     }
   },
   "seed": {
@@ -828,18 +1564,18 @@
       "password-change": "リカバリーパスワードを後から変更することができません",
       "password-required": "ウォレットをバックアップから復元したい場合はリカバリーパスワードが必要になります"
     },
-    "create": "ウォレットを作成",
+    "create": "ウォレットを作成する",
     "creating": "ウォレットの作成中",
     "description": "次の項目を確認しました：",
     "error": {
       "e102": "パスワードは最低4文字(半角)必要です。",
-      "e200": "自動的にバックアップが作成されるため、ウォレットを作成するにはBitBoxにmicroSDカードを挿入する必要があります。"
+      "e200": "ウォレットを作成するためには、BitBoxにmicroSDカードを挿入する必要があるため、自動的にバックアップを作成することが可能です。"
     },
     "info": {
-      "button": "リカバリーパスワードを設定する",
+      "button": "今すぐリカバリーパスワードを設定する",
       "description1": "BitBoxにmicroSDカードを挿入してください",
       "description2": "ウォレットのリカバリーパスワードを決めて「リカバリーパスワードを設定する」を選択してください",
-      "description3": "紛失・盗難されたBitBoxデバイスの資金を復元する唯一の方法はmicroSDカードに保存されたバックアップと、それに一致するリカバリーパスワードの組み合わせのみです。",
+      "description3": "マイクロSDカードへのバックアップとあなたのリカバリーパスワードは、BitBoxデバイスが紛失または盗難の場合に資金を回復する唯一の方法です。",
       "description4": "資金を移す以外の方法で、後からリカバリーパスワードの変更を行うことはできません。",
       "title": "新しいウォレットの作成"
     },
@@ -848,17 +1584,16 @@
       "repeatPlaceholder": "リカバリーパスワードの確認"
     },
     "walletName": {
-      "label": "ウォレットの名前"
+      "label": "ウォレット名"
     }
   },
   "seedRestore": {
     "error": {
-      "e200": "バックアップからウォレットの復元を行うにはmicroSDカードが必要です。"
+      "e200": "バックアップからウォレットを復元するには、マイクロSDカードが必要です。"
     },
     "info": {
-      "button": "続ける",
-      "description1": "microSDカードを挿入してから「続ける」をクリックしてください。",
-      "description2": "バックアップを選択してから「復元」をクリックしてください",
+      "description1": "BitBoxにmicroSDカードを挿入し「続ける」をクリックしてください。",
+      "description2": "バックアップを選択し、「復元」をクリックしてください",
       "description3": "リカバリーパスワード",
       "description4": "間違ったパスワードは別のウォレットを作成することを理解するため、あなたの確認が必要です。",
       "title": "バックアップからウォレットを復元する方法"
@@ -867,33 +1602,34 @@
   "send": {
     "abort": "取引は中止されました。",
     "address": {
-      "label": "受取側のアドレス",
+      "label": "受信者アドレス",
       "placeholder": "アドレスを入力してください"
     },
     "amount": {
       "label": "金額",
       "placeholder": "金額を入力してください"
     },
-    "button": "署名して送る",
+    "availableBalance": "利用可能な残高",
+    "button": "レビュー",
+    "buyEth": "イーサリアムを購入",
     "coincontrol": {
-      "address": "アドレス",
+      "addressReused": "アドレス再利用",
+      "change": "お釣り",
       "outpoint": "アウトポイント",
-      "title": "アウトプットを選択"
+      "title": "アウトプットから送信します。"
     },
     "confirm": {
-      "selected-coins": "選択中のコイン",
-      "title": "取引を確認",
+      "infoMessage": "金額とアドレスが正しいことを BitBox上でよく確認してください。",
+      "selected-coins": "選択されたコイン",
+      "title": "トランザクションの確認と送信",
+      "to": "To",
       "total": "総額"
     },
-    "customFee": {
-      "label": "換算後の手数料",
-      "placeholder": "換算後の手数料"
-    },
-    "data": {
-      "label": "任意データ",
-      "placeholder": "16進数のデータを入力してください"
-    },
+    "edit": "取引内容を変更",
     "error": {
+      "erc20InsufficientGasFunds": "この ERC20 トランザクションを実行するのに十分な Ether（ETH）が不足しています。ウォレットに Ether を追加してから、もう一度お試しください。",
+      "feeTooLow": "手数料が低すぎます。",
+      "feesNotAvailable": "手数料を見積もることができませんでした。",
       "insufficientFunds": "資金が不十分です",
       "invalidAddress": "無効なアドレス",
       "invalidAmount": "無効な金額",
@@ -905,34 +1641,56 @@
       "placeholder": "情報がありません"
     },
     "feeTarget": {
+      "customLabel": "手数料率",
+      "customLabel_eth": "ガス料金",
       "description": {
-        "economy": "24ブロック(Bitcoinで約4時間、Litecoinで約1時間)",
-        "high": "2ブロック(Bitcoinで約20分、Litecoinで約5分)",
-        "low": "12ブロック(Bitcoinで約2時間、Litecoinで約30分)",
-        "normal": "6ブロック(Bitcoinで約1時間、Litecoinで約15分)"
+        "economy": "4時間（24ブロック）",
+        "economy_eth": "30分以内",
+        "economy_ltc": "1時間（24ブロック）",
+        "high": "20分（2ブロック）",
+        "high_eth": "30秒以内",
+        "high_ltc": "5分（2ブロック）",
+        "low": "2時間（12ブロック）",
+        "low_eth": "5分以内",
+        "low_ltc": "30分（12ブロック）",
+        "mEconomy": "-",
+        "mFastest": "10分（次のブロック）",
+        "mHalfHour": "20分（2ブロック）",
+        "mHour": "30分（3ブロック）",
+        "normal": "1時間（6ブロック）",
+        "normal_eth": "2分以内",
+        "normal_ltc": "15分（6ブロック）"
       },
+      "estimate": "推定確認時間：",
       "label": {
+        "custom": "カスタム",
         "economy": "エコノミー",
         "high": "高い",
         "low": "低い",
-        "normal": "普通"
+        "mEconomy": "優先度なし",
+        "mFastest": "高い",
+        "mHalfHour": "中程度",
+        "mHour": "低い",
+        "normal": "ノーマル"
       },
-      "placeholder": "手数料概算の計算中…"
+      "placeholder": "手数料を計算しています..."
     },
     "maximum": "全て送信",
+    "maximumSelectedCoins": "選択したコインを送信します。",
+    "newTransaction": "新規取引",
+    "noFeeTargets": "現在、手数料率の見積もりは利用できません。後でもう一度試すか、カスタム手数料を入力してください",
+    "priority": "優先",
     "scanQR": "QRコードをスキャン",
-    "signprogress": {
-      "description": "この取引はたくさんのデータを含みます。取引を完全にサインするには、{{steps}}回確認することを求められます。",
-      "label": "進行度"
-    },
+    "scanQRNoCameraMessage": "カメラが見つかりません。デバイスがカメラをサポートしていること、および許可が正しく設定されていることを確認してください。",
     "success": "取引は署名され送信されました。",
-    "title": "コインの送信",
-    "toggleCoinControl": "コインコントロール切り替え"
+    "title": "{{accountName}}送信する。",
+    "toggleCoinControl": "コインコントロール",
+    "transactionDetails": "トランザクションの詳細"
   },
   "settings": {
-    "accounts": {
-      "title": "アクティブなアカウント"
-    },
+    "about": "について",
+    "advancedSettings": "詳細設定",
+    "appearance": "外観",
     "electrum": {
       "add": "サーバーを追加",
       "add-server": "追加",
@@ -950,6 +1708,7 @@
       "step1-text": "エンドポイントを入力してください。",
       "step2": "2",
       "step2-text": "サーバーの証明書チェーンの証明書を入力してください。または、リモート証明書をダウンロードして比較することも可能です。",
+      "step2-text-tcp": "もしTLSを使用したくない場合は、このステップをスキップしてください。",
       "step3": "3",
       "step3-text": "接続の確認を行なってサーバーを追加しましょう。",
       "step4": "4",
@@ -962,48 +1721,149 @@
     "expert": {
       "coinControl": "コインコントロールを有効にする",
       "electrum": {
+        "description": "独自のElectrumフルノードに接続することができます。",
         "title": "自分のノードに接続"
       },
-      "title": "エキスパート設定"
+      "exportLogs": {
+        "description": "トラブルシューティングとサポートのためにログファイルをエクスポートします。",
+        "title": "ログのエクスポート"
+      },
+      "fee": "カスタム手数料を有効にします。",
+      "restartInTestnet": "テストネットモード",
+      "setProxyAddress": "プロキシアドレスを設定します。",
+      "title": "エキスパート設定",
+      "useProxy": "Torプロキシを有効にします。",
+      "useSats": "\nBTCの値をSatoshiで表示します。"
+    },
+    "general": "一般",
+    "header": {
+      "home": "ホーム"
+    },
+    "info": {
+      "out-of-date": "新しいアップデートが利用可能です。",
+      "title": "情報",
+      "up-to-date": "お使いのアプリは最新版です。",
+      "version": "アプリのバージョン"
+    },
+    "more": "その他",
+    "notes": {
+      "export": {
+        "description": "取引メモとアカウント名のバックアップを作成します。",
+        "success": "メモが正常にエクスポートされました。",
+        "title": "メモのエクスポート"
+      },
+      "import": {
+        "accountNames_other": "{{count}}個のアカウント名がインポートされました。",
+        "description": "以前に作成したバックアップファイルから取引メモとアカウント名を復元します。",
+        "title": "メモのインポート",
+        "tooLarge": "ファイルが大きすぎます",
+        "transactionNotes_other": "{{count}}件の取引メモがインポートされました。"
+      },
+      "title": "メモの管理"
+    },
+    "restart": "変更が反映されるためには、BitBoxAppを再起動してください。",
+    "services": {
+      "title": "サービス"
     },
     "success": "変更を適用するにはBitBoxを一度引き抜いてから再度挿入してください。",
     "title": "設定"
   },
   "setup": "デバイスを設定",
   "sidebar": {
-    "addAccount": "アカウントを追加",
-    "bitboxBase": "BitBox Base",
     "device": "デバイス管理",
     "leave": "離れる",
     "settings": "設定"
   },
   "success": {
     "create": {
-      "info1": "あなたのウォレットは安全にmicroSDカードにバックアップされました。microSDカードを取り外し、安全な場所に保管してください。",
+      "info1": "ウォレットは安全にmicroSDカードにバックアップされました。カードを取り外して安全な場所に保管してください。",
       "info2": "Bitboxのアンロックに使われる安全なデバイスパスワードを作成しました。",
       "info3": "あなたのウォレットの資産とバックアップをアンロックする安全なリカバリーパスワードを作成しました。",
       "summary": "これまでのサマリーです",
       "title": "成功"
     },
-    "getstarted": "使い始めましょう",
+    "getstarted": "始めましょう",
     "restore": {
       "summary": "バックアップからのウォレットの復元に成功しました。",
       "title": "成功"
     }
   },
+  "testWallet": {
+    "connect": {
+      "description": "Testnetでデバイスを使わずにテストできるソフトウェアテスト用ウォレット",
+      "title": "テスト用ウォレット"
+    },
+    "disconnect": {
+      "description": "ソフトウェアテスト用ウォレットを削除します",
+      "title": "テスト用ウォレットの接続を解除"
+    },
+    "prompt": {
+      "button": "解除",
+      "passwordLabel": "テスト用パスワード",
+      "title": "テスト用ウォレットのロックを解除する"
+    }
+  },
+  "testnet": {
+    "activate": {
+      "description": "機能を検証・確認するには、テストネットモードでアプリを再起動してください。",
+      "prompt": "テストネットモードに切り替えるには、アプリを終了してからもう一度起動してください。",
+      "title": "テストネットモードを開始"
+    },
+    "deactivate": {
+      "description": "テストネットモードを終了するには、アプリをいったん終了し、再起動してください。",
+      "prompt": "テストネットモードを終了するには、アプリを終了してください。",
+      "title": "テストネットモードを終了"
+    }
+  },
   "transaction": {
     "confirmation": "認証済み",
+    "details": {
+      "activity": "アクティビティ",
+      "address": "アドレス",
+      "amount": "金額",
+      "date": "日付",
+      "fiatAmount": "フィアットの金額",
+      "status": "ステータス",
+      "title": "取引の詳細",
+      "type": "タイプ"
+    },
     "explorer": "取引ID",
-    "explorerTitle": "外部ブロックエキスプローラで開く",
+    "explorerTitle": "外部のブロックエクスプローラで開く",
     "fee": "手数料",
     "fiatHistorical": "Historical",
     "gas": "Gas",
-    "pending": "ペンディング状態の取引",
+    "no-results": "{{searchTerm}}」に一致する取引は見つかりませんでした",
+    "pending": "保留中のトランザクション",
     "size": "サイズ",
+    "status": {
+      "complete": "完了",
+      "failed": "失敗しました",
+      "pending": "保留中",
+      "pending_receive": "受信トランザクション",
+      "pending_send": "送信トランザクション",
+      "pending_send_to_self": "保留中のトランザクション"
+    },
+    "statusShort": {
+      "complete": "完了しました",
+      "failed": "失敗しました",
+      "pending": "保留中",
+      "pending_receive": "受信",
+      "pending_send": "送信",
+      "pending_send_to_self": "保留中"
+    },
+    "tx": {
+      "receive_complete": "～に受信",
+      "receive_failed": "～への受信に失敗しました",
+      "receive_pending": "～に受信されました",
+      "send_complete": "～に送信されました",
+      "send_failed": "～への送信に失敗しました",
+      "send_pending": "～に送信されました"
+    },
     "vsize": "バーチャルサイズ",
     "weight": "重量"
   },
   "transactions": {
+    "errorLoadTransactions": "トランザクションの読み込み中にエラーが発生しました。",
     "placeholder": "表示できる取引がありません。"
   },
   "unknownError": "不明なエラーが起きました：{{errorMessage}}",
@@ -1022,7 +1882,7 @@
   },
   "upgradeFirmware": {
     "button": "ファームウェアをアップグレード",
-    "description": "ファームウェアのバージョンを{{currentVersion}}から{{newVersino}}にアップグレードしますか？",
+    "description": "{{currentVersion}}から{{newVersion}}へのファームウェアのアップグレードを行いますか？",
     "label": "BitBoxのファームウェアアップグレードが必要です。",
     "locked": "{{currentVersion}}から{{newVersion}}にアップグレードするには、デバイスを長押ししてください。",
     "title": "ファームウェアをアップグレード",
@@ -1031,13 +1891,54 @@
     "unlocked2": "BitBoxを再度挿入した際にLEDが点灯します",
     "unlocked3": "LEDが点灯したらデバイスをタップしてください"
   },
+  "walletConnect": {
+    "connect": {
+      "button": "接続する",
+      "dappLabel": "dappのURIアドレスを入力してください。",
+      "invalidPairingUri": "無効なペアリングURIです"
+    },
+    "dashboard": {
+      "allSessions": "全セッション",
+      "disclaimer": "Walletconnectは、EthereumベースのDappsに接続するためのプロトコルです。これらのdappsはサードパーティのサービスによって運営されているため、信頼できるdappsにのみ接続し、トランザクションを行う際には常に署名している内容を把握しておくことが重要です。",
+      "newConnection": "新しい接続",
+      "noConnectedSessions": "現在、どのアカウントもdappsに接続されていません。",
+      "unspecifiedAccount": "未指定のアカウント"
+    },
+    "pairingRequest": {
+      "approve": "接続を承認する",
+      "reject": "拒否する",
+      "title": "からの新規接続リクエスト"
+    },
+    "pairingSuccess": "Dappが正常に接続されました。dappのウェブサイトで続行できます。",
+    "signingRequest": {
+      "chain": "チェーン",
+      "dapp": "Dapp",
+      "data": "Data",
+      "dataParsingError": "データの解析に失敗しました",
+      "decodeError": "メッセージのデコードに失敗しました。",
+      "method": {
+        "sendTransaction": "トランザクションに署名して送信する",
+        "signMessage": "メッセージに署名する",
+        "signTransaction": "トランザクションに署名する",
+        "signTypedData": "タイプされたデータに署名する"
+      },
+      "successfullySigned": "リクエストが正常に署名されました。",
+      "walletConnectRequest": "WalletConnectリクエスト"
+    },
+    "useNewUri": "このURIはすでに接続を試みるために使用されています。新しいURIを使用してください。",
+    "walletConnect": "WalletConnect"
+  },
   "warning": {
-    "receivePairing": "安全なアドレス検証を有効にするにはBitBoxのペアリングを行なってください。サイドバーから「デバイス管理」を選択してください。",
-    "sdcard": "バックアップの管理をしている時以外は、microSDカードはBitBoxとは別に保管してください。",
-    "sendPairing": "安全に取引詳細を検証するにはBitBoxのペアリングを行なってください。サイドバーの「デバイス管理」を選択してください。"
+    "coincontrol": "1つ以上のUTXOに再利用されたアドレスがあります。受信者はそれらのアドレスに関連するすべてのUTXOを確認できます。",
+    "offline": "現在オフラインのため、取引の送信や最新の為替レートの確認はできません。",
+    "sdcard": "バックアップを管理したい場合を除き、BitBoxとマイクロSDカードを別々に保管してください。",
+    "testnet": "現在、Testnet モードを使用しています。このモードでのトランザクションやコインは実際のものではなく、金銭的な価値もありません。テスト目的のみに使用してください。"
   },
   "welcome": {
-    "insertDevice": "開始するにはデバイスを差し込んでください",
+    "connect": "BitBox を接続してください",
+    "getStarted": "BitBox にファームウェアをインストールして、はじめましょう。",
+    "loadingAccounts": "アカウントを読み込み中",
+    "message": "BitBox を接続し、本体の側面をタップして続行してください。",
     "title": "ようこそ"
   }
 }

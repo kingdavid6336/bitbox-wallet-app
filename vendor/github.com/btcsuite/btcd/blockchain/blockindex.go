@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
 	"github.com/btcsuite/btcd/database"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/wire/v2"
 )
 
 // blockStatus is a bit field representing the validation state of the block.
@@ -33,6 +33,9 @@ const (
 	// has failed validation, thus the block is also invalid.
 	statusInvalidAncestor
 
+	// statusHeaderStored indicates that the block's header is stored on disk.
+	statusHeaderStored
+
 	// statusNone indicates that the block has no validation state flags set.
 	//
 	// NOTE: This must be defined last in order to avoid influencing iota.
@@ -44,6 +47,11 @@ const (
 // kept.
 func (status blockStatus) HaveData() bool {
 	return status&statusDataStored != 0
+}
+
+// HaveHeader returns whether the header data is stored in the database.
+func (status blockStatus) HaveHeader() bool {
+	return status&statusHeaderStored != 0
 }
 
 // KnownValid returns whether the block is known to be valid. This will return
@@ -73,6 +81,9 @@ type blockNode struct {
 
 	// parent is the parent block for this node.
 	parent *blockNode
+
+	// ancestor is a block that is more than one block back from this node.
+	ancestor *blockNode
 
 	// hash is the double sha 256 of the block.
 	hash chainhash.Hash
@@ -119,6 +130,7 @@ func initBlockNode(node *blockNode, blockHeader *wire.BlockHeader, parent *block
 		node.parent = parent
 		node.height = parent.height + 1
 		node.workSum = node.workSum.Add(parent.workSum, node.workSum)
+		node.buildAncestor()
 	}
 }
 
@@ -129,6 +141,20 @@ func newBlockNode(blockHeader *wire.BlockHeader, parent *blockNode) *blockNode {
 	var node blockNode
 	initBlockNode(&node, blockHeader, parent)
 	return &node
+}
+
+// Equals compares all the fields of the block node except for the parent and
+// ancestor and returns true if they're equal.
+func (node *blockNode) Equals(other *blockNode) bool {
+	return node.hash == other.hash &&
+		node.workSum.Cmp(other.workSum) == 0 &&
+		node.height == other.height &&
+		node.version == other.version &&
+		node.bits == other.bits &&
+		node.nonce == other.nonce &&
+		node.timestamp == other.timestamp &&
+		node.merkleRoot == other.merkleRoot &&
+		node.status == other.status
 }
 
 // Header constructs a block header from the node and returns it.
@@ -150,6 +176,26 @@ func (node *blockNode) Header() wire.BlockHeader {
 	}
 }
 
+// invertLowestOne turns the lowest 1 bit in the binary representation of a number into a 0.
+func invertLowestOne(n int32) int32 {
+	return n & (n - 1)
+}
+
+// getAncestorHeight returns a suitable ancestor for the node at the given height.
+func getAncestorHeight(height int32) int32 {
+	// We pop off two 1 bits of the height.
+	// This results in a maximum of 330 steps to go back to an ancestor
+	// from height 1<<29.
+	return invertLowestOne(invertLowestOne(height))
+}
+
+// buildAncestor sets an ancestor for the given blocknode.
+func (node *blockNode) buildAncestor() {
+	if node.parent != nil {
+		node.ancestor = node.parent.Ancestor(getAncestorHeight(node.height))
+	}
+}
+
 // Ancestor returns the ancestor block node at the provided height by following
 // the chain backwards from this node.  The returned block will be nil when a
 // height is requested that is after the height of the passed node or is less
@@ -161,12 +207,101 @@ func (node *blockNode) Ancestor(height int32) *blockNode {
 		return nil
 	}
 
+	// Traverse back until we find the desired node.
 	n := node
-	for ; n != nil && n.height != height; n = n.parent {
-		// Intentionally left blank
+	for n != nil && n.height != height {
+		// If there's an ancestor available, use it. Otherwise, just
+		// follow the parent.
+		if n.ancestor != nil {
+			// Calculate the height for this ancestor and
+			// check if we can take the ancestor skip.
+			if getAncestorHeight(n.height) >= height {
+				n = n.ancestor
+				continue
+			}
+		}
+
+		// We couldn't take the ancestor skip so traverse back to the parent.
+		n = n.parent
 	}
 
 	return n
+}
+
+// Height returns the blockNode's height in the chain.
+//
+// NOTE: Part of the HeaderCtx interface.
+func (node *blockNode) Height() int32 {
+	return node.height
+}
+
+// Bits returns the blockNode's nBits.
+//
+// NOTE: Part of the HeaderCtx interface.
+func (node *blockNode) Bits() uint32 {
+	return node.bits
+}
+
+// Timestamp returns the blockNode's timestamp.
+//
+// NOTE: Part of the HeaderCtx interface.
+func (node *blockNode) Timestamp() int64 {
+	return node.timestamp
+}
+
+// Parent returns the blockNode's parent.
+//
+// NOTE: Part of the HeaderCtx interface.
+func (node *blockNode) Parent() HeaderCtx {
+	if node.parent == nil {
+		// This is required since node.parent is a *blockNode and if we
+		// do not explicitly return nil here, the caller may fail when
+		// nil-checking this.
+		return nil
+	}
+
+	return node.parent
+}
+
+// RelativeAncestorCtx returns the blockNode's ancestor that is distance blocks
+// before it in the chain. This is equivalent to the RelativeAncestor function
+// below except that the return type is different.
+//
+// This function is safe for concurrent access.
+//
+// NOTE: Part of the HeaderCtx interface.
+func (node *blockNode) RelativeAncestorCtx(distance int32) HeaderCtx {
+	ancestor := node.RelativeAncestor(distance)
+	if ancestor == nil {
+		// This is required since RelativeAncestor returns a *blockNode
+		// and if we do not explicitly return nil here, the caller may
+		// fail when nil-checking this.
+		return nil
+	}
+
+	return ancestor
+}
+
+// IsAncestor returns if the other node is an ancestor of this block node.
+func (node *blockNode) IsAncestor(otherNode *blockNode) bool {
+	// Return early as false if the otherNode is nil.
+	if otherNode == nil {
+		return false
+	}
+
+	ancestor := node.Ancestor(otherNode.height)
+	if ancestor == nil {
+		return false
+	}
+
+	// If the otherNode has the same height as me, then the returned
+	// ancestor will be me.  Return false since I'm not an ancestor of me.
+	if node.height == ancestor.height {
+		return false
+	}
+
+	// Return true if the fetched ancestor is other node.
+	return ancestor.Equals(otherNode)
 }
 
 // RelativeAncestor returns the ancestor block node a relative 'distance' blocks
@@ -182,17 +317,17 @@ func (node *blockNode) RelativeAncestor(distance int32) *blockNode {
 // prior to, and including, the block node.
 //
 // This function is safe for concurrent access.
-func (node *blockNode) CalcPastMedianTime() time.Time {
+func CalcPastMedianTime(node HeaderCtx) time.Time {
 	// Create a slice of the previous few block timestamps used to calculate
 	// the median per the number defined by the constant medianTimeBlocks.
 	timestamps := make([]int64, medianTimeBlocks)
 	numNodes := 0
 	iterNode := node
 	for i := 0; i < medianTimeBlocks && iterNode != nil; i++ {
-		timestamps[i] = iterNode.timestamp
+		timestamps[i] = iterNode.Timestamp()
 		numNodes++
 
-		iterNode = iterNode.parent
+		iterNode = iterNode.Parent()
 	}
 
 	// Prune the slice to the actual number of available timestamps which
@@ -216,6 +351,10 @@ func (node *blockNode) CalcPastMedianTime() time.Time {
 	medianTimestamp := timestamps[numNodes/2]
 	return time.Unix(medianTimestamp, 0)
 }
+
+// A compile-time assertion to ensure blockNode implements the HeaderCtx
+// interface.
+var _ HeaderCtx = (*blockNode)(nil)
 
 // blockIndex provides facilities for keeping track of an in-memory index of the
 // block chain.  Although the name block chain suggests a single chain of
@@ -246,14 +385,16 @@ func newBlockIndex(db database.DB, chainParams *chaincfg.Params) *blockIndex {
 	}
 }
 
-// HaveBlock returns whether or not the block index contains the provided hash.
+// HaveBlock returns whether or not the block index contains the provided hash
+// and if the data exists on disk.
 //
 // This function is safe for concurrent access.
 func (bi *blockIndex) HaveBlock(hash *chainhash.Hash) bool {
 	bi.RLock()
-	_, hasBlock := bi.index[*hash]
+	node, hasBlock := bi.index[*hash]
+	haveData := hasBlock && node.status.HaveData()
 	bi.RUnlock()
-	return hasBlock
+	return haveData
 }
 
 // LookupNode returns the block node identified by the provided hash.  It will
@@ -319,6 +460,44 @@ func (bi *blockIndex) UnsetStatusFlags(node *blockNode, flags blockStatus) {
 	bi.Unlock()
 }
 
+// InactiveTips returns all the block nodes that aren't in the best chain.
+//
+// This function is safe for concurrent access.
+func (bi *blockIndex) InactiveTips(bestChain *chainView) []*blockNode {
+	bi.RLock()
+	defer bi.RUnlock()
+
+	// Look through the entire blockindex and look for nodes that aren't in
+	// the best chain. We're gonna keep track of all the orphans and the parents
+	// of the orphans.
+	orphans := make(map[chainhash.Hash]*blockNode)
+	orphanParent := make(map[chainhash.Hash]*blockNode)
+	for hash, node := range bi.index {
+		found := bestChain.Contains(node)
+		if !found {
+			orphans[hash] = node
+			orphanParent[node.parent.hash] = node.parent
+		}
+	}
+
+	// If an orphan isn't pointed to by another orphan, it is a chain tip.
+	//
+	// We can check this by looking for the orphan in the orphan parent map.
+	// If the orphan exists in the orphan parent map, it means that another
+	// orphan is pointing to it.
+	tips := make([]*blockNode, 0, len(orphans))
+	for hash, orphan := range orphans {
+		_, found := orphanParent[hash]
+		if !found {
+			tips = append(tips, orphan)
+		}
+
+		delete(orphanParent, hash)
+	}
+
+	return tips
+}
+
 // flushToDB writes all dirty block nodes to the database. If all writes
 // succeed, this clears the dirty set.
 func (bi *blockIndex) flushToDB() error {
@@ -328,8 +507,37 @@ func (bi *blockIndex) flushToDB() error {
 		return nil
 	}
 
+	// Check if any dirty node actually needs to be written.  Header-only
+	// nodes are skipped for backwards compatibility (see NOTE below), so
+	// if every dirty node is header-only, we can avoid opening a write
+	// transaction entirely.  This matters during header sync where every
+	// ProcessBlockHeader call would otherwise open a no-op write txn.
+	needsWrite := false
+	for node := range bi.dirty {
+		if node.status.HaveData() {
+			needsWrite = true
+			break
+		}
+	}
+	if !needsWrite {
+		bi.dirty = make(map[*blockNode]struct{})
+		bi.Unlock()
+		return nil
+	}
+
 	err := bi.db.Update(func(dbTx database.Tx) error {
 		for node := range bi.dirty {
+			// NOTE: we specifically don't flush the block indexes that
+			// we don't have the data for backwards compatibility.
+			// While flushing would save us the work of re-downloading
+			// the block headers upon restart, if the user were to start
+			// up a btcd node with an older version, it would result in
+			// an unrecoverable error as older versions would consider a
+			// blockNode being present as having the block data as well.
+			if node.status.HaveHeader() &&
+				!node.status.HaveData() {
+				continue
+			}
 			err := dbStoreBlockNode(dbTx, node)
 			if err != nil {
 				return err

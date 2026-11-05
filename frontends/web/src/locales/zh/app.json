@@ -4,16 +4,7 @@
     "exportTransactions": "将交易导出为CSV文件并下载文件夹",
     "fatalError": "出现意外错误",
     "incoming": "传入",
-    "info": {
-      "btc-p2pkh": "这是一个legacy的比特币账户。建议您使用Segwit比特币帐户，因为它的网络手续费(矿工费)更低。",
-      "btc-p2wpkh": "这是比特币的Native Segwit账户，(相比比特币的Segwit账户)只需更低的网络手续费用(矿工费)。它采用Bech32地址格式，但该地址格式尚未得到广泛支持(请确保您在了解原理的基础上进行使用)。而如果您仍然想尝试前沿技术，可以考虑使用它。",
-      "btc-p2wpkh-p2sh": "这是一个Segwit比特币帐户，建议用于降低网络费用。如果您刚刚从之前的应用程序升级，则可以在比特币遗留帐户中找到您的资金，您可以在设置中启用该帐户。如果您想尝试尖端技术并节省更多网络费用，请转到设置并启用使用Bech32地址格式的Native Segwit比特币帐户。",
-      "tbtc-p2pkh": "$t(account.info.btc-p2pkh)",
-      "tbtc-p2wpkh": "$t(account.info.btc-p2wpkh)",
-      "tbtc-p2wpkh-p2sh": "$t(account.info.btc-p2wpkh-p2sh)"
-    },
     "initializing": "正在从区块链网络中获取信息",
-    "openFile": "打开文件",
     "reconnecting": "链接断开，尝试重新链接"
   },
   "accountInfo": {
@@ -25,31 +16,13 @@
   },
   "accountSummary": {
     "balance": "余额",
-    "exportSummary": "将帐户摘要导出为CSV文件并保存到下载文件夹中",
-    "fiatBalance": "法币余额",
     "name": "账户名",
     "noAccount": "还未添加账户",
-    "synchronizing": "正在进行账户与区块链的同步",
     "title": "帐户汇总",
     "total": "总计"
   },
   "addAccount": {
-    "accountName": "账户名",
-    "address": "地址",
-    "coin": "币种",
-    "error": {
-      "alreadyExists": "账户已存在",
-      "invalidAddress": "请输入有效地址",
-      "xprivEntered": "警告：您输入了扩展私钥。请输入扩展公钥，并确保您的私钥安全。",
-      "xpubInvalid": "扩展公钥格式错误。"
-    },
-    "extendedPublicKey": "扩展公钥",
-    "scriptType": "脚本类型",
-    "submit": "添加账户",
-    "title": "添加账户",
-    "warning": {
-      "xpubWrongNet": "警告：扩展公钥的格式提示它可能不适用于所选的帐户类型。如果您没有看预期的交易，请尝试使用其他帐户类型导入扩展公钥。"
-    }
+    "title": "添加账户"
   },
   "app": {
     "upgrade": "该应用程序有新版本可用！请从 {{current}} 升级至 {{version}}。"
@@ -103,11 +76,7 @@
       "title": "恢复",
       "understand": "我知道输入错误的恢复密码会创建出另一个不同的钱包"
     },
-    "restoreFromMnemonic": {
-      "confirmTitle": "通过助记词进行恢复"
-    },
     "showMnemonic": {
-      "description": "系统将为您提供最多24个单词，构成您的钱包(助记词)备份。请把它们用抄写到纸上。\n\n<strong>请勿将其数字化存储或对其进行拍照。</strong>\n\n<strong>不要大声说出这些单词。</strong>\n\n<strong>此备份不受密码加密保护。</strong>\n\n抄写完成后，您将需要再次核对每个单词。",
       "title": "显示助记词"
     },
     "title": "管理备份"
@@ -120,14 +89,13 @@
     },
     "flipscreen": "翻转屏幕",
     "orientation": "设备方向错误？",
-    "success": "升级成功！继续(等待) {{rebootSeconds}} 秒..."
+    "success": "升级成功！继续(等待) "
   },
   "bitbox": {
     "error": {
       "e10000": "当前输入的设备密码不正确",
       "e10001": "更改设备密码失败",
-      "e102": "密码必须包含至少4个字符",
-      "e112": "隐藏的设备密码不能与主设备密码相同。"
+      "e102": "密码必须包含至少4个字符"
     }
   },
   "bitbox02Interact": {
@@ -138,13 +106,6 @@
       "current": "当前设备名称",
       "input": "BitBox02 名称",
       "title": "设置BitBox02的设备名称"
-    },
-    "mnemonicPassphrase": {
-      "description": "该功能可以让您在解锁BitBox02之后输入一个可选密码短语。\n\n<strong>注意：</strong> 任何密语都会衍生出一个新的独立钱包。\n保持密码短语 <strong>安全</strong>。\n<strong>一旦密码短语丢失将再也无法恢复资产。</strong>",
-      "disable": "禁用可选密码短语",
-      "enable": "启用可选密码短语",
-      "successDisable": "可选密码短语已成功禁用",
-      "successEnable": "密码短语(可选功能)已成功启用。\n\n从现在开始，您可以在解锁BitBox02之后输密码短语。\n\n如果您不知道密码短语是什么，请停用此选项。这是高级用户的选项。 \n\n\n<strong>警告：</strong> 每个密码短语都会生成一个有效的钱包。\n您需要确保您的密码短语是 <strong>安全，并且您不会丢失它。</strong>\n\n<strong>如果您丢失密码短语，则将无法使用您的资产。这意味着您的资产将丢失。</strong>"
     }
   },
   "bitbox02Wizard": {
@@ -171,24 +132,16 @@
       "text": "好的，让我们开始创建一个新的钱包！"
     },
     "initialize": {
-      "passwordText": "现在，让我们为您的设备设置密码。参考以下视频指导，通过BitBox设备的边框触控功能进行密码设置。",
-      "passwordTitle": "为您的BitBox设置密码",
-      "text": "已成功配对您的BitBox02！现在，让我们进行设备的初始化。请选择您是要创建一个新的钱包，或是需要从已有(私钥)备份中恢复原来的钱包。 <strong>请确保您的BitBox02中插入了microSD卡</strong>",
-      "tip": "我们建议您在安全的环境中进行操作。",
-      "title": "初始化您的BitBox"
+      "tip": "我们建议您在安全的环境中进行操作。"
     },
-    "insertSDCard": "<strong>请确保您的BitBox02设备上已插入了microSD卡。</strong>",
     "pairing": {
-      "confirmButton": "确认 & 继续",
       "failed": "未确认的配对。请重新插入您的BitBox02。",
       "paired": "您已在设备上确认代码匹配。如果确认无误，则可以单击下面的按钮以继续。",
       "title": "配对码验证中",
       "unpaired": "已检测到新的BitBox02。请验证以下代码是否与您设备上显示的代码匹配。如果代码匹配(相同)，请轻触BitBox02显示屏上打勾选项下方的设备边框以继续。"
     },
     "restoreFromMnemonic": {
-      "failed": "通过助记词进行的恢复失败，请重试。",
-      "point1": "输入单词",
-      "point2": "$t(bitbox02Wizard.backup.point2)"
+      "failed": "通过助记词进行的恢复失败，请重试。"
     },
     "stepBackup": {
       "beforeProceed": "在继续之前，请阅读以下重要的安全注意事项：",
@@ -202,8 +155,6 @@
       "unlock": "输入BitBox02密码进行解锁。"
     },
     "stepCreate": {
-      "buttonBack": "退回",
-      "buttonContinue": "继续",
       "nameLabel": "BitBox02名称",
       "namePlaceholder": "我的BitBox02",
       "title": "选择BitBox02名称",
@@ -224,217 +175,13 @@
       "restoreMnemonic": "通过助记词还原",
       "title": "设置您的BitBox02"
     },
-    "stepUnpaired": {
-      "verify": "请确认该配对代码与BitBox02设备上显示的代码是相同的。"
-    },
     "success": {
-      "text": "太棒了！您可以开始使用BitBox02了。\n\n如需获取如何使用BitBoxApp的信息，请单击右上角的问号访问应用程序指南。",
       "title": "您已准备就绪！"
     }
   },
-  "bitboxBase": {
-    "connect": "连接Base",
-    "connectedBases": "已连接的设备",
-    "detectedBases": "在网络中已检测到设备",
-    "detectedBasesEmpty": "未找到设备",
-    "manualInput": "手动连接",
-    "manualInputInvalid": "IP地址无效",
-    "manualInputLabel": "IP地址: port",
-    "new": "新的BitBoxBase",
-    "settings": {
-      "advanced": {
-        "confirmSystemPassword": "这将进行BitBoxBase系统密码设置，用于 <strong>ssh身份验证和sudo访问。</strong>\n$t(generic.confirmToContinue)",
-        "connectElectrum": "连接Electrum",
-        "ipAddress": "IP地址",
-        "manual": "手动更新",
-        "port": "端口",
-        "reset": "重置为出厂设置",
-        "sshAccess": {
-          "button": "SSH密码登录",
-          "confirm": "你是否想要 {{切换}} SSH密码验证？",
-          "inProgress": "切换SSH密码认证",
-          "success": "SSH密码验证 {{已启用}}",
-          "title": "SSH访问"
-        },
-        "subheaders": {
-          "bitcoin": "Bitcoin Core",
-          "electrs": "Electrs",
-          "lightning": "Lightning闪电网络",
-          "networking": "联网"
-        },
-        "syncOptions": "同步选项",
-        "systemPassword": "设置系统密码",
-        "systemPasswordSuccess": "BitBoxBase系统密码设置成功。",
-        "title": "高级设置"
-      },
-      "backups": {
-        "confirmBackup": "您要创建一个新的备份吗？",
-        "create": "创建备份",
-        "created": "备份创建成功。",
-        "creating": "正在创建备份...",
-        "manage": "管理备份",
-        "restore": "恢复备份",
-        "title": "备份"
-      },
-      "node": {
-        "bitcoinRestarting": "Base服务正在重新启动...",
-        "changeName": "更换名字",
-        "changeNameTitle": "更改BitBoxBase主机名",
-        "confirmTorEnabled": {
-          "false": "你确定要 <strong>启用</strong>Tor ？\n $t(bitboxBase.settings.node.warning)",
-          "true": "你确定要 <strong>禁用</strong>Tor ？\n 这可能会对隐私产生严重且不可逆的影响，因此不建议这样做。\n $t(bitboxBase.settings.node.warning)"
-        },
-        "disconnect": "断开连接",
-        "newName": "输入新的主机名",
-        "password": "更改密码",
-        "title": "节点",
-        "tor": "Tor",
-        "warning": "请等待1-2分钟，以使更改生效。"
-      },
-      "system": {
-        "confirmRestart": "您的BitBoxBase现在将 <strong>重启</strong> ，准备就绪后您将需要进行重新连接。\n $t(generic.confirmToContinue)",
-        "confirmShutdown": "您的BitBoxBase现在将 <strong>关闭</strong> 您将需要手动将其重新启动。\n $t(generic.confirmToContinue)",
-        "confirmUpdate": "您想将BitBoxBase版本从 {{current}}更新至 {{newVersion}}吗？",
-        "restart": "重启",
-        "shutdown": "关闭",
-        "title": "系统",
-        "upToDate": "您的BitBoxBase是最新版本",
-        "update": "更新",
-        "updateProgress": {
-          "updateApplying": "安装更新...",
-          "updateDownloading": "正在下载更新文件...",
-          "updateFailed": "更新失败",
-          "updateNotInProgress": "正在获取更新信息...",
-          "updateRebooting": "正在重新启动...",
-          "warning": "完成后，Base将自动断开连接并重新启动。"
-        },
-        "updateSeverity": "",
-        "updateTitle": "更新BitBoxBase"
-      },
-      "title": "<strong>BitBox</strong>Base设置"
-    },
-    "title": "BitBoxBase"
-  },
-  "bitboxBaseUnlock": {
-    "placeholder": "输入您的BitBoxBase密码以解锁"
-  },
-  "bitboxBaseWizard": {
-    "backups": {
-      "created": "您的备份已在创建在 <strong>USB闪存盘(U盘)。</strong>中",
-      "createdTitle": "应用配置",
-      "finalizing": "BitBoxBase正在完成设置。只需要几秒钟。",
-      "insert": "将USB记忆棒插入BitBoxBase，以备份您的钱包。",
-      "list": {
-        "point1": "此备份包含敏感信息。",
-        "point2": "它将允许您重置BitBoxBase的管理密码。",
-        "point3": "请 <strong>拔出闪存驱动器(闪存盘)</strong> ，并将其存储在安全的地方。"
-      },
-      "title": "钱包备份"
-    },
-    "bitcoin": {
-      "presync": "使用预同步",
-      "presyncInfo": {
-        "con1": "信任所提供的数据",
-        "con2": "没有独立验证的比特币交易历史",
-        "label": "最快的入门方式",
-        "pro1": "BitBoxBase在几分钟内即可准备好",
-        "pro2": "无需初始下载或验证"
-      },
-      "reindex": "重新索引",
-      "reindexInfo": {
-        "con1": "BitBoxBase大约1天的时间准备就绪",
-        "label": "验证整个区块链",
-        "pro1": "预同步的比特币区块链完全验证",
-        "warning": "此过程大约需要1天。你确定要继续吗？"
-      },
-      "resync": "重新同步",
-      "resyncInfo": {
-        "con1": "可能需要2+天的时间才能准备好BitBoxBase",
-        "con2": "",
-        "label": "下载并验证整个区块链",
-        "pro1": "独立下载的比特币区块链的完全验证",
-        "warning": "此过程可能需要2+天，具体取决于您的网络连接情况。你确定要继续吗？"
-      },
-      "title": "选择同步"
-    },
-    "errors": {
-      "networkSetting": "找不到网络设置"
-    },
-    "hostname": {
-      "label": "主机名",
-      "placeholder": "有效的主机名，例如'mybitboxbase'",
-      "title": "选择一个名字",
-      "tooltip": "有效的主机名介于2到64个字符之间；小写字母a-z;数字0-9；和句点或连字符，不包括第一个和最后一个字符"
-    },
-    "networks": {
-      "clearnet": {
-        "con1": "如果不采取预防措施，将泄漏家庭IP地址和地理位置",
-        "con2": "ISP可以检测到比特币Bitcoin节点",
-        "label": "使用clearnet进行所有连接；不建议。",
-        "pro1": "最快的",
-        "pro2": "更少的延迟",
-        "pro3": "允许使用VPN",
-        "select": "选择Clearnet",
-        "title": "Clearnet"
-      },
-      "clearnetThenTor": {
-        "con1": "",
-        "label": "使用clearnet进行初始区块下载（IBD），然后切换到Tor",
-        "pro1": "更快的初始区块下载",
-        "pro2": "在IBD期间不会给Tor网络造成负荷",
-        "select": "选择clearnet + Tor",
-        "title": "先Clearnet网络然后Tor网络"
-      },
-      "title": "选择网络",
-      "tor": {
-        "con1": "",
-        "con2": "在极权主义的司法管辖区可能是可疑的",
-        "label1": "所有连接均使用Tor。我们推荐的选项。",
-        "label2": "使用Tor进行所有连接",
-        "pro1": "",
-        "pro2": "难以追踪实际位置",
-        "pro3": "允许远程访问",
-        "select": "选择Tor",
-        "title": "Tor"
-      }
-    },
-    "pairing": {
-      "failed": "未确认的配对。请尝试断开并再次连接到BitBoxBase",
-      "paired": "您已在BitBoxBase上确认代码匹配",
-      "title": "验证配对码",
-      "unpaired": "检测到新的BitBoxBase连接。要继续，请确认下面的代码与BitBoxBase屏幕上显示的代码匹配。"
-    },
-    "setPassword": "设定密码",
-    "setup": {
-      "custom": {
-        "point1": "同步选项",
-        "point2": "网络选项",
-        "point3": "自定义主机名",
-        "select": "选择自定义",
-        "title": "自定义"
-      },
-      "quick": {
-        "point1": "预同步的区块链",
-        "point2": "将Tor设为默认选项",
-        "point3": "默认主机名",
-        "select": "快速选择",
-        "title": "快速开始"
-      },
-      "title": "选择设置"
-    },
-    "success": {
-      "button": "前往仪表盘dashboard",
-      "text": "所有仪表板上的信息可能需要一两分钟才能更新。",
-      "title": "您已准备就绪！"
-    },
-    "welcome": "欢迎使用您的BitBoxBase"
-  },
-  "blink": {
-    "button": ""
-  },
   "bootloader": {
     "button": "立即升级固件",
-    "progress": "升级： {{progress}}％",
+    "progress": "升级",
     "success": "升级成功！请重新插入设备。这次，请一定不要触摸按钮。"
   },
   "button": {
@@ -446,14 +193,11 @@
     "copy": "复制",
     "create": "创建",
     "download": "下载",
-    "hiddenwallet": "创建隐藏钱包",
     "next": "下一个",
     "ok": "好的",
     "previous": "上一个",
-    "receive": "接收",
     "restore": "恢复",
     "select": "选择",
-    "send": "发送",
     "unlock": "解锁(设备)",
     "update": "更新",
     "upgrade": "升级"
@@ -465,24 +209,11 @@
   "checkSDcard": "检查microSD卡",
   "clickHere": "点击这里。",
   "confirm": {
-    "abortInfo": "点按 ",
-    "abortInfoRedText": "中止",
-    "approveInfo": "保持4秒 ",
-    "approveInfoGreenText": "确认",
-    "info": "在您的BitBox设备上",
-    "infoWhenPaired": "首先在配对的手机上，然后在您的BitBox上"
+    "info": "在您的BitBox设备上"
   },
   "confirmOnDevice": "请在设备上进行确认",
   "device": {
     "appUpradeRequired": "您的BitBox与该桌面应用程序不兼容。请下载并安装最新版本。"
-  },
-  "deviceLock": {
-    "button": "启用双因素认证（2FA）",
-    "condition1": "你有备份吗？",
-    "condition2": "移动端app的验证功能是否正常工作？",
-    "condition3": "2FA禁用了备份和移动应用程序配对功能。必须进行设备复位才能退出2FA！",
-    "confirm": "启用双因素验证(2FA)",
-    "title": "启用双因素验证（2FA）"
   },
   "deviceSettings": {
     "firmware": {
@@ -504,24 +235,6 @@
       "title": "硬件信息"
     },
     "loading": "检索设备信息…",
-    "pairing": {
-      "lock": {
-        "false": "禁用",
-        "label": "双因素授权（2FA）",
-        "true": "启用"
-      },
-      "mobile": {
-        "false": "关闭",
-        "label": "移动端app",
-        "true": "打开"
-      },
-      "status": {
-        "false": "无法配对",
-        "label": "状态",
-        "true": "已配对"
-      },
-      "title": "配对中"
-    },
     "secrets": {
       "manageBackups": "管理备份",
       "title": "机密信息"
@@ -539,11 +252,6 @@
   },
   "footer": {
     "appVersion": "App版本"
-  },
-  "generic": {
-    "applying": "应用配置",
-    "confirmToContinue": "请确认以继续。",
-    "description": "说明"
   },
   "genericError": "发生错误。如果发现任何问题，请重新启动应用程序。",
   "goal": {
@@ -595,15 +303,7 @@
         "title": "什么是扩展公钥？"
       }
     },
-    "accountLegacyConvert": {
-      "text": "转到Bitcoin比特币帐户，选择接收并复制地址。返回您的legacy帐户，单击发送，粘贴复制的地址，然后勾选全部发送。最后进行签名并将您的所有数字货币通过一次交易全部发送。",
-      "title": "如何将我的数字货币从Legacy帐户中移出？"
-    },
     "accountRates": {
-      "link": {
-        "text": "www.coingecko.com",
-        "url": "https://www.coingecko.com/"
-      },
       "text": "我们每分钟都会通过CoinGecko更新汇率。",
       "title": "使用的哪种汇率？"
     },
@@ -636,7 +336,6 @@
       "title": "显示的是什么时间？"
     },
     "appendix": {
-      "href": "https://shiftcrypto.ch/contact",
       "link": "联系我们！",
       "text": "另一个问题？"
     },
@@ -673,14 +372,6 @@
       }
     },
     "bitbox": {
-      "2FA": {
-        "text": "启用2FA后，所有交易都必须在配对手机上获得批准才能发送资产。在内部，一个经过加密的一次性号码被发送到手机app中，并进行解密，在按下接受按钮时返回到BitBox中。此与设备的通信是通过配对期间建立于移动电话和此桌面应用程序之间的频道完成的。\n\n确保在启用2FA之前备份您的钱包并配对移动端app。一旦启用，micro SD插槽和移动端app配对将被禁用。可以通过重置BitBox来重新启用它们，该操作将位擦除设备。",
-        "title": "双因素授权（2FA）是如何工作的？"
-      },
-      "disable2FA": {
-        "text": "为了禁用2FA功能，您需要重置BitBox，然后从其备份中重置钱包。请确保您仍然拥有带有备份的microSD卡，并且仍记得恢复密码。然后按“重置设备”。设置新的设备密码，然后选择“或还原备份”。从钱包中选择您已创建的备份，单击“还原”，然后输入创建钱包时使用的恢复密码。",
-        "title": "如何禁用两因素授权（2FA）？"
-      },
       "ejectBitbox": {
         "text": "您可以随时拔出BitBox，而不必先退出它。",
         "title": "如何弹出BitBox？"
@@ -688,18 +379,6 @@
       "ejectSD": {
         "text": "只要您不在创建或还原备份的过程中，就可以随时从BitBox中取出microSD卡。",
         "title": "如何弹出microSD卡？"
-      },
-      "hiddenWallet": {
-        "text": "它是同一台设备上的第二个钱包，受不同的设备密码和恢复密码保护，您可以使用这些钱包进行\"合理的可否认性plausible deniability\"。普通和隐藏钱包都使用相同的备份种子，因此不需要其他备份。",
-        "title": "什么是隐藏钱包？"
-      },
-      "legacyHiddenWallet": {
-        "text": "首先单击下面的按钮（如果使用主设备密码将BitBox解锁并禁用了2FA，则可使用该按钮），然后重新插入您的Bitbox并使用隐藏的设备密码将其解锁。",
-        "title": "如何访问legacy隐藏钱包？"
-      },
-      "pairing": {
-        "text": "下载适用于iOS或Android的移动端app后，您可以扫描显示的二维码，从而在移动app和此应用程序之间建立安全通道。扫描后，请按照移动端app中的说明进行操作。",
-        "title": "如何与手机安全配对"
       }
     },
     "receive": {
@@ -746,44 +425,16 @@
         "title": "为什么要收取网络费？"
       }
     },
+    "settings": {
+      "servers": {
+        "text": "该app与Shift Crypto服务器进行通信，以检查更新，加载交易并将信息发送到配对的移动端apps。\n该app还从CoinGecko检索最新汇率。所有转换都是在本地计算的，这意味着不会传输有关交易金额的任何数据。\n注意：对于以太坊和ERC20代币，我们使用Etherscan.io API。",
+        "title": "该app与哪些服务器通信？"
+      }
+    },
     "settings-electrum": {
       "what": {
         "text": "可以使用您自己的全节点为你的钱包提供支持，而无需使用Shift公司的服务器。",
         "title": "这是什么？"
-      }
-    },
-    "settings": {
-      "btc-p2pkh": {
-        "text": "使用旧交易格式的帐户，现在已被隔离见证Segwit地址和交易格式取代。如果您将BitBox与旧的电脑桌面应用程序一起使用，则此帐户将包含您的数字货币。我们建议您将数字货币转移到Bitcoin或Bitcoin bech32帐户，以节省交易费用。",
-        "title": "什么是Bitcoin Legacy?"
-      },
-      "btc-p2sh": {
-        "link": {
-          "text": "隔离见证(Segregated witness)的好处",
-          "url": "https://bitcoincore.org/en/2016/01/26/segwit-benefits/"
-        },
-        "text": "这是一个向后兼容的segwit隔离见证帐户（p2sh-p2wpkh）。它使用一种新的交易格式，可以节省您的网络费用。这种地址格式与legacy账户格式类似，因此可以被所有现有的Bitcoin比特币钱包/交易所/服务进行采用。",
-        "title": "什么是Bitcoin账户？"
-      },
-      "btc-p2wpkh": {
-        "link": {
-          "text": "Bech32的采用范围",
-          "url": "https://en.bitcoin.it/wiki/Bech32_adoption"
-        },
-        "text": "使用新的比特币Bitcoin bech32地址格式，可以享受segwit隔离见证带来的便宜网络费用。请记住，该地址格式尚未被所有应用(钱包/交易所等)接受。",
-        "title": "什么是Bitcoin bech32？"
-      },
-      "moreCoins": {
-        "text": "在接下来的几个版本中，除了莱特币Litecoin，我们还将集成更多的币种。如果您正在寻找特定的币种，请在下面的留言区给我们提出建议。",
-        "title": "可以添加更多币种吗？"
-      },
-      "servers": {
-        "text": "该app与Shift Crypto服务器进行通信，以检查更新，加载交易并将信息发送到配对的移动端apps。\n该app还从CoinGecko检索最新汇率。所有转换都是在本地计算的，这意味着不会传输有关交易金额的任何数据。\n注意：对于以太坊和ERC20代币，我们使用Etherscan.io API。",
-        "title": "该app与哪些服务器通信？"
-      },
-      "whyMultipleAccounts": {
-        "text": "一些加密货币具有多种类型的地址和交易格式。这些地址被划分成多个帐户。",
-        "title": "$t(settings.expert.splitAccounts)"
       }
     },
     "title": "指南",
@@ -802,14 +453,9 @@
       }
     },
     "waiting": {
-      "deviceNotRecognized": {
-        "text": "设备插入后应闪烁一次。确保将其正确插入。如果您遇到问题，请通过以下链接与我们联系。",
-        "title": "我的BitBox01无法识别"
-      },
       "getDevice": {
         "link": {
-          "text": "订购一个BitBox",
-          "url": "https://shiftcrypto.shop/"
+          "text": "订购一个BitBox"
         },
         "text": "您可以在我们的网上商店购买BitBox：",
         "title": "我如何获得设备？"
@@ -820,8 +466,7 @@
       },
       "lostDevice": {
         "link": {
-          "text": "备份中心",
-          "url": "https://shiftcrypto.ch/backup"
+          "text": "备份中心"
         },
         "text": "您可以在新的BitBox或通过我们的备份中心进行帐户恢复。",
         "title": "我丢失了设备。怎么办？"
@@ -839,16 +484,6 @@
   "headerssync": {
     "blocksSynced": "{{blocks}} 同步区块"
   },
-  "hiddenWallet": {
-    "info1HTML": "出于\"合理的可否认性plausible deniability\"的目的，一个隐藏钱包可以根据 <strong>不同</strong> 设备密码+恢复密码的组合进行创建。",
-    "info2HTML": "设定与您的隐藏钱包相关联的设备密码和恢复密码。设备密码和恢复密码必须与您的主钱包密码 <strong>不同</strong> 。",
-    "passwordLabel": "隐藏恢复密码",
-    "passwordPlaceholder": "请确认隐藏的恢复密码",
-    "pinLabel": "隐藏设备密码",
-    "pinRepeatLabel": "重复隐藏设备的密码",
-    "pinRepeatPlaceholder": "请确认隐藏设备的密码",
-    "success": "隐藏钱包创建成功。重新插入您的BitBox以解锁。"
-  },
   "initialize": {
     "create": "设置设备密码",
     "creating": "设置设备密码中...",
@@ -856,7 +491,6 @@
       "e102": "设备密码必须至少包含4个字符。"
     },
     "info": {
-      "button": "继续",
       "description1": "选择您的设备密码。这将用于解锁您的BitBox。",
       "description2": "您可以使用数字，字母 & 符号。更长密码可以提供更高的安全性",
       "description3": "如果您丢失了设备密码，则必须重置设备并还原钱包备份。",
@@ -873,53 +507,9 @@
   "language": {
     "title": "选择语言"
   },
-  "legacyhiddenwallet": {
-    "disable": "禁用legacy隐藏钱包",
-    "enable": "启用Legacy隐藏钱包",
-    "successDisable": "已成功禁用legacy隐藏钱包。",
-    "successEnable": "成功启用legacy隐藏钱包。重新插入您的BitBox并输入隐藏的设备密码以访问legacy隐藏钱包。"
-  },
   "loading": "载入中...",
   "notification": {
-    "newTxs_0": "{{count}} 新交易： {{accountName}}"
-  },
-  "pairing": {
-    "aborted": {
-      "text": "配对已在移动端app端中止。",
-      "title": "中止"
-    },
-    "button": "配对移动端app",
-    "confirm": "您确定要配对BitBox吗？请注意配对完成后，需要通过手机进行交易操作。",
-    "connectOnly": {
-      "button": "连接移动端app",
-      "title": "选择菜单中“连接到新的桌面应用程序”，使用我们的移动端app移动应用程序进行扫描"
-    },
-    "error": {
-      "text": "出现一些问题。请重新开始。",
-      "title": "错误"
-    },
-    "reconnectOnly": {
-      "button": "重新连接移动端app"
-    },
-    "start": {
-      "hideAppQRCode": "隐藏二维码",
-      "revealAppQRCode": "显示二维码",
-      "step1": "如果您没有移动端app，则可以根据你的手机型号扫描对应的Apple App Store或Google Play商店的二维码。",
-      "step2": "请使用我们的移动端app进行扫描，您可以在iOS和Android的应用程序商店中通过搜索“ Digital Bitbox 2FA”的名称找到该app："
-    },
-    "started": {
-      "text": "现在，请按照移动端app上的说明进行操作。",
-      "title": "太棒了"
-    },
-    "success": {
-      "text": "恭喜，您已成功将BitBox与移动端app配对！",
-      "title": "成功"
-    },
-    "timeout": {
-      "text": "配对在两分钟后超时。如果您仍想配对移动端app，请重新开始。",
-      "title": "超时"
-    },
-    "title": "手机配对"
+    "newTxs_other": "{{count}} 新交易： {{accountName}}"
   },
   "password": {
     "show": "显示 {{label}}",
@@ -928,25 +518,16 @@
       "paste": "粘贴文本，启用“显示 {{label}}”"
     }
   },
-  "random": {
-    "button": "生成随机序号",
-    "description": "您的BitBox产生了以下 {{bits}}位随机数："
-  },
   "receive": {
     "label": "你的地址",
     "onlyThisCoin": {
       "description": "要接收其他代币，请先在设置中启用它们。否则如果您存入其他代币，则可能无法访问它们。",
       "warning": "确保只在这个地址上接收 {{coinName}} 。"
     },
-    "showFull": "在设备上显示并验证完整的地址",
     "title": "获取 {{accountName}}",
     "verify": "安全验证地址",
-    "verifyBitBox01": "在移动端app上验证地址",
     "verifyBitBox02": "请在BitBox02设备上的验证地址",
-    "verifyInstruction": "请确认以下地址与设备上显示的地址匹配。",
-    "warning": {
-      "secureOutput": "请将您的BitBox与您的移动设备配对以启用安全地址验证功能。再访问侧栏中的“管理设备”选项。"
-    }
+    "verifyInstruction": "请确认以下地址与设备上显示的地址匹配。"
   },
   "reset": {
     "description": "设备上的所有数据将被删除。其中包括您的私钥！",
@@ -957,7 +538,6 @@
   },
   "securityInformation": {
     "create": {
-      "button": "继续",
       "description1": "设置设备之前，建议您在安全的环境中进行设置。",
       "description2": "系统将要求您创建两个密码。",
       "description3": "首先是 <strong>设备密码</strong> 即可解锁您的BitBox设备，该密码以后可以进行更改。",
@@ -966,7 +546,6 @@
       "title": "安全信息"
     },
     "restore": {
-      "button": "继续",
       "description1": "系统将要求您插入用于存储备份的microSD卡。",
       "description2": "要恢复设备，您将需要使用恢复密码。 ",
       "description3": "输入恢复密码时请小心。您输入的任何密码都会创建一个有效的钱包。如果输入错误的密码，可能会看到您不期望的钱包余额。",
@@ -1007,7 +586,6 @@
       "e200": "通过备份还原钱包需要用到microSD卡。"
     },
     "info": {
-      "button": "继续",
       "description1": "将microSD卡插入BitBox，然后单击“继续”",
       "description2": "选择一个备份，然后单击“还原”",
       "description3": "输入恢复密码",
@@ -1027,22 +605,12 @@
     },
     "button": "签名并发送",
     "coincontrol": {
-      "address": "地址",
-      "outpoint": "",
       "title": "从输出发送"
     },
     "confirm": {
       "selected-coins": "已选择的币种",
       "title": "确认交易",
       "total": "总计"
-    },
-    "customFee": {
-      "label": "折算费用",
-      "placeholder": "折算费用"
-    },
-    "data": {
-      "label": "可选数据",
-      "placeholder": "输入十六进制数据"
     },
     "error": {
       "insufficientFunds": "余额不足",
@@ -1073,18 +641,11 @@
     },
     "maximum": "发送全部",
     "scanQR": "扫描二维码",
-    "signprogress": {
-      "description": "这是一个包含大量数据的交易。如要完成交易的完整签名过程，系统会要求您确认 {{steps}} 次。",
-      "label": "进展"
-    },
     "success": "交易已签名并完成发送。",
     "title": "发送 {{accountName}}",
     "toggleCoinControl": "切换coin控制"
   },
   "settings": {
-    "accounts": {
-      "title": "活跃帐户"
-    },
     "electrum": {
       "add": "添加服务器",
       "add-server": "添加",
@@ -1112,7 +673,6 @@
       "title-tltc": "Litecoin莱特币测试网Electrum服务器"
     },
     "expert": {
-      "base": "BitBoxBase管理",
       "coinControl": "启用coin控制",
       "electrum": {
         "title": "连接您自己的全节点"
@@ -1130,9 +690,6 @@
   },
   "setup": "设置设备",
   "sidebar": {
-    "addAccount": "新增帐户",
-    "bitboxBase": "BitBoxBase",
-    "bitboxBaseConnect": "连接BitBoxBase",
     "device": "管理设备",
     "leave": "离开",
     "settings": "设置"
@@ -1171,7 +728,7 @@
     "description": "输入您的设备密码以解锁设备",
     "error": {
       "e109_normal": "设备密码错误。 {{remainingAttempts}} 重设设备之前尝试会保留。",
-      "e109_touch": "$ t（unlock.error.e109_normal）下次登录需要按住触摸按钮。",
+      "e109_touch": "$t(unlock.error.e109_normal）下次登录需要按住触摸按钮。",
       "e113": "由于多次登录尝试，下次登录需要按住触摸按钮4秒钟。"
     },
     "input": {
@@ -1192,13 +749,9 @@
     "unlocked3": "LED屏幕亮起时请轻触设备的触控边框"
   },
   "warning": {
-    "receivePairing": "请配对BitBox以启用安全地址验证。点击侧单栏中的“管理设备”。",
-    "sdcard": "除非要进行备份管理，否则请将microSD卡与BitBox设备分开存放。",
-    "sendPairing": "请配对BitBox以安全地验证交易详细信息。转到侧栏中的“管理设备”。"
+    "sdcard": "除非要进行备份管理，否则请将microSD卡与BitBox设备分开存放。"
   },
   "welcome": {
-    "insertBitBox02": "如果是BitBox02设备，请点击设备以继续。",
-    "insertDevice": "请链接您的设备以开始进一步操作",
     "title": "欢迎"
   }
 }

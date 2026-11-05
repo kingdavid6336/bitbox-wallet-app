@@ -1,16 +1,4 @@
-// Copyright 2020 Shift Crypto AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package accounts
 
@@ -20,42 +8,49 @@ import (
 	"io"
 	"os"
 	"path"
-	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts/notes"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/synchronizer"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/keystore"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/rates"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/signing"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/observable"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/notes"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/types"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/synchronizer"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/keystore"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/rates"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/signing"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/observable/action"
 	"github.com/sirupsen/logrus"
 )
 
-// Code is a globally unique account code. It is used for example as a name in databases (e.g. cache
-// database, transaction notes database, etc).
-type Code string
+const (
+	// ErrSyncInProgress is returned when the initial account sync is still in progress.
+	ErrSyncInProgress errp.ErrorCode = "syncInProgress"
+)
 
 // AccountConfig holds account configuration.
 type AccountConfig struct {
-	// Active, if false, does not load the account in the sidebar, portfolio, etc.
-	Active bool
-	// Code is an identifier for the account *type* (part of account database filenames, apis, etc.).
-	// Type as in btc-p2wpkh, eth-erc20-usdt, etc.
-	Code Code
-	// Name returns a human readable long name.
-	Name string
-	// DBFolder is the folder for all accounts. Full path.
-	DBFolder string
-	// NotesFolder is the folder where the transaction notes are stored. Full path.
-	NotesFolder           string
-	Keystore              keystore.Keystore
-	OnEvent               func(Event)
-	RateUpdater           *rates.RateUpdater
+	// Code and SigningConfigurations are immutable construction data.
+	Code                  types.Code
 	SigningConfigurations signing.Configurations
-	GetNotifier           func(signing.Configurations) Notifier
+
+	DBFolder string
+	// SkipInitialSync suppresses the ETH init-time per-account update when a batch sync will
+	// refresh the account right after loading.
+	SkipInitialSync bool
+	// NotesFolder is the folder where the transaction notes are stored. Full path.
+	NotesFolder     string
+	ConnectKeystore func() (keystore.Keystore, error)
+	RateUpdater     *rates.RateUpdater
+	// Returns the currency selected by the user in app settings.
+	GetMainCurrency func() string
+	GetNotifier     func(signing.Configurations) Notifier
+	GetSaveFilename func(suggestedFilename string) string
+	// IsInsured resolves mutable insurance metadata from persisted account data.
+	IsInsured func() bool
+	// Opens a file in a default application. The filename is not checked.
+	UnsafeSystemOpen func(filename string) error
 }
 
 // BaseAccount is an account struct with common functionality to all coin accounts.
@@ -69,19 +64,11 @@ type BaseAccount struct {
 
 	// synced indicates whether the account has loaded and finished the initial sync of the
 	// addresses.
-	synced  bool
-	offline error
+	synced  atomic.Bool
+	offline atomic.Pointer[error]
 
 	// notes handles transaction notes.
-	//
-	// It is a slice for migration purposes: from v4.27.0 to v4.28.0, the account identifiers
-	// changed. The slice contains all possible instances of where notes are stored. The first
-	// element is the newest, and other elements are notes stored under legacy names. After
-	// `Initialize()`, this will always have at least one element.
-	notes []*notes.Notes
-
-	proposedTxNote   string
-	proposedTxNoteMu sync.Mutex
+	notes *notes.Notes
 
 	log *logrus.Entry
 }
@@ -94,13 +81,15 @@ func NewBaseAccount(config *AccountConfig, coin coin.Coin, log *logrus.Entry) *B
 		log:    log,
 	}
 	account.Synchronizer = synchronizer.NewSynchronizer(
-		func() { config.OnEvent(EventSyncStarted) },
 		func() {
-			if !account.synced {
-				account.synced = true
-				config.OnEvent(EventStatusChanged)
+			if account.synced.CompareAndSwap(false, true) {
+				account.Notify(observable.Event{
+					Subject: string(types.EventStatusChanged),
+					Action:  action.Reload,
+					Object:  nil,
+				})
 			}
-			config.OnEvent(EventSyncDone)
+			account.notifySyncDone()
 		},
 		log,
 	)
@@ -112,6 +101,11 @@ func (account *BaseAccount) Config() *AccountConfig {
 	return account.config
 }
 
+// IsInsured returns the current persisted insurance state.
+func (account *BaseAccount) IsInsured() bool {
+	return account.config.IsInsured != nil && account.config.IsInsured()
+}
+
 // Coin implements accounts.Interface.
 func (account *BaseAccount) Coin() coin.Coin {
 	return account.coin
@@ -119,29 +113,37 @@ func (account *BaseAccount) Coin() coin.Coin {
 
 // Synced implements Interface.
 func (account *BaseAccount) Synced() bool {
-	return account.synced
+	return account.synced.Load()
 }
 
 // Close stops the account.
 func (account *BaseAccount) Close() {
-	account.synced = false
+	account.synced.Store(false)
 }
 
 // ResetSynced sets synced to false.
 func (account *BaseAccount) ResetSynced() {
-	account.synced = false
+	account.synced.Store(false)
 }
 
 // Offline implements Interface.
 func (account *BaseAccount) Offline() error {
-	return account.offline
+	errorPtr := account.offline.Load()
+	if errorPtr == nil {
+		return nil
+	}
+	return *errorPtr
 }
 
 // SetOffline sets the account offline status and emits the EventStatusChanged() if the status
 // changed.
 func (account *BaseAccount) SetOffline(offline error) {
-	account.offline = offline
-	account.config.OnEvent(EventStatusChanged)
+	account.offline.Store(&offline)
+	account.Notify(observable.Event{
+		Subject: string(types.EventStatusChanged),
+		Action:  action.Reload,
+		Object:  nil,
+	})
 }
 
 // Initialize initializes the account. `accountIdentifier` is used as part of the filename of
@@ -154,14 +156,38 @@ func (account *BaseAccount) Initialize(accountIdentifier string) error {
 	if err != nil {
 		return err
 	}
-	account.notes = []*notes.Notes{txNotes}
+	account.notes = txNotes
 
-	// Append legacy notes (notes stored in files based on obsolete account identifiers). Account
-	// identifiers changed from v4.27.0 to v4.28.0.
-	if len(account.Config().SigningConfigurations) == 0 {
+	if err := account.migrateLegacyNotes(); err != nil {
+		return err
+	}
+
+	// An account syncdone event is generated when new rates are available. This allows the frontend
+	// to reload the relevant data.
+	if account.config.RateUpdater != nil {
+		account.config.RateUpdater.Observe(func(e observable.Event) {
+			if e.Subject == rates.RatesEventSubject {
+				account.notifySyncDone()
+			}
+		})
+	}
+
+	return nil
+}
+
+// Notes returns the notes instance of this account.
+func (account *BaseAccount) Notes() *notes.Notes {
+	return account.notes
+}
+
+// Migrate legacy notes (notes stored in files based on obsolete account identifiers). Account
+// identifiers changed from v4.27.0 to v4.28.0.
+func (account *BaseAccount) migrateLegacyNotes() error {
+	signingConfigurations := account.Config().SigningConfigurations
+	if len(signingConfigurations) == 0 {
 		return nil
 	}
-	accountNumber, err := account.Config().SigningConfigurations[0].AccountNumber()
+	accountNumber, err := signingConfigurations[0].AccountNumber()
 	if err != nil {
 		return nil
 	}
@@ -170,13 +196,13 @@ func (account *BaseAccount) Initialize(accountIdentifier string) error {
 		return nil
 	}
 
-	legacyConfigurations := signing.ConvertToLegacyConfigurations(account.Config().SigningConfigurations)
+	legacyConfigurations := signing.ConvertToLegacyConfigurations(signingConfigurations)
 	var legacyAccountIdentifiers []string
 	switch account.coin.Code() {
 	case coin.CodeBTC, coin.CodeTBTC, coin.CodeLTC, coin.CodeTLTC:
 		legacyAccountIdentifiers = []string{fmt.Sprintf("account-%s-%s", legacyConfigurations.Hash(), account.coin.Code())}
 		// Also consider split accounts:
-		for _, cfg := range account.Config().SigningConfigurations {
+		for _, cfg := range signingConfigurations {
 			legacyConfigurations := signing.ConvertToLegacyConfigurations(signing.Configurations{cfg})
 			legacyAccountIdentifier := fmt.Sprintf("account-%s-%s-%s", legacyConfigurations.Hash(), account.coin.Code(), cfg.ScriptType())
 			legacyAccountIdentifiers = append(
@@ -202,58 +228,33 @@ func (account *BaseAccount) Initialize(accountIdentifier string) error {
 		if err != nil {
 			return err
 		}
-		account.notes = append(account.notes, legacyNotes)
+		if err := account.notes.MergeLegacy(legacyNotes); err != nil {
+			return err
+		}
+		_ = os.Remove(notesFile)
 	}
-
 	return nil
-}
-
-// ProposeTxNote implements accounts.Account.
-func (account *BaseAccount) ProposeTxNote(note string) {
-	account.proposedTxNoteMu.Lock()
-	defer account.proposedTxNoteMu.Unlock()
-
-	account.proposedTxNote = note
-}
-
-// GetAndClearProposedTxNote returns the note previously set using ProposeTxNote(). If none was set,
-// the empty string is returned. The proposed note is cleared by calling this function.
-func (account *BaseAccount) GetAndClearProposedTxNote() string {
-	account.proposedTxNoteMu.Lock()
-	defer func() {
-		account.proposedTxNote = ""
-		account.proposedTxNoteMu.Unlock()
-	}()
-	return account.proposedTxNote
 }
 
 // SetTxNote implements accounts.Account.
 func (account *BaseAccount) SetTxNote(txID string, note string) error {
-	// The notes slice is guaranteed to have at least one element by BaseAccount.Initialize.
-	if err := account.notes[0].SetTxNote(txID, note); err != nil {
+	changed, err := account.notes.SetTxNote(txID, note)
+	if err != nil {
 		return err
 	}
-	// Delete the notes in legacy files. Don't really care if it fails.
-	for i, notes := range account.notes[1:] {
-		if err := notes.SetTxNote(txID, ""); err != nil {
-			account.log.WithError(err).Errorf("Can't delete a note from a legacy file idx=%d", i)
-		}
+	if changed {
+		account.Notify(observable.Event{
+			Subject: string(types.EventTransactionsChanged),
+			Action:  action.Reload,
+			Object:  nil,
+		})
 	}
-	// Prompt refresh.
-	account.config.OnEvent(EventStatusChanged)
 	return nil
 }
 
-// TxNote fetches a note for a transcation. Returns the empty string if no note was found.
+// TxNote fetches a note for a transaction. Returns the empty string if no note was found.
 func (account *BaseAccount) TxNote(txID string) string {
-	// Take the first note we can find. The first slice element is the regular location of notes,
-	// the other elements lookup notes in legacy locations, so they are not lost when upgrading.
-	for _, notes := range account.notes {
-		if note := notes.TxNote(txID); note != "" {
-			return note
-		}
-	}
-	return ""
+	return account.notes.TxNote(txID)
 }
 
 // ExportCSV implements accounts.Account.
@@ -265,8 +266,11 @@ func (account *BaseAccount) ExportCSV(w io.Writer, transactions []*TransactionDa
 		"Amount",
 		"Unit",
 		"Fee",
+		"Fee Unit",
 		"Address",
 		"Transaction ID",
+		"Historical value",
+		"Historical value currency",
 		"Note",
 	})
 	if err != nil {
@@ -280,37 +284,91 @@ func (account *BaseAccount) ExportCSV(w io.Writer, transactions []*TransactionDa
 			TxTypeSendSelf: "sent_to_yourself",
 		}[transaction.Type]
 		feeString := ""
+		feeUnit := ""
 		fee := transaction.Fee
 		if fee != nil {
 			feeString = fee.BigInt().String()
+			feeUnit = account.Coin().SmallestUnit()
 		}
 		unit := account.Coin().SmallestUnit()
+		if transaction.IsErc20 {
+			unit = account.Coin().Unit(false)
+		}
+
 		timeString := ""
 		if transaction.Timestamp != nil {
 			timeString = transaction.Timestamp.Format(time.RFC3339)
 		}
+		historicalValue, historicalValueCurrency := account.historicalValueAndCurrency(transaction)
 		for _, addressAndAmount := range transaction.Addresses {
 			if transactionType == "sent" && addressAndAmount.Ours {
 				transactionType = "sent_to_yourself"
 			}
+
+			amount := addressAndAmount.Amount.BigInt().String()
+
+			// When dealing with ERC20 tokens, we need to format the amount
+			// based on the number of decimals for that token.
+			if transaction.IsErc20 {
+				amount = account.Coin().FormatAmount(addressAndAmount.Amount, false)
+			}
 			err := writer.Write([]string{
 				timeString,
 				transactionType,
-				addressAndAmount.Amount.BigInt().String(),
+				amount,
 				unit,
 				feeString,
+				feeUnit,
 				addressAndAmount.Address,
 				transaction.TxID,
+				historicalValue,
+				historicalValueCurrency,
 				account.TxNote(transaction.InternalID),
 			})
 			if err != nil {
 				return errp.WithStack(err)
 			}
 			// a multitx is output in one row per receive address. Show the tx fee only in the
-			// first row.
+			// first row. Historical value is also a tx-level detail shown in the first row.
 			feeString = ""
+			feeUnit = ""
+			historicalValue = ""
+			historicalValueCurrency = ""
 		}
 	}
 	writer.Flush()
 	return writer.Error()
+}
+
+func (account *BaseAccount) historicalValueAndCurrency(transaction *TransactionData) (string, string) {
+	if account.config.RateUpdater == nil || account.config.GetMainCurrency == nil {
+		return "", ""
+	}
+
+	mainCurrency := account.config.GetMainCurrency()
+	if mainCurrency == "" {
+		return "", ""
+	}
+
+	amountAtTime := transaction.Amount.FormatWithConversionsAtTime(
+		account.Coin(),
+		transaction.Timestamp,
+		account.config.RateUpdater,
+	)
+	if amountAtTime.Estimated {
+		return "", ""
+	}
+	conversion, ok := amountAtTime.Conversions[mainCurrency]
+	if !ok || conversion == "" {
+		return "", ""
+	}
+	return conversion, mainCurrency
+}
+
+func (account *BaseAccount) notifySyncDone() {
+	account.Notify(observable.Event{
+		Subject: string(types.EventSyncDone),
+		Action:  action.Replace,
+		Object:  nil,
+	})
 }

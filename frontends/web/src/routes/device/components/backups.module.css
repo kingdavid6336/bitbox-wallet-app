@@ -1,6 +1,4 @@
 .stepContext {
-    background-color: white;
-    padding: var(--space-default);
     margin: var(--space-default) 0;
 }
 
@@ -9,26 +7,46 @@
     flex-direction: column;
     text-align: left;
     flex: 1;
+    padding: var(--space-eight);
+}
+
+.listContainerWrapper {
+    position: relative;
+}
+
+.listContainerWrapper.showFade::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 0;
+    right: 0;
+    height: 48px;
+    background: linear-gradient(to bottom, transparent, var(--background));
+    pointer-events: none;
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
 }
 
 .listContainer {
-    border: solid 1px var(--color-lightgray);
     display: flex;
     flex-direction: column;
+    gap: var(--space-quarter);
     max-height: 45vh;
     overflow-x: hidden;
     overflow-y: scroll;
+    padding-bottom: var(--space-half);
     position: relative;
     width: 100%;
 }
 
 .item {
+    background: var(--background-secondary);
+    border-radius: var(--radius-xl);
     width: 100%;
     padding: var(--space-quarter) var(--space-half);
 }
 
 .item:not(:first-child) {
-    border-top: solid 1px var(--color-lightgray);
+    border-top: solid 1px var(--background);
 }
 
 .item label {
@@ -36,28 +54,24 @@
 }
 
 .agreements {
-    margin-bottom: 1rem;
-}
-
-.fillSpace {
-    margin-top: calc(var(--spacing-default) * -1) !important;
+    margin-bottom: 16px;
 }
 
 .emptyText {
     text-align: center;
     color: var(--color-secondary);
-    padding: var(--spacing-large) 0;
+    padding: var(--space-default) 0;
 }
 
 .backupItem + label {
-    color: var(--color-dark);
+    color: var(--color-default);
     word-break: break-all;
 }
 
 .backupID {
     word-break: break-all;
     margin-bottom: var(--space-quarter);
-    font-size: var(--size-small);
+    font-size: var(--size-smaller);
     color: var(--color-secondary);
 }
 
@@ -76,7 +90,7 @@
 
 @media (max-width: 768px) {
     .backupButtons {
-        align-items: center;
+        align-items: stretch;
         flex-direction: column;
         margin-top: var(--space-default);
     }

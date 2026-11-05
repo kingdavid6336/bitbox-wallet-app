@@ -1,16 +1,4 @@
-// Copyright 2018 Shift Devices AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package config
 
@@ -20,11 +8,18 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
 )
 
 var mu sync.RWMutex
 var appFolder string
+
+const (
+	// PrivateDirMode is used for directories containing app-private data.
+	PrivateDirMode os.FileMode = 0700
+	// PrivateFileMode is used for files containing app-private data.
+	PrivateFileMode os.FileMode = 0600
+)
 
 // SetAppDir sets the app folder (retrieved by AppDir()) and can only be called once.
 func SetAppDir(folder string) {
@@ -51,7 +46,7 @@ func defaultAppFolder() string {
 		// especially when 2FA is enabled, requiring full device reset.
 		// So, check for the existing dir first. If that fails, use the regular approach.
 		// For most users, it is a noop.
-		// See https://github.com/digitalbitbox/bitbox-wallet-app/pull/16 for more details.
+		// See https://github.com/BitBoxSwiss/bitbox-wallet-app/pull/16 for more details.
 		folder = filepath.Join(os.Getenv("HOME"), ".config")
 		if fi, err := os.Stat(folder + "/bitbox"); err == nil && fi.IsDir() {
 			break
@@ -81,10 +76,71 @@ func AppDir() string {
 	return appFolder
 }
 
-// DownloadsDir returns the absolute path to the Downloads folder in the home folder.
-func DownloadsDir() (string, error) {
-	if runtime.GOOS == "android" {
-		return "", errp.New("android not yet supported")
+// CacheDir returns the disposable cache path without creating it or initializing app state.
+func CacheDir(appDir string) string {
+	return filepath.Join(appDir, "cache")
+}
+
+// EnsurePrivateDir creates dir if needed and tightens permissions if it already exists.
+func EnsurePrivateDir(dir string) error {
+	if err := os.MkdirAll(dir, PrivateDirMode); err != nil {
+		return errp.WithStack(err)
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return errp.WithStack(err)
+	}
+	// Ignore symlinks. The app does not create symlinks, so if it is a symlink, the user has a
+	// special setup we should not interfere with.
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil
+	}
+	if !info.IsDir() {
+		return errp.Newf("%s is not a directory", dir)
+	}
+	if info.Mode().Perm() == PrivateDirMode {
+		return nil
+	}
+	return errp.WithStack(os.Chmod(dir, PrivateDirMode))
+}
+
+// EnsurePrivateFile tightens permissions if filename already exists with a broader mode.
+func EnsurePrivateFile(filename string) error {
+	return ensurePrivateFile(filename, false)
+}
+
+// EnsurePrivateFileIfExists tightens permissions if filename exists with a broader mode.
+func EnsurePrivateFileIfExists(filename string) error {
+	return ensurePrivateFile(filename, true)
+}
+
+func ensurePrivateFile(filename string, ignoreMissing bool) error {
+	info, err := os.Lstat(filename)
+	if ignoreMissing && os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return errp.WithStack(err)
+	}
+	// Ignore symlinks. The app does not create symlinks, so if it is a symlink, the user has a
+	// special setup we should not interfere with.
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil
+	}
+	if info.IsDir() {
+		return errp.Newf("%s is a directory", filename)
+	}
+	if info.Mode().Perm() == PrivateFileMode {
+		return nil
+	}
+	return errp.WithStack(os.Chmod(filename, PrivateFileMode))
+}
+
+// ExportsDir returns the absolute path to the folder which can be used to export files.
+func ExportsDir() (string, error) {
+	if runtime.GOOS == "android" || runtime.GOOS == "ios" {
+		// Android/iOS apps are sandboxed, we don't need to specify a folder.
+		return "", nil
 	}
 	homeFolder := os.Getenv("HOME")
 	if runtime.GOOS == "windows" && homeFolder == "" {

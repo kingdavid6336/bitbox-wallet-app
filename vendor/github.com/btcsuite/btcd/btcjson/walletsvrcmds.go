@@ -12,7 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/btcutil/v2"
 )
 
 // AddMultisigAddressCmd defines the addmutisigaddress JSON-RPC command.
@@ -242,7 +242,8 @@ func NewGetBalancesCmd() *GetBalancesCmd {
 
 // GetNewAddressCmd defines the getnewaddress JSON-RPC command.
 type GetNewAddressCmd struct {
-	Account *string
+	Account     *string
+	AddressType *string
 }
 
 // NewGetNewAddressCmd returns a new instance which can be used to issue a
@@ -250,15 +251,17 @@ type GetNewAddressCmd struct {
 //
 // The parameters which are pointers indicate they are optional.  Passing nil
 // for optional parameters will use the default value.
-func NewGetNewAddressCmd(account *string) *GetNewAddressCmd {
+func NewGetNewAddressCmd(account, addrType *string) *GetNewAddressCmd {
 	return &GetNewAddressCmd{
-		Account: account,
+		Account:     account,
+		AddressType: addrType,
 	}
 }
 
 // GetRawChangeAddressCmd defines the getrawchangeaddress JSON-RPC command.
 type GetRawChangeAddressCmd struct {
-	Account *string
+	Account     *string
+	AddressType *string
 }
 
 // NewGetRawChangeAddressCmd returns a new instance which can be used to issue a
@@ -266,9 +269,10 @@ type GetRawChangeAddressCmd struct {
 //
 // The parameters which are pointers indicate they are optional.  Passing nil
 // for optional parameters will use the default value.
-func NewGetRawChangeAddressCmd(account *string) *GetRawChangeAddressCmd {
+func NewGetRawChangeAddressCmd(account, addrType *string) *GetRawChangeAddressCmd {
 	return &GetRawChangeAddressCmd{
-		Account: account,
+		Account:     account,
+		AddressType: addrType,
 	}
 }
 
@@ -871,7 +875,8 @@ func (s *ScriptPubKey) UnmarshalJSON(data []byte) error {
 //
 // Descriptors are typically ranged when specified in the form of generic HD
 // chain paths.
-//   Example of a ranged descriptor: pkh(tpub.../*)
+//
+//	Example of a ranged descriptor: pkh(tpub.../*)
 //
 // The value can be an int to specify the end of the range, or the range
 // itself, as []int{begin, end}.
@@ -898,9 +903,14 @@ func (r *DescriptorRange) UnmarshalJSON(data []byte) error {
 		if len(v) != 2 {
 			return fmt.Errorf("expected [begin,end] integer range, got: %v", unmarshalled)
 		}
+		begin, ok1 := v[0].(float64)
+		end, ok2 := v[1].(float64)
+		if !ok1 || !ok2 {
+			return fmt.Errorf("expected both begin and end to be numbers, got: %v", v)
+		}
 		r.Value = []int{
-			int(v[0].(float64)),
-			int(v[1].(float64)),
+			int(begin),
+			int(end),
 		}
 	default:
 		return fmt.Errorf("invalid descriptor range value: %v", unmarshalled)
@@ -973,7 +983,7 @@ type ImportMultiRequest struct {
 	KeyPool *bool `json:"keypool,omitempty"`
 }
 
-// ImportMultiRequest defines the options struct, provided to the
+// ImportMultiOptions defines the options struct, provided to the
 // ImportMultiCmd as a pointer argument.
 type ImportMultiOptions struct {
 	Rescan bool `json:"rescan"` // Rescan the blockchain after all imports
@@ -1029,7 +1039,7 @@ type WalletCreateFundedPsbtOpts struct {
 	ChangeType             *ChangeType `json:"change_type,omitempty"`
 	IncludeWatching        *bool       `json:"includeWatching,omitempty"`
 	LockUnspents           *bool       `json:"lockUnspents,omitempty"`
-	FeeRate                *int64      `json:"feeRate,omitempty"`
+	FeeRate                *float64    `json:"feeRate,omitempty"`
 	SubtractFeeFromOutputs *[]int64    `json:"subtractFeeFromOutputs,omitempty"`
 	Replaceable            *bool       `json:"replaceable,omitempty"`
 	ConfTarget             *int64      `json:"conf_target,omitempty"`

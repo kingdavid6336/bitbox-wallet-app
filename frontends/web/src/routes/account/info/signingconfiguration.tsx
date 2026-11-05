@@ -1,149 +1,200 @@
-/**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import { route } from 'preact-router';
-import { getCanVerifyXPub, IAccount, TBitcoinSimple, TEthereumSimple, TSigningConfiguration, verifyXPub } from '../../../api/account';
-import { getScriptName, isBitcoinBased } from '../utils';
-import { CopyableInput } from '../../../components/copy/Copy';
-import { Button } from '../../../components/forms';
-import { QRCode } from '../../../components/qrcode/qrcode';
-import { translate, TranslateProps } from '../../../decorators/translate';
-import * as style from './info.module.css';
+import { useState, useEffect, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocation } from 'wouter';
+import { AccountCode, TAccount, TAmountWithConversions, TBitcoinSimple, TEthereumSimple, TSigningConfiguration, verifyXPub, getBalance } from '@/api/account';
+import { getScriptName } from '@/routes/account/utils';
+import { isBitcoinBased, isEthereumBased } from '@/utils/coin';
+import { alertUser } from '@/components/alert/Alert';
+import { AmountWithUnit } from '@/components/amount/amount-with-unit';
+import { A } from '@/components/anchor/anchor';
+import { CopyableInput } from '@/components/copy/Copy';
+import { Button } from '@/components/forms';
+import { ExternalLink } from '@/components/icon';
+import { Message } from '@/components/message/message';
+import { QRCode } from '@/components/qrcode/qrcode';
+import { truncateMiddle } from '@/utils/address';
+import { MultilineMarkup } from '@/utils/markup';
+import style from './info.module.css';
 
-interface ProvidedProps {
-    account: IAccount;
-    info: TSigningConfiguration;
-    code: string;
-    signingConfigIndex: number;
-}
+type TProps = {
+  account: TAccount;
+  info: TSigningConfiguration;
+  code: AccountCode;
+  signingConfigIndex: number;
+  children: ReactNode;
+};
 
-interface State {
-    canVerifyExtendedPublicKey: boolean;
-}
+export const SigningConfiguration = ({ account, info, code, signingConfigIndex, children }: TProps) => {
+  const [, navigate] = useLocation();
+  const { t } = useTranslation();
+  const [verifying, setVerifying] = useState(false);
+  const [balance, setBalance] = useState<TAmountWithConversions>();
+  const isTaproot = info.bitcoinSimple?.scriptType === 'p2tr';
 
-type Props = ProvidedProps & TranslateProps;
-
-class SigningConfiguration extends Component<Props, State> {
-
-    public readonly state: State = {
-        canVerifyExtendedPublicKey: false,
-    }
-
-    public componentDidMount() {
-        this.canVerifyExtendedPublicKeys();
-    }
-
-    private canVerifyExtendedPublicKeys = () => {
-        getCanVerifyXPub(this.props.code).then(canVerifyExtendedPublicKey => {
-            this.setState({ canVerifyExtendedPublicKey });
-        });
-    }
-
-    private verifyExtendedPublicKey = (signingConfigIndex: number) => {
-        verifyXPub(this.props.code, signingConfigIndex);
-    }
-
-    private getSimpleInfo(): TBitcoinSimple | TEthereumSimple {
-        const { info } = this.props;
-        if (info.bitcoinSimple !== undefined) {
-            return info.bitcoinSimple;
+  useEffect(() => {
+    if (isEthereumBased(account.coinCode)) {
+      getBalance(code).then(response => {
+        if (response.success) {
+          setBalance(response.balance.available);
         }
-        return info.ethereumSimple;
+      }).catch(console.error);
     }
+  }, [code, account.coinCode]);
 
-    public render(
-        { children,
-          account,
-          code,
-          t,
-          signingConfigIndex,
-        }: RenderableProps<Props>,
-        { canVerifyExtendedPublicKey }: State
-    ) {
-        const config = this.getSimpleInfo();
-        const bitcoinBased = isBitcoinBased(account.coinCode);
-        return (
-            <div className={style.address}>
-                <div className={style.qrCode}>
-                    { bitcoinBased ? (
-                        <QRCode
-                            data={config.keyInfo.xpub} />
-                    ) : null }
-                </div>
-                <div className={style.details}>
-                    <div className="labelLarge">
-                        { account.isToken ? null : (
-                            <p key="accountname" className={style.entry}>
-                                {/* borrowing translation from accountSummary */}
-                                <strong>{t('accountSummary.name')}:</strong>
-                                <span>{account.name}</span>
-                            </p>
-                        )}
-                        <p key="keypath" className={style.entry}>
-                            <strong>Keypath:</strong>
-                            <code>{config.keyInfo.keypath}</code>
-                        </p>
-                        { ('scriptType' in config) ? (
-                            <p key="scriptName" className={style.entry}>
-                                <strong>Type:</strong>
-                                <span>{getScriptName(config.scriptType)}</span>
-                            </p>
-                        ) : null}
-                        { ('scriptType' in config) ? (
-                            <p key="scriptType" className={style.entry}>
-                                <strong>Script Type:</strong>
-                                <span>{config.scriptType.toUpperCase()}</span>
-                            </p>
-                        ) : null}
-                        <p key="coinName" className={style.entry}>
-                            <strong>{account.isToken ? 'Token' : 'Coin'}:</strong>
-                            <span>{account.coinName} ({account.coinUnit})</span>
-                        </p>
-                        { bitcoinBased ? (
-                            <p key="xpub" className={`${style.entry} ${style.largeEntry}`}>
-                                <strong className="m-right-half">
-                                    {t('accountInfo.extendedPublicKey')}:
-                                </strong>
-                                <CopyableInput
-                                    className="flex-grow"
-                                    alignLeft
-                                    flexibleHeight
-                                    value={config.keyInfo.xpub} />
-                            </p>
-                        ) : null }
-                    </div>
-                </div>
-                <div className={style.buttons}>
-                    { canVerifyExtendedPublicKey ? (
-                        <Button className={style.verifyButton} primary onClick={() => this.verifyExtendedPublicKey(signingConfigIndex)}>
-                            {t('accountInfo.verify')}
-                        </Button>
-                    ) : bitcoinBased ? null : (
-                        <Button className={style.verifyButton} primary onClick={() => route(`/account/${code}/receive`)}>
-                            {t('receive.verify')}
-                        </Button>
-                    ) }
-                    {children}
-                </div>
+  const getSimpleInfo = (): TBitcoinSimple | TEthereumSimple => {
+    if (info.bitcoinSimple !== undefined) {
+      return info.bitcoinSimple;
+    }
+    return info.ethereumSimple;
+  };
+
+  const config = getSimpleInfo();
+  const bitcoinBased = isBitcoinBased(account.coinCode);
+  const contractAddress = account.contractAddress;
+  const blockExplorerAddressPrefix = account.blockExplorerAddressPrefix;
+  const contractAddressInfo = (
+    account.isToken && contractAddress && blockExplorerAddressPrefix
+      ? {
+        address: contractAddress,
+        url: `${blockExplorerAddressPrefix}${contractAddress}`,
+      }
+      : null
+  );
+  return (
+    <div className={style.address}>
+      <div className={style.qrCode}>
+        { (bitcoinBased && !isTaproot) ? (
+          <div className={style.qrItem}>
+            <span className={style.qrLabel}>
+              {t('accountInfo.extendedPublicKey')}
+            </span>
+            <QRCode
+              data={config.keyInfo.xpub}
+              size={180}
+            />
+          </div>
+        ) : null }
+        { info.bitcoinSimple ? (
+          <div className={style.qrItem}>
+            <span className={style.qrLabel}>
+              Descriptor
+            </span>
+            <QRCode
+              data={info.bitcoinSimple.descriptor}
+              size={180}
+            />
+          </div>
+        ) : null }
+      </div>
+      <div className={style.details}>
+        { account.isToken ? null : (
+          <div key="accountname" className={style.entry}>
+            {/* borrowing translation from accountSummary */}
+            <strong>{t('accountSummary.name')}:</strong>
+            <span>{account.name}</span>
+          </div>
+        )}
+        <div key="keypath" className={style.entry}>
+          <strong>Keypath:</strong>
+          <code>{config.keyInfo.keypath}</code>
+        </div>
+        { ('scriptType' in config) ? (
+          <div key="scriptName" className={style.entry}>
+            <strong>{t('accountInfo.scriptType')}:</strong>
+            <span>{getScriptName(config.scriptType)}</span>
+          </div>
+        ) : null}
+        <div key="rootFingerprint" className={style.entry}>
+          <strong>Root fingerprint:</strong>
+          <code>{config.keyInfo.rootFingerprint}</code>
+        </div>
+        <div key="coinName" className={style.entry}>
+          <strong>{account.isToken ? 'Token' : 'Coin'}:</strong>
+          <span>{account.coinName} ({account.coinUnit})</span>
+        </div>
+        { balance ? (
+          <div key="balance" className={style.entry}>
+            <strong>{t('accountSummary.balance')}:</strong>
+            <span>
+              <AmountWithUnit amount={balance} />
+            </span>
+          </div>
+        ) : null }
+        { contractAddressInfo ? (
+          <div key="contractAddress" className={style.entry}>
+            <strong>{t('accountInfo.contractAddress')}:</strong>
+            <div className={style.contractAddressLink}>
+              <code>{truncateMiddle(contractAddressInfo.address)}</code>
+              <A
+                href={contractAddressInfo.url}
+                title={contractAddressInfo.url}>
+                <ExternalLink className={style.contractAddressLinkIcon} />
+              </A>
             </div>
-        );
-    }
-}
+          </div>
+        ) : null}
+        { bitcoinBased && !isTaproot ? (
+          <div key="xpub" className={`${style.entry || ''} ${style.largeEntry || ''}`}>
+            <strong className="m-right-half">
+              {t('accountInfo.extendedPublicKey')}:
+            </strong>
+            <CopyableInput
+              alignLeft
+              flexibleHeight
+              value={config.keyInfo.xpub} />
+          </div>
+        ) : null }
+        { info.bitcoinSimple ? (
+          <div key="descriptor" className={`${style.entry || ''} ${style.largeEntry || ''}`}>
+            <strong className="m-right-half">
+              Descriptor:
+            </strong>
 
-const HOC = translate<ProvidedProps>()(SigningConfiguration);
-export { HOC as SigningConfiguration };
+            <Message type="info">
+              <MultilineMarkup
+                markup={t('accountInfo.descriptorWarning')}
+                tagName="span"
+                withBreaks/>
+            </Message>
+
+            <CopyableInput
+              className="flex-grow"
+              alignLeft
+              flexibleHeight
+              value={info.bitcoinSimple.descriptor} />
+          </div>
+        ) : null }
+      </div>
+      { contractAddressInfo ? (
+        <Message className={style.warningMessage} type="warning">
+          {t('accountInfo.contractAddressWarning')}
+        </Message>
+      ) : null}
+      <div className={style.buttons}>
+        { (bitcoinBased && !isTaproot) ? (
+          <Button className={style.verifyButton} primary disabled={verifying} onClick={async () => {
+            setVerifying(true);
+            try {
+              const result = await verifyXPub(code, signingConfigIndex);
+              if (!result.success) {
+                alertUser(result.errorMessage);
+              }
+            } finally {
+              setVerifying(false);
+            }
+          }
+          }>
+            {t('accountInfo.verify')}
+          </Button>
+        ) : !bitcoinBased ? (
+          <Button className={style.verifyButton} primary onClick={() => navigate(`/account/${code}/receive`)}>
+            {t('receive.verify')}
+          </Button>
+        ) : null}
+        {children}
+      </div>
+    </div>
+  );
+};

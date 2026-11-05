@@ -1,283 +1,361 @@
-/**
- * Copyright 2018 Shift Devices AG
- * Copyright 2021 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// SPDX-License-Identifier: Apache-2.0
 
-import { Component, h, RenderableProps } from 'preact';
-import { translate } from 'react-i18next';
-import * as accountApi from '../../../api/account';
-import A from '../../../components/anchor/anchor';
-import { Header } from '../../../components/layout';
-import { Entry } from '../../../components/guide/entry';
-import { Guide } from '../../../components/guide/guide';
-import { FiatConversion, formatCurrency } from '../../../components/rates/rates';
-import { TranslateProps } from '../../../decorators/translate';
-import { Check } from '../../../components/icon/icon';
-import Logo from '../../../components/icon/logo';
-import Spinner from '../../../components/spinner/ascii';
-import { debug } from '../../../utils/env';
-import { apiWebsocket } from '../../../utils/websocket';
+import { useState, useEffect, useRef, useCallback, useContext } from 'react';
+import { useTranslation } from 'react-i18next';
+import * as accountApi from '@/api/account';
+import { statusChanged, syncdone } from '@/api/accountsync';
+import { subscribeLightningBalance } from '@/api/lightning';
+import { useAppState } from '@/contexts/app-state-context';
+import { unsubscribe } from '@/utils/subscriptions';
+import { TUnsubscribe } from '@/utils/transport-common';
+import { SimpleMarkup } from '@/utils/markup';
+import { useMountedRef } from '@/hooks/mount';
+import { useLightning } from '@/hooks/lightning';
+import { GuideWrapper, GuidedContent, Header, Main } from '@/components/layout';
+import { View } from '@/components/view/view';
 import { Chart } from './chart';
-import * as style from './accountssummary.module.css';
+import { KeystoreBalance } from './keystorebalance';
+import { TotalBalanceForAllKeystores } from './total-balance-for-all-keystores';
+import { AddBuyReceiveOnEmptyBalances } from '@/routes/account/info/buy-receive-cta';
+import { Entry } from '@/components/guide/entry';
+import { Guide } from '@/components/guide/guide';
+import { HideAmountsButton } from '@/components/hideamountsbutton/hideamountsbutton';
+import { AppContext } from '@/contexts/AppContext';
+import { getAccountsByKeystore, getAccountsPerCoin } from '@/routes/account/utils';
+import { isBitcoinOnly } from '@/utils/coin';
+import { RatesContext } from '@/contexts/RatesContext';
+import { ContentWrapper } from '@/components/contentwrapper/contentwrapper';
+import { BackupReminder } from '@/components/banners/backup';
+import { OfflineError } from '@/components/banners/offline-error';
+import { isLightningFeatureAvailable } from '@/utils/env';
+import style from './accountssummary.module.css';
 
-interface AccountSummaryProps {
-    accounts: accountApi.IAccount[];
-}
+export type Balances = {
+  [code: string]: accountApi.TBalance;
+};
 
-interface Balances {
-    [code: string]: accountApi.IBalance;
-}
+export const AccountsSummary = () => {
+  const { t } = useTranslation();
 
-interface SyncStatus {
-    [code: string]: string;
-}
+  const {
+    activeAccounts,
+    hasAccounts
+  } = useAppState();
 
-interface State {
-    data?: accountApi.ISummary;
-    exported: string;
-    balances?: Balances;
-    syncStatus?: SyncStatus;
-}
+  const summaryReqTimerID = useRef<number>();
+  const chartRequestInFlight = useRef(false);
+  const chartMarkerRefreshQueued = useRef(false);
+  const lastChartTimestamp = useRef<number>();
+  const mounted = useMountedRef();
+  const { hideAmounts } = useContext(AppContext);
+  const { defaultCurrency } = useContext(RatesContext);
+  const { lightningAccount, lightningSDKStatus } = useLightning();
 
-type Props = TranslateProps & AccountSummaryProps;
+  const accountsByKeystore = getAccountsByKeystore(activeAccounts);
+  const hasActiveBitcoinAccount = activeAccounts.some(account => account.active && isBitcoinOnly(account.coinCode));
+  const hasOnlyLightningAccount = !!lightningAccount && !hasAccounts;
 
-interface BalanceRowProps {
-    code: string;
-    name: string;
-    balance?: accountApi.IBalance;
-    coinUnit: string;
-    coinCode: accountApi.CoinCode;
-}
+  const accountsPerCoin = getAccountsPerCoin(activeAccounts);
+  const hasMultipleAccountsPerCoin = Object.values(accountsPerCoin).some(
+    coinAccounts => coinAccounts !== undefined && coinAccounts.length > 1
+  );
+  const showTotalBalance = (
+    lightningAccount !== null
+    || accountsByKeystore.length > 1
+    || (accountsByKeystore.length > 0 && hasMultipleAccountsPerCoin)
+  );
 
-class AccountsSummary extends Component<Props, State> {
-    private summaryReqTimerID?: number;
-    public readonly state: State = {
-        data: undefined,
-        exported: '',
+  const [chartData, setChartData] = useState<accountApi.TChartData>();
+  const [accountsBalanceSummary, setAccountsBalanceSummary] = useState<accountApi.TAccountsBalanceSummary>();
+  const [balances, setBalances] = useState<Balances>();
+  const [offlineError, setOfflineError] = useState<string | null>(null);
+  const coinBalancePlaceholders = Object.values(accountsPerCoin).flatMap(coinAccounts => {
+    const account = coinAccounts?.[0];
+    return account ? [{
+      coinCode: account.coinCode,
+      coinName: account.coinName,
+      coinUnit: account.coinUnit,
+    }] : [];
+  });
+  if (lightningAccount && isLightningFeatureAvailable()) {
+    const bitcoinIndex = coinBalancePlaceholders.findIndex(balance => balance.coinCode === 'btc');
+    coinBalancePlaceholders.splice(bitcoinIndex + 1, 0, {
+      coinCode: 'lightning',
+      coinName: 'Lightning',
+      coinUnit: 'BTC',
+    });
+  }
+  const coinsTotalBalance = (
+    accountsBalanceSummary
+      ? accountsBalanceSummary.coinsTotalBalance.filter(balance => (
+        balance.coinCode !== 'lightning' || isLightningFeatureAvailable()
+      ))
+      : coinBalancePlaceholders.length > 0 ? coinBalancePlaceholders : undefined
+  );
+
+  // Pass true on initial load and after account, currency, or history changes to refresh markers.
+  // Routine polls pass false and reuse existing markers, avoiding marker calculation on every refresh.
+  const getChartData = useCallback(async (includeTransactionMarkers = false) => {
+    if (chartRequestInFlight.current) {
+      chartMarkerRefreshQueued.current = chartMarkerRefreshQueued.current || includeTransactionMarkers;
+      return;
+    }
+    // replace previous timer if present
+    if (summaryReqTimerID.current) {
+      window.clearTimeout(summaryReqTimerID.current);
+      summaryReqTimerID.current = undefined;
+    }
+    chartRequestInFlight.current = true;
+    let delay = 10000;
+    let includeTransactionMarkersNext = includeTransactionMarkers;
+    const chartDataResponse = await accountApi.getChartData(includeTransactionMarkers)
+      .catch(() => undefined);
+    if (!mounted.current) {
+      chartRequestInFlight.current = false;
+      return;
+    }
+    if (chartDataResponse?.success) {
+      const historyChanged = (
+        lastChartTimestamp.current !== undefined
+        && chartDataResponse.data.lastTimestamp !== lastChartTimestamp.current
+      );
+      lastChartTimestamp.current = chartDataResponse.data.lastTimestamp;
+      setChartData(current => ({
+        ...chartDataResponse.data,
+        chartTransactionMarkers: chartDataResponse.data.chartTransactionMarkers
+          ?? (current?.chartFiat === chartDataResponse.data.chartFiat
+            ? current.chartTransactionMarkers
+            : undefined)
+          ?? { daily: [], hourly: [] },
+      }));
+      if (chartDataResponse.data.chartDataMissing) {
+        delay = 1000;
+        includeTransactionMarkersNext = true;
+      } else if (!includeTransactionMarkers && historyChanged) {
+        delay = 0;
+        includeTransactionMarkersNext = true;
+      } else {
+        delay = 10000;
+        includeTransactionMarkersNext = false;
+      }
+    }
+    chartRequestInFlight.current = false;
+    if (chartMarkerRefreshQueued.current) {
+      chartMarkerRefreshQueued.current = false;
+      getChartData(true);
+      return;
+    }
+    summaryReqTimerID.current = window.setTimeout(
+      () => getChartData(includeTransactionMarkersNext),
+      delay,
+    );
+  }, [mounted]);
+
+  const getAccountsBalanceSummary = useCallback(async () => {
+    const response = await accountApi.getAccountsBalanceSummary();
+    if (!mounted.current) {
+      return;
+    }
+    if (response.success) {
+      setAccountsBalanceSummary(response.accountsBalanceSummary);
+    }
+  }, [mounted]);
+
+  const onStatusChanged = useCallback(async (
+    code: accountApi.AccountCode,
+    isActive: () => boolean,
+  ) => {
+    if (!isActive()) {
+      return;
+    }
+    const status = await accountApi.getStatus(code);
+    if (status.disabled || !isActive()) {
+      return;
+    }
+    setOfflineError(status.offlineError);
+    if (!status.synced) {
+      const result = await accountApi.init(code);
+      if (isActive() && !result.success) {
+        console.error(result.errorMessage);
+      }
+      return;
+    }
+    const balance = await accountApi.getBalance(code);
+    if (!isActive()) {
+      return;
+    }
+    if (!balance.success) {
+      return;
+    }
+    setBalances((prevBalances) => ({
+      ...prevBalances,
+      [code]: balance.balance
+    }));
+  }, []);
+
+  const update = useCallback((code: accountApi.AccountCode, isActive: () => boolean) => {
+    if (isActive()) {
+      onStatusChanged(code, isActive);
+      getChartData(true);
+      getAccountsBalanceSummary();
+    }
+  }, [getChartData, getAccountsBalanceSummary, onStatusChanged]);
+
+  // Keep account and Lightning subscriptions separate so Lightning state changes
+  // do not invalidate pending account status or balance requests.
+  useEffect(() => {
+    let active = true;
+    const subscriptions: TUnsubscribe[] = [];
+    activeAccounts.forEach(account => {
+      subscriptions.push(statusChanged(account.code, () => update(account.code, () => active)));
+      subscriptions.push(syncdone(account.code, () => update(account.code, () => active)));
+    });
+    return () => {
+      active = false;
+      unsubscribe(subscriptions);
     };
-    private unsubscribe!: () => void;
+  }, [activeAccounts, update]);
 
-    public componentDidMount() {
-        this.getAccountSummary();
-        this.unsubscribe = apiWebsocket(this.onEvent);
-
-        this.props.accounts.map((account) => {
-            this.onStatusChanged(account.code);
-        });
+  useEffect(() => {
+    if (lightningAccount === null) {
+      return;
     }
+    let active = true;
+    const unsubscribe = subscribeLightningBalance(() => {
+      if (active) {
+        getChartData(true);
+        getAccountsBalanceSummary();
+      }
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [getAccountsBalanceSummary, getChartData, lightningAccount]);
 
-    public componentWillUnmount() {
-        window.clearTimeout(this.summaryReqTimerID);
-        this.unsubscribe();
-    }
+  useEffect(() => {
+    // handles fetching data and runs on component mount
+    // & whenever any of the dependencies change.
+    getChartData(true);
+    getAccountsBalanceSummary();
+  }, [activeAccounts, defaultCurrency, getAccountsBalanceSummary, getChartData, lightningAccount]);
 
-    private getAccountSummary = () => {
-        accountApi.getSummary().then(data => {
-            this.setState({ data }, () => {
-                if (this.summaryReqTimerID) {
-                    return;
-                }
-                const delay = (!data || data.chartDataMissing) ? 1000 : 10000;
-                this.summaryReqTimerID = window.setTimeout(this.getAccountSummary, delay);
-            });
-        }).catch(console.error);
-    }
+  useEffect(() => {
+    return () => {
+      if (summaryReqTimerID.current) {
+        window.clearTimeout(summaryReqTimerID.current);
+      }
+    };
+  }, []);
 
-    private onEvent = (data: any) => {
-        for (const account of this.props.accounts) {
-            if (data.subject ===  'account/' + account.code + '/synced-addresses-count') {
-                this.setState(state => {
-                    const syncStatus = {...state.syncStatus};
-                    syncStatus[account.code] = data.object;
-                    return { syncStatus };
-                });
-            }
-        }
-        if (data.type === 'account') {
-            switch (data.data) {
-                case 'statusChanged':
-                case 'syncdone':
-                    this.onStatusChanged(data.code);
-                    // Force getting account summary now; cancel next scheduled call.
-                    window.clearTimeout(this.summaryReqTimerID);
-                    this.summaryReqTimerID = undefined;
-                    this.getAccountSummary();
-                    break;
-            }
-        }
-    }
+  useEffect(() => {
+    let active = true;
+    activeAccounts.forEach(account => {
+      onStatusChanged(account.code, () => active);
+    });
+    getAccountsBalanceSummary();
+    return () => {
+      active = false;
+    };
+  }, [activeAccounts, onStatusChanged, getAccountsBalanceSummary]);
 
-    private onStatusChanged(code: string) {
-        accountApi.getStatus(code).then(status => {
-            if (status.disabled) {
-                return;
-            }
-            if (!status.synced) {
-                return accountApi.init(code);
-            }
-            return accountApi.getBalance(code).then(balance => {
-                this.setState(state => {
-                    const balances = {...state.balances};
-                    balances[code] = balance;
-                    return { balances };
-                });
-            });
-        })
-        .catch(console.error);
-    }
+  useEffect(() => {
+    getAccountsBalanceSummary();
+  }, [defaultCurrency, getAccountsBalanceSummary]);
 
-    private export = () => {
-        accountApi.exportSummary().then(exported => {
-            this.setState({ exported });
-        })
-        .catch(console.error);
-    }
-
-    private balanceRow = ({ code, name, coinCode, coinUnit }: RenderableProps<BalanceRowProps>) => {
-        const { t } = this.props;
-        const balance = this.state.balances ? this.state.balances[code] : undefined;
-        const nameCol = (
-            <td data-label={t('accountSummary.name')}>
-                <div class={style.coinName}>
-                    <Logo className={style.coincode} coinCode={coinCode} active={true} alt={coinCode} />
-                    {name}
-                </div>
-            </td>
-        );
-        if (balance) {
-            return (
-                <tr key={code}>
-                    { nameCol }
-                    <td data-label={t('accountSummary.balance')}>
-                        <span className={style.summaryTableBalance}>
-                            {balance.available.amount}{' '}
-                            <span className={style.coinUnit}>{coinUnit}</span>
-                        </span>
-                    </td>
-                    <td data-label={t('accountSummary.fiatBalance')}>
-                        <FiatConversion amount={balance.available} noAction={true} />
-                    </td>
-                </tr>
-            );
-        }
-        const syncStatus = this.state.syncStatus && this.state.syncStatus[code];
-        return (
-            <tr key={code}>
-                { nameCol }
-                <td colSpan={2}>
-                    { t('account.syncedAddressesCount', {
-                        count: syncStatus?.toString(),
-                        defaultValue: 0,
-                    }) }
-                    <Spinner />
-                </td>
-            </tr>
-        );
-    }
-
-    public render(
-        { t, accounts }: RenderableProps<Props>,
-        { exported, data }: State,
-    ) {
-        return (
-            <div className="contentWithGuide">
-                <div className="container">
-                    <Header title={<h2>{t('accountSummary.title')}</h2>}>
-                        { debug && (
-                            exported ? (
-                                <A href={exported} title={exported} className="flex flex-row flex-start flex-items-center">
-                                    <span>
-                                        <Check style="margin-right: 5px !important;" />
-                                        <span>{t('account.openFile')}</span>
-                                    </span>
-                                </A>
-                            ) : (
-                                <a onClick={this.export} title={t('accountSummary.exportSummary')}>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#699ec6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                        <polyline points="7 10 12 15 17 10"></polyline>
-                                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                                    </svg>
-                                </a>
-                            )
-                        )}
-                    </Header>
-                    <div className="innerContainer scrollableContainer">
-                        <div className="content padded">
-                            {data ? (
-                                <Chart
-                                    dataDaily={data.chartDataMissing ? undefined : data.chartDataDaily}
-                                    dataHourly={data.chartDataMissing ? undefined : data.chartDataHourly}
-                                    fiatUnit={data.chartFiat}
-                                    total={data.chartTotal}
-                                    isUpToDate={data.chartIsUpToDate} />
-                            ) : (
-                                <p>&nbsp;</p>
-                            )}
-                            <div className={style.balanceTable}>
-                                <table className={style.table}>
-                                    <colgroup>
-                                        <col width="33%" />
-                                        <col width="33%" />
-                                        <col width="*" />
-                                    </colgroup>
-                                    <thead>
-                                        <tr>
-                                            <th>{t('accountSummary.name')}</th>
-                                            <th>{t('accountSummary.balance')}</th>
-                                            <th>{t('accountSummary.fiatBalance')}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        { accounts.length > 0 ? (
-                                            accounts.map(account => this.balanceRow(account))
-                                        ) : (
-                                            <p>{t('accountSummary.noAccount')}</p>
-                                        )}
-                                    </tbody>
-                                    {(data && data.chartTotal) ? (
-                                        <tfoot>
-                                            <tr>
-                                                <th>
-                                                    <strong>{t('accountSummary.total')}</strong>
-                                                </th>
-                                                <td colSpan={2}>
-                                                    <strong>
-                                                        {formatCurrency(data.chartTotal, data.chartFiat)}
-                                                    </strong>
-                                                    {' '}
-                                                    <span className={style.coinUnit}>
-                                                        {data.chartFiat}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        </tfoot>
-                                    ) : null }
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <Guide>
-                    <Entry key="accountSummaryDescription" entry={t('guide.accountSummaryDescription')} />
-                    <Entry key="accountSummaryAmount" entry={t('guide.accountSummaryAmount')} />
-                </Guide>
+  return (
+    <GuideWrapper>
+      <GuidedContent>
+        <Main>
+          <ContentWrapper>
+            <OfflineError error={offlineError} />
+            {accountsByKeystore.map(({ keystore }) => (
+              <BackupReminder
+                key={keystore.rootFingerprint}
+                keystore={keystore}
+                accountsBalanceSummary={accountsBalanceSummary}
+              />
+            ))}
+          </ContentWrapper>
+          <Header title={t('accountSummary.title')}>
+            <HideAmountsButton />
+          </Header>
+          <View>
+            <Chart
+              className={chartData ? style.fadeIn : ''}
+              hideAmounts={hideAmounts}
+              data={chartData}
+              noDataPlaceholder={
+                (hasAccounts && activeAccounts.length <= Object.keys(balances || {}).length) ? (
+                  <AddBuyReceiveOnEmptyBalances balances={balances} />
+                ) : undefined
+              } />
+            <div className={style.keystoresContainer} data-testid="account-summary-keystores">
+              {showTotalBalance && (
+                <TotalBalanceForAllKeystores
+                  hideHeader={hasOnlyLightningAccount}
+                  hideLightningUnitPrice={hasActiveBitcoinAccount}
+                  lightningSDKStatus={lightningSDKStatus}
+                  summaryData={chartData}
+                  coinsBalances={coinsTotalBalance}
+                />
+              )}
+              {accountsByKeystore &&
+              (accountsByKeystore.map(({ keystore, accounts }) =>
+                (
+                  <KeystoreBalance
+                    key={keystore.rootFingerprint}
+                    accounts={accounts}
+                    accountsByKeystore={accountsByKeystore}
+                    keystore={keystore}
+                    keystoreBalance={accountsBalanceSummary?.keystoresBalance[keystore.rootFingerprint]}
+                    balances={balances}
+                    showUnitPrice={!showTotalBalance}
+                  />
+                )
+              ))}
             </div>
-        );
-    }
-}
 
-const HOC = translate()(AccountsSummary);
-export { HOC as AccountsSummary };
+          </View>
+        </Main>
+      </GuidedContent>
+      <Guide title={t('guide.guideTitle.accountSummary')}>
+        <Entry key="accountSummaryDescription" entry={{
+          text: t('guide.accountSummaryDescription.text'),
+          title: t('guide.accountSummaryDescription.title'),
+        }} />
+        <Entry key="accountSummaryPercentageMeaning" entry={{
+          text: t('guide.accountSummaryPercentageMeaning.text'),
+          title: t('guide.accountSummaryPercentageMeaning.title'),
+        }}>
+          <ul>
+            <SimpleMarkup
+              tagName="li"
+              markup={t('guide.accountSummaryPercentageMeaning.listOptions.0')}
+            />
+            <SimpleMarkup
+              tagName="li"
+              markup={t('guide.accountSummaryPercentageMeaning.listOptions.1')}
+            />
+          </ul>
+          <SimpleMarkup
+            tagName="p"
+            markup={t('guide.accountSummaryPercentageMeaning.outro')}
+          />
+        </Entry>
+        <Entry key="accountSummaryAmount" entry={{
+          link: {
+            text: 'www.coingecko.com',
+            url: 'https://www.coingecko.com/'
+          },
+          text: t('guide.accountSummaryAmount.text'),
+          title: t('guide.accountSummaryAmount.title')
+        }} />
+        <Entry key="trackingModePortfolioChart" entry={{
+          text: t('guide.trackingModePortfolioChart.text'),
+          title: t('guide.trackingModePortfolioChart.title'),
+        }} />
+      </Guide>
+    </GuideWrapper>
+  );
+};

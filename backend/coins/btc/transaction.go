@@ -1,17 +1,4 @@
-// Copyright 2018 Shift Devices AG
-// Copyright 2020 Shift Crypto AG
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package btc
 
@@ -19,28 +6,36 @@ import (
 	"math/big"
 	"strconv"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/accounts/errors"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/addresses"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/blockchain"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/maketx"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/btc/transactions"
-	"github.com/digitalbitbox/bitbox-wallet-app/backend/coins/coin"
-	"github.com/digitalbitbox/bitbox-wallet-app/util/errp"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/accounts/errors"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/addresses"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/maketx"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/btc/transactions"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/coins/coin"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/keystore"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/backend/signing"
+	"github.com/BitBoxSwiss/bitbox-wallet-app/util/errp"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 )
 
 // unitSatoshi is 1 BTC (default unit) in Satoshi.
 const unitSatoshi = 1e8
 
+// CheckTaprootSendSupport checks whether the keystore supports the account's Taproot configuration.
+func (account *Account) CheckTaprootSendSupport(ks keystore.Keystore) error {
+	if account.Config().SigningConfigurations.FindScriptType(signing.ScriptTypeP2TR) != -1 &&
+		!ks.SupportsAccount(account.Coin(), signing.ScriptTypeP2TR) {
+		return keystore.ErrFirmwareUpgradeRequired
+	}
+	return nil
+}
+
 // getFeePerKb returns the fee rate to be used in a new transaction. It is deduced from the supplied
 // fee target (priority) if one is given, or the provided args.FeePerKb if the fee taret is
 // `FeeTargetCodeCustom`.
 func (account *Account) getFeePerKb(args *accounts.TxProposalArgs) (btcutil.Amount, error) {
-	if args.FeeTargetCode == accounts.FeeTargetCodeCustom {
+	if args.FeeTargetCode == accounts.FeeTargetCodeCustom && !args.UseHighestFee {
 		float, err := strconv.ParseFloat(args.CustomFee, 64)
 		if err != nil {
 			return 0, err
@@ -48,23 +43,88 @@ func (account *Account) getFeePerKb(args *accounts.TxProposalArgs) (btcutil.Amou
 		// Technically it is vKb (virtual Kb) since fees are computed from a transaction's weight
 		// (measured in weight units or virtual bytes), but we keep the `Kb` unit to be consistent
 		// with the rest of the codebase and Bitcoin Core.
+		minRelayFeeRate, err := account.getMinRelayFeeRate()
+		if err != nil {
+			return 0, err
+		}
 		feePerKb := btcutil.Amount(float * 1000)
-		if feePerKb < account.getMinRelayFeeRate() {
+		if feePerKb < minRelayFeeRate {
 			return 0, errors.ErrFeeTooLow
 		}
 		return feePerKb, nil
 	}
+
 	var feeTarget *FeeTarget
-	for _, target := range account.feeTargets {
-		if target.code == args.FeeTargetCode {
-			feeTarget = target
-			break
+	if args.UseHighestFee {
+		feeTarget = account.feeTargets().highest()
+	} else {
+		for _, target := range account.feeTargets() {
+			if target.code == args.FeeTargetCode {
+				feeTarget = target
+				break
+			}
 		}
 	}
 	if feeTarget == nil || feeTarget.feeRatePerKb == nil {
 		return 0, errp.New("Fee could not be estimated")
 	}
 	return *feeTarget.feeRatePerKb, nil
+}
+
+// pickChangeAddress returns a suitable unused change address to be used when making a transaction.
+// If the account is a unified account with multiple subaccounts (script/address types), we choose
+// the change address type like this:
+//
+// - If there is at least one P2TR UTXO, the change address will be a P2TR change address.
+// - Otherwise we pick P2WPKH if available.
+// - Otherwise we take the change of the first subaccount as a fallback.
+//
+// The above is a solution for the current lack of adoption of Taproot in third party (watch-only)
+// wallets.  Only users who already opted-in to Taproot (by receiving on a Taproot address) continue
+// with Taproot changes. This ensures that also users who received on Taproot and broke their
+// watch-only tools can fix it by moving the coins back to P2WPKH, and not have them go a Taproot
+// change again by accident.
+func (account *Account) pickChangeAddress(utxos map[wire.OutPoint]maketx.UTXO) (*addresses.AccountAddress, error) {
+	if len(account.subaccounts) == 0 {
+		return nil, errp.New("Account has no subaccounts")
+	}
+	if len(account.subaccounts) == 1 {
+		unusedAddresses, err := account.subaccounts[0].changeAddresses.GetUnused()
+		if err != nil {
+			return nil, err
+		}
+		return unusedAddresses[0], nil
+	}
+
+	p2trIndex := account.subaccounts.signingConfigurations().FindScriptType(signing.ScriptTypeP2TR)
+	if p2trIndex >= 0 {
+		// Check if there is at least one taproot UTXO.
+		for _, utxo := range utxos {
+			if utxo.Address.AccountConfiguration.ScriptType() == signing.ScriptTypeP2TR {
+				// Found a taproot UTXO.
+				unusedAddresses, err := account.subaccounts[p2trIndex].changeAddresses.GetUnused()
+				if err != nil {
+					return nil, err
+				}
+				return unusedAddresses[0], nil
+			}
+		}
+	}
+
+	p2wpkhIndex := account.subaccounts.signingConfigurations().FindScriptType(signing.ScriptTypeP2WPKH)
+	if p2wpkhIndex >= 0 {
+		unusedAddresses, err := account.subaccounts[p2wpkhIndex].changeAddresses.GetUnused()
+		if err != nil {
+			return nil, err
+		}
+		return unusedAddresses[0], nil
+	}
+
+	unusedAddresses, err := account.subaccounts[0].changeAddresses.GetUnused()
+	if err != nil {
+		return nil, err
+	}
+	return unusedAddresses[0], nil
 }
 
 // newTx creates a new tx to the given recipient address. It also returns a set of used account
@@ -76,15 +136,24 @@ func (account *Account) newTx(args *accounts.TxProposalArgs) (
 
 	account.log.Debug("Prepare new transaction")
 
-	address, err := account.coin.DecodeAddress(args.RecipientAddress)
+	var outputInfo *maketx.OutputInfo
+	if err := account.coin.ValidateSilentPaymentAddress(args.RecipientAddress); err == nil {
+		outputInfo = maketx.NewOutputInfoSilentPayment(args.RecipientAddress)
+	} else {
+		pkScript, err := account.coin.AddressToPkScript(args.RecipientAddress)
+		if err != nil {
+			return nil, nil, err
+		}
+		outputInfo = maketx.NewOutputInfo(pkScript)
+	}
+
+	if !account.Synced() {
+		return nil, nil, accounts.ErrSyncInProgress
+	}
+	utxo, err := account.transactions.SpendableOutputs()
 	if err != nil {
 		return nil, nil, err
 	}
-	pkScript, err := txscript.PayToAddrScript(address)
-	if err != nil {
-		return nil, nil, errp.WithStack(err)
-	}
-	utxo := account.transactions.SpendableOutputs()
 	wireUTXO := make(map[wire.OutPoint]maketx.UTXO, len(utxo))
 	for outPoint, txOut := range utxo {
 		// Apply coin control.
@@ -93,10 +162,10 @@ func (account *Account) newTx(args *accounts.TxProposalArgs) (
 				continue
 			}
 		}
+		addressID := addresses.NewAddressID(txOut.TxOut.PkScript)
 		wireUTXO[outPoint] = maketx.UTXO{
-			TxOut: txOut.TxOut,
-			Configuration: account.getAddress(
-				blockchain.NewScriptHashHex(txOut.TxOut.PkScript)).Configuration,
+			TxOut:   txOut.TxOut,
+			Address: account.AddressByID(addressID),
 		}
 	}
 	feeRatePerKb, err := account.getFeePerKb(args)
@@ -106,10 +175,13 @@ func (account *Account) newTx(args *accounts.TxProposalArgs) (
 
 	var txProposal *maketx.TxProposal
 	if args.Amount.SendAll() {
+		if args.PaymentRequest != nil {
+			return nil, nil, errp.New("Payment Requests do not allow send-all transaction proposals")
+		}
 		txProposal, err = maketx.NewTxSpendAll(
 			account.coin,
 			wireUTXO,
-			pkScript,
+			outputInfo,
 			feeRatePerKb,
 			account.log,
 		)
@@ -118,7 +190,12 @@ func (account *Account) newTx(args *accounts.TxProposalArgs) (
 		}
 	} else {
 		allowZero := false
-		parsedAmount, err := args.Amount.Amount(big.NewInt(unitSatoshi), allowZero)
+
+		unit := int64(unitSatoshi)
+		if account.coin.formatUnit == coin.BtcUnitSats {
+			unit = 1
+		}
+		parsedAmount, err := args.Amount.Amount(big.NewInt(unit), allowZero)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -126,76 +203,66 @@ func (account *Account) newTx(args *accounts.TxProposalArgs) (
 		if err != nil {
 			return nil, nil, errp.WithStack(errors.ErrInvalidAmount)
 		}
+		changeAddress, err := account.pickChangeAddress(wireUTXO)
+		if err != nil {
+			return nil, nil, err
+		}
+		account.log.Infof("Change address script type: %s", changeAddress.AccountConfiguration.ScriptType())
 		txProposal, err = maketx.NewTx(
 			account.coin,
 			wireUTXO,
-			wire.NewTxOut(parsedAmountInt64, pkScript),
+			outputInfo,
+			parsedAmountInt64,
 			feeRatePerKb,
-			// Change address is of the first subaccount, always.
-			account.subaccounts[0].changeAddresses.GetUnused()[0],
+			changeAddress,
 			account.log,
 		)
 		if err != nil {
 			return nil, nil, err
 		}
+
+		if args.PaymentRequest != nil {
+			account.log.Info("Payment request tx proposal")
+			txProposal.PaymentRequest = args.PaymentRequest
+		}
 	}
 	account.log.Debugf("creating tx with %d inputs, %d outputs",
-		len(txProposal.Transaction.TxIn), len(txProposal.Transaction.TxOut))
+		len(txProposal.Psbt.UnsignedTx.TxIn), len(txProposal.Psbt.UnsignedTx.TxOut))
 	return utxo, txProposal, nil
 }
 
-func (account *Account) getAddress(scriptHashHex blockchain.ScriptHashHex) *addresses.AccountAddress {
-	for _, subacc := range account.subaccounts {
-		if address := subacc.receiveAddresses.LookupByScriptHashHex(scriptHashHex); address != nil {
-			return address
-		}
-		if address := subacc.changeAddresses.LookupByScriptHashHex(scriptHashHex); address != nil {
-			return address
-		}
-	}
-	panic("address must be present")
+// AddressByID returns the address in the account with the given address ID. Returns nil if the
+// address does not exist in the account.
+func (account *Account) AddressByID(addressID addresses.AddressID) *addresses.AccountAddress {
+	address, _ := account.lookupAddressByID(addressID)
+	return address
 }
 
 // SendTx implements accounts.Interface.
-func (account *Account) SendTx() error {
+func (account *Account) SendTx(txNote string) (string, error) {
 	unlock := account.activeTxProposalLock.RLock()
 	txProposal := account.activeTxProposal
 	unlock()
 	if txProposal == nil {
-		return errp.New("No active tx proposal")
+		return "", errp.New("No active tx proposal")
 	}
-
-	note := account.BaseAccount.GetAndClearProposedTxNote()
 
 	account.log.Info("Signing and sending transaction")
-	utxos := account.transactions.SpendableOutputs()
-	getPrevTx := func(txHash chainhash.Hash) *wire.MsgTx {
-		txChan := make(chan *wire.MsgTx)
-		account.coin.Blockchain().TransactionGet(txHash,
-			func(tx *wire.MsgTx) {
-				txChan <- tx
-			},
-			func(err error) {
-				if err != nil {
-					panic(err)
-				}
-			},
-		)
-		return <-txChan
-	}
-	if err := account.signTransaction(txProposal, utxos, getPrevTx); err != nil {
-		return errp.WithMessage(err, "Failed to sign transaction")
+	signedTx, err := account.signTransaction(txProposal, account.coin.Blockchain().TransactionGet)
+	if err != nil {
+		return "", errp.WithMessage(err, "Failed to sign transaction")
 	}
 
 	account.log.Info("Signed transaction is broadcasted")
-	if err := account.coin.Blockchain().TransactionBroadcast(txProposal.Transaction); err != nil {
-		return err
+	if err := account.coin.Blockchain().TransactionBroadcast(signedTx); err != nil {
+		return "", err
 	}
-	if err := account.SetTxNote(txProposal.Transaction.TxHash().String(), note); err != nil {
+
+	if err := account.SetTxNote(signedTx.TxHash().String(), txNote); err != nil {
 		// Not critical.
 		account.log.WithError(err).Error("Failed to save transaction note when sending a tx")
 	}
-	return nil
+	return signedTx.TxID(), nil
 }
 
 // TxProposal creates a tx from the relevant input and returns information about it for display in
